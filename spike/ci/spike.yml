@@ -1,0 +1,113 @@
+# Fase 0 — spike di fattibilità napi-go.
+# Copre le piattaforme che non è stato possibile provare in locale (macOS, Linux arm64,
+# Alpine/musl, Windows con mingw-gcc) e ripete Linux/Windows su più versioni di Node e Go.
+name: spike
+
+on:
+  push:
+    paths: ['spike/**', '.github/workflows/spike.yml']
+  pull_request:
+    paths: ['spike/**', '.github/workflows/spike.yml']
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: spike
+    shell: bash
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · node ${{ matrix.node }} · go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        node: ['22', '24']
+        go: ['1.24.x', 'stable']
+        include:
+          - os: ubuntu-latest
+            node: 'current'
+            go: 'stable'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: spike/go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Toolchain
+        run: go version && node --version && (gcc --version || cc --version) | head -1
+      - name: Build
+        env:
+          CGO_ENABLED: '1'
+        run: node scripts/build.mjs
+      - name: Test
+        run: node --test --test-reporter=spec test/*.test.mjs
+      - name: Benchmark
+        run: node test/bench.mjs
+      - name: Costo callback C→Go
+        working-directory: spike/experiments/cbcost
+        run: go run .
+
+  cgocheck2:
+    name: ubuntu · GOEXPERIMENT=cgocheck2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: spike/go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/build.mjs
+        env:
+          GOEXPERIMENT: cgocheck2
+      - run: node --test --test-reporter=spec test/*.test.mjs
+
+  windows-zig:
+    name: windows · zig cc
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: spike/go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: mlugg/setup-zig@v2
+      - run: node scripts/build.mjs
+        env:
+          CC: zig cc
+      - run: node --test --test-reporter=spec test/*.test.mjs
+
+  alpine:
+    # Q7: Go c-shared usa TLS initial-exec (FLAGS STATIC_TLS): va verificato il dlopen con musl.
+    name: alpine (musl) · node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    container: node:${{ matrix.node }}-alpine
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - name: Dipendenze
+        working-directory: /
+        run: apk add --no-cache go gcc musl-dev git bash
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: go version && node --version && gcc --version | head -1
+      - name: Build
+        env:
+          CGO_ENABLED: '1'
+        run: node scripts/build.mjs
+      - name: Test
+        run: node --test --test-reporter=spec test/*.test.mjs
+      - name: Benchmark
+        run: node test/bench.mjs
