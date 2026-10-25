@@ -55,6 +55,9 @@ test('Q3: rientranza Go → JS → Go ed eccezioni JS che attraversano Go', () =
   assert.equal(b.callMe((x) => b.add(x, 1), 41), 42)
   assert.throws(() => b.callMe(() => { throw new TypeError('da JS') }, 0), { name: 'TypeError', message: 'da JS' })
   assert.deepEqual(b.makeObject(4), { name: 'squares', values: [0, 1, 4, 9] })
+  assert.deepEqual(b.makeObject(0), { name: 'squares', values: [] }) // array vuoto
+  assert.throws(() => b.makeObject(null), /A number was expected/)
+  assert.throws(() => b.makeObject(), /A number was expected/)
 })
 
 test('Q4: Promise risolta sul thread JS, lavoro su thread Go', async () => {
@@ -62,6 +65,12 @@ test('Q4: Promise risolta sul thread JS, lavoro su thread Go', async () => {
   assert.equal(r.ms, 10)
   assert.equal(r.resolveThread, r.jsThread)
   assert.notEqual(r.workThread, r.jsThread)
+})
+
+test('Q4: Promise con attesa zero e argomenti non validi', async () => {
+  assert.equal((await b.sleep(0)).ms, 0)
+  assert.throws(() => b.sleep('x'), /A number was expected/) // errore sincrono, nessuna Promise
+  assert.throws(() => b.sleep(undefined), /A number was expected/)
 })
 
 test('Q4: reject e panic asincroni', async () => {

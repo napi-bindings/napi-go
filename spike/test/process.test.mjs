@@ -21,18 +21,31 @@ function nodeEval(code, args = []) {
   return r
 }
 
-test('Q6: trap WebAssembly (SIGSEGV di V8) mentre il runtime Go fa preemption', async () => {
+// Verifica la correttezza (ogni trap intercettata, nessun crash), non il throughput: quanti
+// accessi entrano in un intervallo di tempo dipende dalla macchina (in CI, runner da 4 vCPU
+// con tutte le P occupate da Go, ne entravano pochissimi). I tempi vanno nella diagnostica.
+test('Q6: trap WebAssembly (SIGSEGV/SEH di V8) mentre il runtime Go fa preemption e GC', { timeout: 120_000 }, async (t) => {
   const b = load('basic')
   const { instance } = await WebAssembly.instantiate(wasmBytes)
-  const burning = b.burnCPU(500) // goroutine su tutte le P: segnali SIGURG + GC Go
+  const TRAPS = 500            // abbastanza da sovrapporsi a più cicli di GC/preemption Go
+  const OOB_ADDR = 1 << 20     // 1 MiB: oltre l'unica pagina (64 KiB) di memoria wasm → trap
+  const BURN_MS = 1500         // > durata tipica del ciclo; il vecchio test usava 500 ms
+  const burning = b.burnCPU(BURN_MS) // goroutine su tutte le P: preemption (SIGURG/SuspendThread) + GC Go
   let traps = 0
-  const t0 = Date.now()
-  while (Date.now() - t0 < 400) {
-    try { instance.exports.load(1 << 20) } catch (e) { if (e instanceof WebAssembly.RuntimeError) traps++ }
-    assert.equal(instance.exports.load(0), 0)
+  let worstUs = 0
+  const t0 = process.hrtime.bigint()
+  for (let i = 0; i < TRAPS; i++) {
+    const s = process.hrtime.bigint()
+    assert.throws(() => instance.exports.load(OOB_ADDR), WebAssembly.RuntimeError)
+    traps++
+    worstUs = Math.max(worstUs, Number(process.hrtime.bigint() - s) / 1000)
+    assert.equal(instance.exports.load(0), 0) // l'istanza resta utilizzabile dopo la trap
   }
-  await burning
-  assert.ok(traps > 1000, `trap gestite: ${traps}`)
+  const avgUs = Number(process.hrtime.bigint() - t0) / 1000 / TRAPS
+  t.diagnostic(`${traps} trap, media ${avgUs.toFixed(1)} µs, peggiore ${worstUs.toFixed(0)} µs`)
+  assert.equal(traps, TRAPS)
+  assert.equal(b.add(1, 2), 3) // il runtime Go risponde ancora
+  assert.equal(await burning, true) // le goroutine terminano regolarmente
 })
 
 test('Q6: il processo termina da solo quando non c\'è lavoro (TSFN unref)', () => {

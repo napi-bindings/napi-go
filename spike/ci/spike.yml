@@ -30,12 +30,12 @@ jobs:
             node: 'current'
             go: 'stable'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: spike/go.mod
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
       - name: Toolchain
@@ -46,6 +46,9 @@ jobs:
         run: node scripts/build.mjs
       - name: Test
         run: node --test --test-reporter=spec test/*.test.mjs
+      - name: Diagnostica trap WebAssembly
+        if: ${{ !cancelled() }}
+        run: node experiments/wasmtrap/trap.mjs
       - name: Benchmark
         run: node test/bench.mjs
       - name: Costo callback C→Go
@@ -56,12 +59,12 @@ jobs:
     name: ubuntu · GOEXPERIMENT=cgocheck2
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: stable
           cache-dependency-path: spike/go.mod
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
       - run: node scripts/build.mjs
@@ -73,25 +76,39 @@ jobs:
     name: windows · zig cc
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: stable
           cache-dependency-path: spike/go.mod
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
       - uses: mlugg/setup-zig@v2
+      - run: zig version && go version && node --version
       - run: node scripts/build.mjs
         env:
           CC: zig cc
       - run: node --test --test-reporter=spec test/*.test.mjs
+      - name: Diagnostica trap WebAssembly
+        if: ${{ !cancelled() }}
+        run: node experiments/wasmtrap/trap.mjs
+      - name: Costo callback C→Go
+        if: ${{ !cancelled() }}
+        working-directory: spike/experiments/cbcost
+        run: go run .
+        env:
+          CC: zig cc
 
   alpine:
     # Q7: Go c-shared usa TLS initial-exec (FLAGS STATIC_TLS): va verificato il dlopen con musl.
     name: alpine (musl) · node ${{ matrix.node }}
     runs-on: ubuntu-latest
     container: node:${{ matrix.node }}-alpine
+    defaults:
+      run:
+        shell: sh   # l'immagine alpine non ha bash: il default del workflow fallirebbe prima di installarlo
+        working-directory: spike
     strategy:
       fail-fast: false
       matrix:
@@ -99,8 +116,8 @@ jobs:
     steps:
       - name: Dipendenze
         working-directory: /
-        run: apk add --no-cache go gcc musl-dev git bash
-      - uses: actions/checkout@v4
+        run: apk add --no-cache go gcc musl-dev git
+      - uses: actions/checkout@v5
       - name: Toolchain
         run: go version && node --version && gcc --version | head -1
       - name: Build
