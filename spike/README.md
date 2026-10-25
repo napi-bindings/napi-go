@@ -46,7 +46,7 @@ Ambienti provati:
 - **Linux** x64 (Ubuntu 24.04, VM 2 core): Go 1.24.7, Node 22.23.4 e 20.20.0, gcc 13
 - **Windows** x64 (22 thread logici): Go 1.27.1, Node 24.21.0, `zig cc` 0.16
 
-macOS, Linux arm64 e Alpine/musl sono coperti da `ci/spike.yml`, ancora da eseguire.
+macOS e Linux arm64 sono coperti da `ci/spike.yml`. Alpine/musl è stato eseguito in CI: vedi Q7.
 
 | # | Domanda | Esito | Evidenza |
 |---|---|---|---|
@@ -55,8 +55,8 @@ macOS, Linux arm64 e Alpine/musl sono coperti da `ci/spike.yml`, ancora da esegu
 | Q3 | Dispatch, argomenti, panic, errori | ✅ | 12+ funzioni senza il bug `static dataCopy`; più di 8 argomenti; panic → `Error` con `code: GO_PANIC` e processo vivo; codici di errore; rientranza Go→JS→Go; **pulito con `GOEXPERIMENT=cgocheck2`** |
 | Q4 | Goroutine → Promise, worker_threads | ✅ | Risoluzione sempre sul thread JS dell'env. 20k Promise concorrenti con coalescenza del dispatcher. 8 worker concorrenti con cleanup degli env; worker terminati con Promise pendenti senza crash |
 | Q5 | **Due runtime Go nello stesso processo** | ✅ nei test | Due addon distinti: chiamate sincrone, async, GC e CPU concorrenti, entrambi caricati in 4 worker. Resta uno scenario non supportato ufficialmente da Go: va tenuto sotto osservazione in CI |
-| Q6 | Segnali e ciclo di vita del processo | ✅ | Più di 1000 trap WebAssembly (SIGSEGV di V8) mentre Go fa preemption e GC. SIGINT/SIGTERM (Linux). `child_process`. `process.exit` con goroutine in volo. `gc()` forzato. Il processo esce da solo (TSFN unref) e resta vivo finché ci sono Promise pendenti |
-| Q7 | Alpine / musl | ⏳ CI | Il `.node` ha `FLAGS: STATIC_TLS` (TLS initial-exec di Go): il `dlopen` con musl è proprio il punto da verificare |
+| Q6 | Segnali e ciclo di vita del processo | ✅ Linux, Windows · ⚠️ macOS | Più di 1000 trap WebAssembly (SIGSEGV di V8) mentre Go fa preemption e GC. SIGINT/SIGTERM (Linux). `child_process`. `process.exit` con goroutine in volo. `gc()` forzato. Il processo esce da solo (TSFN unref) e resta vivo finché ci sono Promise pendenti. **Aperto su macOS (CI, Go 1.27.3, Node 24):** SIGINT con handler JS funziona; SIGTERM con l'handler interno di Node (`node::SignalExit`) blocca il processo quando il runtime Go è caricato (ucciso con SIGKILL dopo 30 s). Il test ora raccoglie `__sigInfo` e gli stack dei thread per trovare la causa |
+| Q7 | Alpine / musl | ❌ limite di Go | `dlopen` rifiutato da musl: *initial-exec TLS resolves to dynamic definition*. Riprodotto in CI (Go 1.26.10) e in locale con Go 1.24.7 e 1.27.1 (`experiments/musltls`); `LD_PRELOAD` va in segfault (argc/argv nulli all'init). Correzione solo upstream: golang/go#71953, CL 696635 |
 | Q8 | Overhead per chiamata | ✅ misurato | Vedi sotto; due scoperte che cambiano il piano |
 
 Ripetizioni: Linux 5 esecuzioni complete (Node 22 ×3, Node 20, cgocheck2), Windows 4 esecuzioni complete. Zero fallimenti. Dimensione: 1,8–2,1 MB per `.node` con `-ldflags=-s -w`.
@@ -95,4 +95,8 @@ Callback C→Go vuota (`experiments/cbcost`):
    - valutare un contributo upstream a Go (binding dell'M con `FlsAlloc` e callback di distruzione).
 3. Il race detector (TSan) non si inizializza dentro un `.node` caricato da Node. La logica concorrente (dispatcher, registri) va testata con `go test -race` usando una TSFN finta.
 4. `-Wl,-z,nodelete` non serve: Go imposta già `NODELETE` sui `c-shared` (ed è comunque fuori dalla allowlist dei flag cgo).
-5. `#cgo noescape`/`nocallback` (Go 1.24) funzionano: zero allocazioni per i getter/setter numerici e per i buffer di lettura stringa sullo stack.
+5. **Alpine/musl non è supportabile con nessuna release di Go attuale (≤ 1.27).** Il runtime Go nei `c-shared` usa TLS initial-exec (`R_X86_64_TPOFF64`) e si aspetta `argc`/`argv` nelle funzioni di init: musl rifiuta il `dlopen` e con `LD_PRELOAD` va in segfault. **Conseguenze:**
+   - musl esce dalle piattaforme supportate della prima release;
+   - il job Alpine resta in CI come sentinella (`continue-on-error`);
+   - va seguita la proposta golang/go#71953 e la CL 696635, che introducono il modello TLS "general dynamic" e i controlli su `argv`.
+6. `#cgo noescape`/`nocallback` (Go 1.24) funzionano: zero allocazioni per i getter/setter numerici e per i buffer di lettura stringa sullo stack.

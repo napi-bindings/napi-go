@@ -104,9 +104,13 @@ jobs:
           CC: zig cc
 
   alpine:
-    # Q7: Go c-shared usa TLS initial-exec (FLAGS STATIC_TLS): va verificato il dlopen con musl.
-    name: alpine (musl) · node ${{ matrix.node }}
+    # Q7 — limite noto (Go ≤ 1.27): il runtime Go nei c-shared usa TLS initial-exec e si aspetta
+    # argc/argv nelle funzioni di init; musl rifiuta il dlopen ("initial-exec TLS resolves to dynamic
+    # definition"). Correzione upstream: golang/go#71953, CL 696635. Il job resta attivo come
+    # sentinella (quando passa, Go ha risolto) ma non blocca la pipeline.
+    name: alpine (musl) · node ${{ matrix.node }} · limite noto
     runs-on: ubuntu-latest
+    continue-on-error: true
     timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
     container: node:${{ matrix.node }}-alpine
     defaults:
@@ -128,6 +132,8 @@ jobs:
         env:
           CGO_ENABLED: '1'
         run: node scripts/build.mjs
+      - name: Modello TLS del .node (TPOFF64 = initial-exec, TLSGD/TLSDESC = general dynamic)
+        run: readelf -d build/basic.node | grep -i flags; readelf -r build/basic.node | grep -E 'TPOFF|TLSGD|TLSDESC|DTPMOD' || true
       - name: Test
         run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
       - name: Benchmark

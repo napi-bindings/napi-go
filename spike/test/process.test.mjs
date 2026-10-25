@@ -96,64 +96,113 @@ test('Q6: child_process (SIGCHLD) funziona con l\'addon caricato', () => {
 })
 
 // Segnali POSIX nel processo figlio. Il figlio ha una vita limitata (CHILD_LIFETIME_MS): se il
-// segnale non arriva all'handler JS esce con LOST_SIGNAL_EXIT invece di restare appeso; il padre
-// lo uccide comunque con SIGKILL dopo KILL_AFTER_MS. Le varianti isolano la causa di un
-// eventuale segnale perso (osservato su macOS in CI): Node da solo, addon caricato, addon con
-// goroutine CPU-bound su tutte le P.
+// segnale non arriva all'handler JS esce con LOST_SIGNAL_EXIT invece di restare appeso. Se dopo
+// HANG_AFTER_MS dal segnale è ancora vivo, il padre ne cattura gli stack dei thread (`sample` su
+// macOS, /proc su Linux) e lo uccide con SIGKILL. Le varianti isolano la causa:
+//  - solo Node / addon caricato / addon + goroutine CPU-bound / addon + handler JS per SIGTERM;
+//  - il figlio stampa __sigInfo (diag.c, C puro): chi gestisce SIGTERM/SIGINT e se sono bloccati,
+//    prima e dopo una chiamata in Go (da Go 1.21 l'M resta legato al thread JS dopo la callback).
+// Osservato su macOS in CI: SIGTERM con l'handler di Node (node::SignalExit) non termina il figlio
+// quando il runtime Go è caricato; SIGINT con handler JS funziona.
 const CHILD_LIFETIME_MS = 15_000
-const KILL_AFTER_MS = 30_000
+const HANG_AFTER_MS = 5_000
 const LOST_SIGNAL_EXIT = 99
 const SIGINT_EXIT = 42
+const SIGTERM_JS_EXIT = 43
+const DIAG_PREFIX = 'diag:'
+
+function captureStacks(pid) {
+  const run = (cmd, args) => {
+    const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 20_000 })
+    return r.error ? `${cmd}: ${r.error.message}` : (r.stdout || r.stderr || '').trim()
+  }
+  if (process.platform === 'darwin') {
+    return [run('ps', ['-M', '-p', String(pid)]), run('sample', [String(pid), '1', '-mayDie'])].join('\n')
+  }
+  if (process.platform === 'linux') {
+    return run('sh', ['-c', `grep -E '^(State|SigQ|SigPnd|ShdPnd|SigBlk|SigIgn|SigCgt)' /proc/${pid}/status; ` +
+      `for t in /proc/${pid}/task/*; do echo "$t $(cat $t/comm) $(cat $t/wchan 2>/dev/null) $(grep -E '^(State|SigBlk|SigPnd)' $t/status | tr '\\n' ' ')"; done`])
+  }
+  return ''
+}
 
 function runSignalChild(setup, signal) {
-  const script = `${setup}
+  const script = `const os = require('node:os');
+    ${setup}
+    if (typeof b !== 'undefined') {
+      const S = os.constants.signals;
+      console.log('${DIAG_PREFIX}' + JSON.stringify({ SIGTERM: b.__sigInfo(S.SIGTERM), SIGINT: b.__sigInfo(S.SIGINT) }));
+    }
     process.on('SIGINT', () => { console.log('got SIGINT'); process.exit(${SIGINT_EXIT}) });
     setTimeout(() => { console.log('segnale non ricevuto'); process.exit(${LOST_SIGNAL_EXIT}) }, ${CHILD_LIFETIME_MS});
     console.log('ready')`
   return new Promise((resolve, reject) => {
-    const t0 = Date.now()
     const c = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'pipe'] })
-    const killer = setTimeout(() => c.kill('SIGKILL'), KILL_AFTER_MS)
     let out = ''
     let err = ''
+    let stacks = ''
     let signaledAt = 0
-    c.once('error', (e) => { clearTimeout(killer); reject(e) })
+    let hangTimer = null
+    c.once('error', (e) => { clearTimeout(hangTimer); reject(e) })
     c.stderr.on('data', (d) => { err += d })
     c.stdout.on('data', (d) => {
       out += d
       if (!signaledAt && out.includes('ready')) {
         signaledAt = Date.now()
         c.kill(signal)
+        hangTimer = setTimeout(() => {
+          stacks = captureStacks(c.pid)
+          c.kill('SIGKILL')
+        }, HANG_AFTER_MS)
       }
     })
     c.on('exit', (code, sig) => {
-      clearTimeout(killer)
-      resolve({ code, sig, out, err, exitMs: signaledAt ? Date.now() - signaledAt : -1, totalMs: Date.now() - t0 })
+      clearTimeout(hangTimer)
+      const diagLine = out.split('\n').find((l) => l.startsWith(DIAG_PREFIX))
+      resolve({
+        code, sig, out, err, stacks,
+        diag: diagLine ? diagLine.slice(DIAG_PREFIX.length) : '-',
+        exitMs: signaledAt ? Date.now() - signaledAt : -1,
+      })
     })
   })
 }
 
+function report(st, r) {
+  st.diagnostic(`code=${r.code} sig=${r.sig} uscita dopo il segnale ${r.exitMs} ms; stderr: ${r.err.trim() || '-'}`)
+  st.diagnostic(`segnali nel figlio: ${r.diag}`)
+  if (r.stacks) st.diagnostic(`figlio bloccato, stack dei thread:\n${r.stacks.split('\n').slice(0, 150).join('\n')}`)
+}
+
 const addonReq = `const b = require(${JSON.stringify(addonPath('basic'))});`
 const signalVariants = [
-  ['solo Node', ''],
-  ['addon caricato', `${addonReq} b.add(1, 1);`],
-  ['addon + goroutine CPU-bound', `${addonReq} b.burnCPU(${CHILD_LIFETIME_MS});`],
+  { label: 'solo Node', setup: '' },
+  { label: 'addon caricato', setup: `${addonReq} b.add(1, 1);` },
+  { label: 'addon + goroutine CPU-bound', setup: `${addonReq} b.burnCPU(${CHILD_LIFETIME_MS});` },
 ]
 
-test('Q6: SIGINT gestito da process.on e SIGTERM di default', { skip: isWin && 'segnali POSIX', timeout: 4 * KILL_AFTER_MS }, async (t) => {
-  for (const [label, setup] of signalVariants) {
+test('Q6: SIGINT gestito da process.on e SIGTERM di default', { skip: isWin && 'segnali POSIX', timeout: 120_000 }, async (t) => {
+  for (const { label, setup } of signalVariants) {
     await t.test(`${label}: SIGINT → handler JS`, async (st) => {
       const r = await runSignalChild(setup, 'SIGINT')
-      st.diagnostic(`code=${r.code} sig=${r.sig} uscita dopo il segnale ${r.exitMs} ms; stderr: ${r.err.trim() || '-'}`)
+      report(st, r)
       assert.notEqual(r.code, LOST_SIGNAL_EXIT, 'SIGINT non consegnato all\'handler JS')
-      assert.notEqual(r.sig, 'SIGKILL', 'figlio appeso: ucciso con SIGKILL')
+      assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
       assert.equal(r.code, SIGINT_EXIT)
       assert.match(r.out, /got SIGINT/)
     })
     await t.test(`${label}: SIGTERM → terminazione di default`, async (st) => {
       const r = await runSignalChild(setup, 'SIGTERM')
-      st.diagnostic(`code=${r.code} sig=${r.sig} uscita dopo il segnale ${r.exitMs} ms`)
+      report(st, r)
+      assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
       assert.equal(r.sig, 'SIGTERM')
     })
   }
+  await t.test('addon caricato: SIGTERM → handler JS', async (st) => {
+    const setup = `${addonReq} b.add(1, 1); process.on('SIGTERM', () => { console.log('got SIGTERM'); process.exit(${SIGTERM_JS_EXIT}) });`
+    const r = await runSignalChild(setup, 'SIGTERM')
+    report(st, r)
+    assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
+    assert.equal(r.code, SIGTERM_JS_EXIT)
+  })
 })

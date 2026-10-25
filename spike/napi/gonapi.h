@@ -43,6 +43,7 @@
   X(napi_status, napi_set_property, (napi_env env, napi_value o, napi_value k, napi_value v), (env, o, k, v)) \
   X(napi_status, napi_get_property, (napi_env env, napi_value o, napi_value k, napi_value* r), (env, o, k, r)) \
   X(napi_status, napi_set_element, (napi_env env, napi_value o, uint32_t i, napi_value v), (env, o, i, v)) \
+  X(napi_status, napi_set_named_property, (napi_env env, napi_value o, const char* k, napi_value v), (env, o, k, v)) \
   X(napi_status, napi_get_cb_info, (napi_env env, napi_callback_info info, size_t* argc, napi_value* argv, napi_value* self, void** data), (env, info, argc, argv, self, data)) \
   X(napi_status, napi_call_function, (napi_env env, napi_value recv, napi_value fn, size_t argc, const napi_value* argv, napi_value* r), (env, recv, fn, argc, argv, r)) \
   X(napi_status, napi_throw, (napi_env env, napi_value err), (env, err))                            \
@@ -100,6 +101,9 @@ uint64_t gn_thread_id(void);
 napi_value gn_callback(napi_env env, napi_callback_info info);
 void gn_tsfn_call_js(napi_env env, napi_value js_cb, void* ctx, void* data);
 void gn_env_cleanup(void* arg);
+
+/* ---- diagnostica (diag.c): __sigInfo(signo) in C puro, senza entrare in Go ---- */
+napi_status gn_register_diag(napi_env env, napi_value exports);
 
 /* Numero di argomenti letti "inline" sullo stack C prima di entrare in Go. */
 #define GN_INLINE_ARGS 8

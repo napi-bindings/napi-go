@@ -22,5 +22,9 @@ NAPI_MODULE_INIT() {
             missing, first_missing ? first_missing : "?");
     return NULL;
   }
-  return goNapiRegisterModule(env, exports);
+  napi_value result = goNapiRegisterModule(env, exports);
+  if (result != NULL && gn_register_diag(env, result) != napi_ok) {
+    fprintf(stderr, "napi-go: registrazione di __sigInfo fallita\n");
+  }
+  return result;
 }
