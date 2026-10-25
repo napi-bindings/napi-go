@@ -7,6 +7,11 @@
  * si richiama all'infinito (osservato su macOS con un addon napi-go).
  *
  *   cc -O2 -o sigflags sigflags.c && ./sigflags
+ *
+ * Risultati (CI, ottobre 2026):
+ *   Linux (glibc):  SA_RESETHAND riportato in lettura e conservato → esito "ok".
+ *   macOS 26 arm64: SA_RESETHAND applicato (passo 2) ma NON riportato in lettura (passi 1 e 3),
+ *                   quindi la reinstallazione con i flag riletti lo perde (passo 4).
  */
 #include <signal.h>
 #include <stdio.h>

@@ -226,15 +226,14 @@ test('Q6: SA_RESETHAND perso su node::SignalExit (macOS) e correzione di napi-go
     const r = await runSignalChild(setup, 'SIGTERM', { captureOnHang: false })
     report(st, r)
     assert.equal(r.sig, 'SIGKILL', 'la perdita di SA_RESETHAND dovrebbe bloccare il processo')
-    assert.equal(JSON.parse(r.diag).SIGTERM.resethand, false)
   })
   await t.test('con la correzione SIGTERM termina il processo', async (st) => {
     const setup = `${addonReq} b.__sigEmulateDarwinLoss(require('node:os').constants.signals.SIGTERM); b.__sigRepair();`
     const r = await runSignalChild(setup, 'SIGTERM')
     report(st, r)
     assert.equal(r.sig, 'SIGTERM')
-    const info = JSON.parse(r.diag).SIGTERM
-    assert.equal(info.resethand, true)
-    assert.equal(info.repairedByNapiGo, true)
+    // Non si verifica info.resethand: su macOS sigaction() non riporta mai SA_RESETHAND in
+    // lettura, anche quando è attivo (vedi experiments/sigflags). Conta il comportamento.
+    assert.equal(JSON.parse(r.diag).SIGTERM.repairedByNapiGo, true)
   })
 })

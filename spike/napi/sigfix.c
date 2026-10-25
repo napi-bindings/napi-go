@@ -3,17 +3,19 @@
  *
  * Problema (osservato su macOS, Go 1.24–1.27, Node 22/24): all'avvio di un c-shared il runtime
  * Go esegue initsig → setsigstack(i) per ogni handler preesistente che non gestisce: rilegge
- * l'handler con sigaction e lo reinstalla con flags | SA_ONSTACK. Su macOS in questo passaggio
- * SA_RESETHAND si perde. Node installa node::SignalExit per SIGINT e SIGTERM proprio con
+ * l'handler con sigaction e lo reinstalla con flags | SA_ONSTACK. Il kernel di macOS applica
+ * SA_RESETHAND ma non lo riporta in lettura (verificato in CI con experiments/sigflags), quindi
+ * la reinstallazione lo perde. Node installa node::SignalExit per SIGINT e SIGTERM proprio con
  * SA_RESETHAND, ripristina il terminale e poi fa raise(signo) contando sul ritorno a SIG_DFL:
  * senza SA_RESETHAND l'handler si richiama all'infinito e il processo resta al 100% di CPU
  * invece di terminare (SIGTERM/SIGINT senza listener JS).
  *
  * Correzione: per SIGINT e SIGTERM, se l'handler installato è node::SignalExit dell'eseguibile
- * principale e non ha SA_RESETHAND, lo reinstalliamo con SA_RESETHAND (mantenendo SA_ONSTACK,
+ * principale e la lettura non mostra SA_RESETHAND, lo reinstalliamo con SA_RESETHAND (mantenendo SA_ONSTACK,
  * che serve a Go per i segnali consegnati sui suoi thread). Tocchiamo solo l'handler di cui
  * conosciamo i flag originali (node::RegisterSignalHandler(..., reset_handler = true)).
- * Dove SA_RESETHAND è già presente (Linux) non cambia nulla.
+ * Su Linux la lettura riporta SA_RESETHAND e non cambia nulla; su macOS la lettura non lo
+ * riporta mai, quindi la reinstallazione avviene sempre: è idempotente e innocua.
  */
 #if !defined(_WIN32) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE /* dladdr/Dl_info su glibc: va definito prima di qualsiasi include */
