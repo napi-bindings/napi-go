@@ -50,6 +50,10 @@ jobs:
       - name: Diagnostica trap WebAssembly
         if: ${{ !cancelled() }}
         run: node experiments/wasmtrap/trap.mjs
+      - name: Diagnostica SA_RESETHAND (rilettura + reinstallazione, come setsigstack di Go)
+        if: ${{ !cancelled() && runner.os != 'Windows' }}
+        continue-on-error: true   # descrive il comportamento del sistema operativo, non di napi-go
+        run: cc -O2 -o "$RUNNER_TEMP/sigflags" experiments/sigflags/sigflags.c && "$RUNNER_TEMP/sigflags"
       - name: Benchmark
         run: node test/bench.mjs
       - name: Costo callback C→Go

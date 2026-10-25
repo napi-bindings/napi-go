@@ -88,14 +88,57 @@ static napi_value gn_diag_siginfo(napi_env env, napi_callback_info info) {
   set_bool(env, obj, "resethand", sa_ok && (sa.sa_flags & SA_RESETHAND));
   set_bool(env, obj, "siginfo", sa_ok && (sa.sa_flags & SA_SIGINFO));
   set_bool(env, obj, "restart", sa_ok && (sa.sa_flags & SA_RESTART));
+  set_bool(env, obj, "repairedByNapiGo", gn_signal_repaired(signo)); /* sigfix.c */
   return obj;
 }
 
-napi_status gn_register_diag(napi_env env, napi_value exports) {
+/* Solo per i test: toglie SA_RESETHAND dall'handler di signo, riproducendo ciò che setsigstack
+   del runtime Go fa su macOS. Permette di verificare bug e correzione anche su Linux. */
+static napi_value gn_diag_emulate_darwin_loss(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  int32_t signo = 0;
+  if (gn_napi.napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok ||
+      argc < 1 || gn_napi.napi_get_value_int32(env, argv[0], &signo) != napi_ok ||
+      signo <= 0 || signo >= NSIG) {
+    gn_napi.napi_throw_type_error(env, NULL, "__sigEmulateDarwinLoss(signo): numero di segnale non valido");
+    return NULL;
+  }
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  int ok = sigaction(signo, NULL, &sa) == 0;
+  if (ok) {
+    sa.sa_flags &= ~SA_RESETHAND;
+    sa.sa_flags |= SA_ONSTACK;
+    ok = sigaction(signo, &sa, NULL) == 0;
+  }
+  napi_value r;
+  gn_napi.napi_get_boolean(env, ok, &r);
+  return r;
+}
+
+/* Solo per i test: riesegue la correzione di sigfix.c. */
+static napi_value gn_diag_repair(napi_env env, napi_callback_info info) {
+  (void)info;
+  gn_repair_node_signal_handlers();
+  napi_value r;
+  gn_napi.napi_get_undefined(env, &r);
+  return r;
+}
+
+static napi_status export_fn(napi_env env, napi_value exports, const char* name, napi_callback cb) {
   napi_value fn;
-  napi_status s = gn_napi.napi_create_function(env, "__sigInfo", NAPI_AUTO_LENGTH, gn_diag_siginfo, NULL, &fn);
+  napi_status s = gn_napi.napi_create_function(env, name, NAPI_AUTO_LENGTH, cb, NULL, &fn);
   if (s != napi_ok) return s;
-  return gn_napi.napi_set_named_property(env, exports, "__sigInfo", fn);
+  return gn_napi.napi_set_named_property(env, exports, name, fn);
+}
+
+napi_status gn_register_diag(napi_env env, napi_value exports) {
+  napi_status s = export_fn(env, exports, "__sigInfo", gn_diag_siginfo);
+  if (s != napi_ok) return s;
+  s = export_fn(env, exports, "__sigEmulateDarwinLoss", gn_diag_emulate_darwin_loss);
+  if (s != napi_ok) return s;
+  return export_fn(env, exports, "__sigRepair", gn_diag_repair);
 }
 
 #else /* _WIN32: niente segnali POSIX */

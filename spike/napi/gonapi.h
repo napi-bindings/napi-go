@@ -105,6 +105,10 @@ void gn_env_cleanup(void* arg);
 /* ---- diagnostica (diag.c): __sigInfo(signo) in C puro, senza entrare in Go ---- */
 napi_status gn_register_diag(napi_env env, napi_value exports);
 
+/* ---- sigfix.c: ripristina SA_RESETHAND su node::SignalExit dopo l'initsig del runtime Go ---- */
+void gn_repair_node_signal_handlers(void);
+int gn_signal_repaired(int signo);
+
 /* Numero di argomenti letti "inline" sullo stack C prima di entrare in Go. */
 #define GN_INLINE_ARGS 8
 

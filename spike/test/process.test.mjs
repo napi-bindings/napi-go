@@ -126,14 +126,17 @@ function captureStacks(pid) {
   return ''
 }
 
-function runSignalChild(setup, signal) {
+function runSignalChild(setup, signal, { jsSigint = true, captureOnHang = true } = {}) {
+  const sigintListener = jsSigint
+    ? `process.on('SIGINT', () => { console.log('got SIGINT'); process.exit(${SIGINT_EXIT}) });`
+    : '' // SIGINT resta a node::SignalExit (terminazione di default)
   const script = `const os = require('node:os');
     ${setup}
     if (typeof b !== 'undefined') {
       const S = os.constants.signals;
       console.log('${DIAG_PREFIX}' + JSON.stringify({ SIGTERM: b.__sigInfo(S.SIGTERM), SIGINT: b.__sigInfo(S.SIGINT) }));
     }
-    process.on('SIGINT', () => { console.log('got SIGINT'); process.exit(${SIGINT_EXIT}) });
+    ${sigintListener}
     setTimeout(() => { console.log('segnale non ricevuto'); process.exit(${LOST_SIGNAL_EXIT}) }, ${CHILD_LIFETIME_MS});
     console.log('ready')`
   return new Promise((resolve, reject) => {
@@ -151,7 +154,7 @@ function runSignalChild(setup, signal) {
         signaledAt = Date.now()
         c.kill(signal)
         hangTimer = setTimeout(() => {
-          stacks = captureStacks(c.pid)
+          if (captureOnHang) stacks = captureStacks(c.pid)
           c.kill('SIGKILL')
         }, HANG_AFTER_MS)
       }
@@ -191,6 +194,12 @@ test('Q6: SIGINT gestito da process.on e SIGTERM di default', { skip: isWin && '
       assert.equal(r.code, SIGINT_EXIT)
       assert.match(r.out, /got SIGINT/)
     })
+    await t.test(`${label}: SIGINT → terminazione di default (senza handler JS)`, async (st) => {
+      const r = await runSignalChild(setup, 'SIGINT', { jsSigint: false })
+      report(st, r)
+      assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
+      assert.equal(r.sig, 'SIGINT')
+    })
     await t.test(`${label}: SIGTERM → terminazione di default`, async (st) => {
       const r = await runSignalChild(setup, 'SIGTERM')
       report(st, r)
@@ -204,5 +213,28 @@ test('Q6: SIGINT gestito da process.on e SIGTERM di default', { skip: isWin && '
     report(st, r)
     assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
     assert.equal(r.code, SIGTERM_JS_EXIT)
+  })
+})
+
+// Regressione del blocco osservato su macOS: il runtime Go (initsig → setsigstack) reinstalla
+// node::SignalExit perdendo SA_RESETHAND, e raise() dentro l'handler lo richiama all'infinito.
+// __sigEmulateDarwinLoss riproduce la perdita su qualsiasi Unix; __sigRepair esegue la correzione
+// di napi/sigfix.c (la stessa chiamata all'avvio del modulo).
+test('Q6: SA_RESETHAND perso su node::SignalExit (macOS) e correzione di napi-go', { skip: isWin && 'segnali POSIX', timeout: 60_000 }, async (t) => {
+  await t.test('senza correzione SIGTERM blocca il processo (riproduce macOS)', async (st) => {
+    const setup = `${addonReq} b.__sigEmulateDarwinLoss(require('node:os').constants.signals.SIGTERM);`
+    const r = await runSignalChild(setup, 'SIGTERM', { captureOnHang: false })
+    report(st, r)
+    assert.equal(r.sig, 'SIGKILL', 'la perdita di SA_RESETHAND dovrebbe bloccare il processo')
+    assert.equal(JSON.parse(r.diag).SIGTERM.resethand, false)
+  })
+  await t.test('con la correzione SIGTERM termina il processo', async (st) => {
+    const setup = `${addonReq} b.__sigEmulateDarwinLoss(require('node:os').constants.signals.SIGTERM); b.__sigRepair();`
+    const r = await runSignalChild(setup, 'SIGTERM')
+    report(st, r)
+    assert.equal(r.sig, 'SIGTERM')
+    const info = JSON.parse(r.diag).SIGTERM
+    assert.equal(info.resethand, true)
+    assert.equal(info.repairedByNapiGo, true)
   })
 })

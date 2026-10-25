@@ -23,6 +23,9 @@ NAPI_MODULE_INIT() {
     return NULL;
   }
   napi_value result = goNapiRegisterModule(env, exports);
+  /* A questo punto l'initsig del runtime Go è concluso (goNapiRegisterModule ne attende la fine):
+     ripristiniamo SA_RESETHAND su node::SignalExit se setsigstack lo ha perso (macOS). */
+  gn_repair_node_signal_handlers();
   if (result != NULL && gn_register_diag(env, result) != napi_ok) {
     fprintf(stderr, "napi-go: registrazione di __sigInfo fallita\n");
   }
