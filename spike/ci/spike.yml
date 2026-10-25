@@ -19,6 +19,7 @@ jobs:
   test:
     name: ${{ matrix.os }} · node ${{ matrix.node }} · go ${{ matrix.go }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
     strategy:
       fail-fast: false
       matrix:
@@ -45,7 +46,7 @@ jobs:
           CGO_ENABLED: '1'
         run: node scripts/build.mjs
       - name: Test
-        run: node --test --test-reporter=spec test/*.test.mjs
+        run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
       - name: Diagnostica trap WebAssembly
         if: ${{ !cancelled() }}
         run: node experiments/wasmtrap/trap.mjs
@@ -58,6 +59,7 @@ jobs:
   cgocheck2:
     name: ubuntu · GOEXPERIMENT=cgocheck2
     runs-on: ubuntu-latest
+    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -70,11 +72,12 @@ jobs:
       - run: node scripts/build.mjs
         env:
           GOEXPERIMENT: cgocheck2
-      - run: node --test --test-reporter=spec test/*.test.mjs
+      - run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
 
   windows-zig:
     name: windows · zig cc
     runs-on: windows-latest
+    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -89,7 +92,7 @@ jobs:
       - run: node scripts/build.mjs
         env:
           CC: zig cc
-      - run: node --test --test-reporter=spec test/*.test.mjs
+      - run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
       - name: Diagnostica trap WebAssembly
         if: ${{ !cancelled() }}
         run: node experiments/wasmtrap/trap.mjs
@@ -104,6 +107,7 @@ jobs:
     # Q7: Go c-shared usa TLS initial-exec (FLAGS STATIC_TLS): va verificato il dlopen con musl.
     name: alpine (musl) · node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
     container: node:${{ matrix.node }}-alpine
     defaults:
       run:
@@ -125,6 +129,6 @@ jobs:
           CGO_ENABLED: '1'
         run: node scripts/build.mjs
       - name: Test
-        run: node --test --test-reporter=spec test/*.test.mjs
+        run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
       - name: Benchmark
         run: node test/bench.mjs

@@ -61,11 +61,14 @@ test('Q6: il processo resta vivo finché ci sono Promise Go pendenti', () => {
   assert.equal(r.stdout.trim(), 'resolved 300')
 })
 
-test('Q6: process.exit con goroutine in volo non crasha', () => {
+test('Q6: process.exit con goroutine in volo non crasha', (t) => {
+  const t0 = Date.now()
   const r = nodeEval(`const b = require(${JSON.stringify(addonPath('basic'))});
     for (let i = 0; i < 1000; i++) b.sleep(5);
     b.burnCPU(1000);
     setTimeout(() => process.exit(7), 20)`)
+  // se l'uscita aspettasse le goroutine, il figlio durerebbe circa quanto burnCPU (1000 ms)
+  t.diagnostic(`durata del processo figlio ${Date.now() - t0} ms`)
   assert.equal(r.status, 7, r.stderr)
 })
 
@@ -92,23 +95,65 @@ test('Q6: child_process (SIGCHLD) funziona con l\'addon caricato', () => {
   }
 })
 
-test('Q6: SIGINT gestito da process.on e SIGTERM di default', { skip: isWin && 'segnali POSIX' }, async () => {
-  const script = `const b = require(${JSON.stringify(addonPath('basic'))});
-    process.on('SIGINT', () => { console.log('got SIGINT'); process.exit(42) });
-    b.burnCPU(60000); setInterval(() => b.add(1,1), 5); console.log('ready')`
-  const runChild = (signal) => new Promise((resolve, reject) => {
+// Segnali POSIX nel processo figlio. Il figlio ha una vita limitata (CHILD_LIFETIME_MS): se il
+// segnale non arriva all'handler JS esce con LOST_SIGNAL_EXIT invece di restare appeso; il padre
+// lo uccide comunque con SIGKILL dopo KILL_AFTER_MS. Le varianti isolano la causa di un
+// eventuale segnale perso (osservato su macOS in CI): Node da solo, addon caricato, addon con
+// goroutine CPU-bound su tutte le P.
+const CHILD_LIFETIME_MS = 15_000
+const KILL_AFTER_MS = 30_000
+const LOST_SIGNAL_EXIT = 99
+const SIGINT_EXIT = 42
+
+function runSignalChild(setup, signal) {
+  const script = `${setup}
+    process.on('SIGINT', () => { console.log('got SIGINT'); process.exit(${SIGINT_EXIT}) });
+    setTimeout(() => { console.log('segnale non ricevuto'); process.exit(${LOST_SIGNAL_EXIT}) }, ${CHILD_LIFETIME_MS});
+    console.log('ready')`
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now()
     const c = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'pipe'] })
-    c.once('error', reject)
+    const killer = setTimeout(() => c.kill('SIGKILL'), KILL_AFTER_MS)
     let out = ''
+    let err = ''
+    let signaledAt = 0
+    c.once('error', (e) => { clearTimeout(killer); reject(e) })
+    c.stderr.on('data', (d) => { err += d })
     c.stdout.on('data', (d) => {
       out += d
-      if (out.includes('ready')) c.kill(signal)
+      if (!signaledAt && out.includes('ready')) {
+        signaledAt = Date.now()
+        c.kill(signal)
+      }
     })
-    c.on('exit', (code, sig) => resolve({ code, sig, out }))
+    c.on('exit', (code, sig) => {
+      clearTimeout(killer)
+      resolve({ code, sig, out, err, exitMs: signaledAt ? Date.now() - signaledAt : -1, totalMs: Date.now() - t0 })
+    })
   })
-  const a = await runChild('SIGINT')
-  assert.equal(a.code, 42)
-  assert.match(a.out, /got SIGINT/)
-  const t = await runChild('SIGTERM')
-  assert.equal(t.sig, 'SIGTERM')
+}
+
+const addonReq = `const b = require(${JSON.stringify(addonPath('basic'))});`
+const signalVariants = [
+  ['solo Node', ''],
+  ['addon caricato', `${addonReq} b.add(1, 1);`],
+  ['addon + goroutine CPU-bound', `${addonReq} b.burnCPU(${CHILD_LIFETIME_MS});`],
+]
+
+test('Q6: SIGINT gestito da process.on e SIGTERM di default', { skip: isWin && 'segnali POSIX', timeout: 4 * KILL_AFTER_MS }, async (t) => {
+  for (const [label, setup] of signalVariants) {
+    await t.test(`${label}: SIGINT → handler JS`, async (st) => {
+      const r = await runSignalChild(setup, 'SIGINT')
+      st.diagnostic(`code=${r.code} sig=${r.sig} uscita dopo il segnale ${r.exitMs} ms; stderr: ${r.err.trim() || '-'}`)
+      assert.notEqual(r.code, LOST_SIGNAL_EXIT, 'SIGINT non consegnato all\'handler JS')
+      assert.notEqual(r.sig, 'SIGKILL', 'figlio appeso: ucciso con SIGKILL')
+      assert.equal(r.code, SIGINT_EXIT)
+      assert.match(r.out, /got SIGINT/)
+    })
+    await t.test(`${label}: SIGTERM → terminazione di default`, async (st) => {
+      const r = await runSignalChild(setup, 'SIGTERM')
+      st.diagnostic(`code=${r.code} sig=${r.sig} uscita dopo il segnale ${r.exitMs} ms`)
+      assert.equal(r.sig, 'SIGTERM')
+    })
+  }
 })

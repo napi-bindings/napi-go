@@ -27,7 +27,9 @@ function run(cmd, args, env = {}) {
 const go = process.env.GO || 'go'
 for (const name of ['basic', 'second']) {
   const target = join(out, `${name}.node`)
-  const ms = run(go, ['build', '-buildmode=c-shared', '-trimpath', '-ldflags=-s -w', '-o', target, `./addons/${name}`], { CGO_ENABLED: '1' })
+  // -buildvcs=false: le info VCS non servono in un .node e la build non deve dipendere da git
+  // (nei container CI il repository ha un altro proprietario → "dubious ownership", exit 128).
+  const ms = run(go, ['build', '-buildmode=c-shared', '-buildvcs=false', '-trimpath', '-ldflags=-s -w', '-o', target, `./addons/${name}`], { CGO_ENABLED: '1' })
   rmSync(join(out, `${name}.h`), { force: true }) // header generato da c-shared: inutile per un .node
   console.log(`✓ ${name}.node  ${(statSync(target).size / 1048576).toFixed(2)} MB  (${ms} ms)`)
 }
