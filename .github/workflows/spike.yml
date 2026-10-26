@@ -110,14 +110,15 @@ jobs:
   alpine:
     # Q7 — limite noto (Go ≤ 1.27): il runtime Go nei c-shared usa TLS initial-exec e si aspetta
     # argc/argv nelle funzioni di init; musl rifiuta il dlopen ("initial-exec TLS resolves to dynamic
-    # definition"). Correzione upstream: golang/go#71953, CL 696635. Il job resta attivo come
-    # sentinella (quando passa, Go ha risolto) ma non blocca la pipeline.
+    # definition"). Correzione upstream: golang/go#71953, CL 696635.
+    # Sentinella: la sonda dlopen distingue tre esiti. Errore noto con il Go di Alpine → warning e job
+    # verde (test saltati); caricamento riuscito → tutti i test; qualunque altro errore → job rosso.
     # La variante go=cl696635 compila Go dall'ultimo patchset della CL (ancora aperta) e verifica in
-    # anticipo che la correzione basti a napi-go. Per i c-shared la CL sceglie già il modello general
-    # dynamic (-tls=auto), quindi la build dell'addon resta identica.
+    # anticipo che la correzione basti a napi-go: lì anche l'errore noto è un fallimento. Per i c-shared
+    # la CL sceglie già il modello general dynamic (-tls=auto), quindi la build dell'addon resta identica.
     name: alpine (musl) · node ${{ matrix.node }} · go ${{ matrix.go }}
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: ${{ matrix.go == 'cl696635' }}   # una CL non integrata può rompersi: non blocca la pipeline
     timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
     container: node:${{ matrix.node }}-alpine
     defaults:
@@ -159,7 +160,23 @@ jobs:
         run: node scripts/build.mjs
       - name: Modello TLS del .node (TPOFF64 = initial-exec, TLSGD/TLSDESC = general dynamic)
         run: readelf -d build/basic.node | grep -i flags; readelf -r build/basic.node | grep -E 'TPOFF|TLSGD|TLSDESC|DTPMOD' || true
+      - name: Sonda dlopen (limite noto Q7 → warning, altri errori → job rosso)
+        id: sonda
+        run: |
+          if out=$(timeout 60 node -e "require('./build/basic.node'); require('./build/second.node')" 2>&1); then
+            echo "caricato=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=musl::dlopen riuscito con $(go version): eseguo tutti i test"
+          elif [ '${{ matrix.go }}' = alpine ] && printf '%s' "$out" | grep -q 'initial-exec TLS resolves to dynamic definition'; then
+            echo "caricato=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=musl: limite noto Q7::$(go version): musl rifiuta il TLS initial-exec del runtime Go, test saltati (golang/go#71953, CL 696635)"
+          else
+            printf '%s\n' "$out"
+            echo "::error title=musl::dlopen fallito (o bloccato) con un esito diverso dal limite noto Q7"
+            exit 1
+          fi
       - name: Test
+        if: steps.sonda.outputs.caricato == 'true'
         run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
       - name: Benchmark
+        if: steps.sonda.outputs.caricato == 'true'
         run: node test/bench.mjs
