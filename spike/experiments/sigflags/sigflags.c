@@ -58,9 +58,9 @@ int main(void) {
   install(sig);
   struct sigaction o;
   memset(&o, 0, sizeof o);
-  sigaction(sig, NULL, &o);
+  if (sigaction(sig, NULL, &o) != 0) { perror("sigaction (rilettura)"); return 2; }
   o.sa_flags |= SA_ONSTACK;
-  sigaction(sig, &o, NULL);
+  if (sigaction(sig, &o, NULL) != 0) { perror("sigaction (reinstallazione)"); return 2; }
   int r2 = flag_set(sig, SA_RESETHAND);
   printf("3. dopo rilettura + reinstallazione (setsigstack): SA_RESETHAND %s\n", r2 ? "presente" : "ASSENTE");
   raise(sig);

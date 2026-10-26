@@ -10,6 +10,12 @@
  *   - flags:       SA_ONSTACK, SA_RESETHAND, SA_SIGINFO, SA_RESTART
  * Serve a capire se il runtime Go cambia la gestione dei segnali del processo Node (macOS:
  * SIGTERM con azione di default non termina il processo quando l'addon è caricato).
+ * Nota: su macOS il campo resethand è sempre false, perché sigaction() non riporta mai
+ * SA_RESETHAND in lettura (vedi experiments/sigflags).
+ *
+ * Solo darwin/amd64: __goTlsSlot() restituisce il contenuto dello slot TLS 0x30(GS), dove
+ * OGNI runtime Go del processo tiene il puntatore a g (slot fisso riservato da Apple a Go,
+ * golang/go#23617). Serve a verificare che due addon Go se lo contendono.
  */
 #if !defined(_WIN32)
 #ifndef _GNU_SOURCE
@@ -126,6 +132,27 @@ static napi_value gn_diag_repair(napi_env env, napi_callback_info info) {
   return r;
 }
 
+#if defined(__APPLE__) && defined(__x86_64__)
+#define GN_HAS_GO_TLS_SLOT 1
+#define GN_PTR_TEXT_MAX 32
+static napi_value gn_diag_go_tls_slot(napi_env env, napi_callback_info info) {
+  (void)info;
+  void* g;
+  /* Stesso offset di runtime/sys_darwin_amd64.s e cmd/link computeTLSOffset. */
+  __asm__ volatile("movq %%gs:0x30, %0" : "=r"(g));
+  char text[GN_PTR_TEXT_MAX];
+  snprintf(text, sizeof text, "%p", g);
+  napi_value r;
+  if (gn_napi.napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &r) != napi_ok) {
+    static const char msg[] = "__goTlsSlot(): creazione della stringa fallita";
+    static const char code[] = "GO_DIAG";
+    gn_throw_error(env, msg, sizeof msg - 1, code, sizeof code - 1);
+    return NULL;
+  }
+  return r;
+}
+#endif
+
 static napi_status export_fn(napi_env env, napi_value exports, const char* name, napi_callback cb) {
   napi_value fn;
   napi_status s = gn_napi.napi_create_function(env, name, NAPI_AUTO_LENGTH, cb, NULL, &fn);
@@ -138,6 +165,10 @@ napi_status gn_register_diag(napi_env env, napi_value exports) {
   if (s != napi_ok) return s;
   s = export_fn(env, exports, "__sigEmulateDarwinLoss", gn_diag_emulate_darwin_loss);
   if (s != napi_ok) return s;
+#ifdef GN_HAS_GO_TLS_SLOT
+  s = export_fn(env, exports, "__goTlsSlot", gn_diag_go_tls_slot);
+  if (s != napi_ok) return s;
+#endif
   return export_fn(env, exports, "__sigRepair", gn_diag_repair);
 }
 

@@ -110,6 +110,7 @@ const LOST_SIGNAL_EXIT = 99
 const SIGINT_EXIT = 42
 const SIGTERM_JS_EXIT = 43
 const DIAG_PREFIX = 'diag:'
+const NO_DIAG = '-'
 
 function captureStacks(pid) {
   const run = (cmd, args) => {
@@ -164,7 +165,7 @@ function runSignalChild(setup, signal, { jsSigint = true, captureOnHang = true }
       const diagLine = out.split('\n').find((l) => l.startsWith(DIAG_PREFIX))
       resolve({
         code, sig, out, err, stacks,
-        diag: diagLine ? diagLine.slice(DIAG_PREFIX.length) : '-',
+        diag: diagLine ? diagLine.slice(DIAG_PREFIX.length) : NO_DIAG,
         exitMs: signaledAt ? Date.now() - signaledAt : -1,
       })
     })
@@ -234,6 +235,7 @@ test('Q6: SA_RESETHAND perso su node::SignalExit (macOS) e correzione di napi-go
     assert.equal(r.sig, 'SIGTERM')
     // Non si verifica info.resethand: su macOS sigaction() non riporta mai SA_RESETHAND in
     // lettura, anche quando è attivo (vedi experiments/sigflags). Conta il comportamento.
+    assert.notEqual(r.diag, NO_DIAG, 'il figlio non ha stampato la diagnostica dei segnali')
     assert.equal(JSON.parse(r.diag).SIGTERM.repairedByNapiGo, true)
   })
 })

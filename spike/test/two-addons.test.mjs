@@ -2,10 +2,43 @@
 // stesso processo Node.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { Worker } from 'node:worker_threads'
 import { load, addonPath } from './helpers.mjs'
 
-test('due runtime Go: caricamento e chiamate sincrone', () => {
+// Su darwin/amd64 tutti i runtime Go tengono g nello stesso slot TLS fisso 0x30(GS): il secondo
+// runtime trova il g del primo sul main thread e lo usa come proprio (heap e M mescolati,
+// "fatal error: bad sweepgen in refill"). Limite di Go, vedi README, scoperta 8.
+const DARWIN_X64 = process.platform === 'darwin' && process.arch === 'x64'
+const SKIP_IF_SHARED_G_SLOT = DARWIN_X64 && 'darwin/amd64: due runtime Go condividono lo slot TLS di g (limite di Go)'
+const CHILD_TIMEOUT_MS = 30_000
+const NULL_POINTER_TEXT = '0x0'
+
+test('darwin/amd64: il secondo runtime Go riusa il g del primo (slot TLS condiviso)', {
+  skip: !DARWIN_X64 && 'solo darwin/amd64: altrove ogni runtime ha il proprio slot',
+}, (t) => {
+  // In un processo separato: lo stato dei runtime dopo il test non è affidabile.
+  const src = `
+    const b = require(${JSON.stringify(addonPath('basic'))})
+    const beforeSecond = b.__goTlsSlot()  // init di basic: il suo g resta legato al main thread
+    require(${JSON.stringify(addonPath('second'))})  // anche l'init di second entra in Go
+    const afterSecond = b.__goTlsSlot()
+    process.stdout.write(JSON.stringify({ beforeSecond, afterSecond }))`
+  const r = spawnSync(process.execPath, ['-e', src], { encoding: 'utf8', timeout: CHILD_TIMEOUT_MS })
+  assert.equal(r.error, undefined)
+  const firstLine = (r.stderr || '').split('\n')[0] || '-'
+  const outcome = `code=${r.status} sig=${r.signal} stdout=${r.stdout || '-'} stderr: ${firstLine}`
+  t.diagnostic(outcome)
+  // Il figlio può anche andare in crash all'uscita (è il difetto stesso): conta che abbia scritto le
+  // letture dello slot, altrimenti si riporta come è terminato invece di un errore di parsing.
+  assert.ok(r.stdout, `il processo figlio non ha prodotto output: ${outcome}`)
+  const { beforeSecond, afterSecond } = JSON.parse(r.stdout)
+  assert.notEqual(beforeSecond, NULL_POINTER_TEXT, 'il runtime di basic deve aver legato un g al main thread')
+  // Se second avesse un proprio slot avrebbe legato il suo g e lo slot sarebbe cambiato.
+  assert.equal(afterSecond, beforeSecond)
+})
+
+test('due runtime Go: caricamento e chiamate sincrone', { skip: SKIP_IF_SHARED_G_SLOT }, () => {
   const b = load('basic')
   const s = load('second')
   assert.equal(s.name(), 'second')
@@ -15,7 +48,7 @@ test('due runtime Go: caricamento e chiamate sincrone', () => {
   assert.notEqual(s.goAddr().split(' ')[0], b.info().goAddr)
 })
 
-test('due runtime Go: input limite, null ed errori isolati per runtime', async () => {
+test('due runtime Go: input limite, null ed errori isolati per runtime', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
   const b = load('basic')
   const s = load('second')
   assert.equal(s.mul(Number.MAX_VALUE, 2), Infinity)
@@ -31,7 +64,7 @@ test('due runtime Go: input limite, null ed errori isolati per runtime', async (
   assert.equal(b.echo(''), '')
 })
 
-test('due runtime Go: async, GC e CPU concorrenti in entrambi', async () => {
+test('due runtime Go: async, GC e CPU concorrenti in entrambi', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
   const b = load('basic')
   const s = load('second')
   const jobs = []
@@ -43,7 +76,7 @@ test('due runtime Go: async, GC e CPU concorrenti in entrambi', async () => {
   b.goGC()
 })
 
-test('due runtime Go: entrambi caricati in worker concorrenti', async () => {
+test('due runtime Go: entrambi caricati in worker concorrenti', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
   const src = `
     const { parentPort } = require('node:worker_threads')
     const b = require(${JSON.stringify(addonPath('basic'))})
