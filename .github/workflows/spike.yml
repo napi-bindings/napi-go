@@ -112,7 +112,10 @@ jobs:
     # argc/argv nelle funzioni di init; musl rifiuta il dlopen ("initial-exec TLS resolves to dynamic
     # definition"). Correzione upstream: golang/go#71953, CL 696635. Il job resta attivo come
     # sentinella (quando passa, Go ha risolto) ma non blocca la pipeline.
-    name: alpine (musl) · node ${{ matrix.node }} · limite noto
+    # La variante go=cl696635 compila Go dall'ultimo patchset della CL (ancora aperta) e verifica in
+    # anticipo che la correzione basti a napi-go. Per i c-shared la CL sceglie già il modello general
+    # dynamic (-tls=auto), quindi la build dell'addon resta identica.
+    name: alpine (musl) · node ${{ matrix.node }} · go ${{ matrix.go }}
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
@@ -125,11 +128,29 @@ jobs:
       fail-fast: false
       matrix:
         node: ['22', '24']
+        go: ['alpine']   # Go del pacchetto Alpine: riproduce il limite noto
+        include:
+          - node: '24'
+            go: 'cl696635'
     steps:
       - name: Dipendenze
         working-directory: /
         run: apk add --no-cache go gcc musl-dev git
       - uses: actions/checkout@v5
+      - name: Go dalla CL 696635 (ultimo patchset, bootstrap con il Go di Alpine)
+        if: matrix.go == 'cl696635'
+        working-directory: /
+        run: |
+          apk add --no-cache bash   # richiesto da make.bash
+          ref=$(git ls-remote https://go.googlesource.com/go 'refs/changes/35/696635/*' | awk '{print $2}' | grep -E '/[0-9]+$' | sort -t/ -k5,5n | tail -1)
+          test -n "$ref"
+          echo "CL 696635: $ref"
+          git init -q /opt/go-cl
+          git -C /opt/go-cl fetch -q --depth=1 https://go.googlesource.com/go "$ref"
+          git -C /opt/go-cl checkout -q FETCH_HEAD
+          git -C /opt/go-cl log -1 --format='%H %s'
+          cd /opt/go-cl/src && GOROOT_BOOTSTRAP=$(go env GOROOT) ./make.bash
+          echo /opt/go-cl/bin >> "$GITHUB_PATH"
       - name: Toolchain
         run: go version && node --version && gcc --version | head -1
       - name: Build
