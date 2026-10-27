@@ -16,9 +16,13 @@
 //     target, direttamente in <cartella>/;
 //   - l'addon va in <cartella>/build/Release/<target>.node, dove lo cercano gli script JS;
 //   - ogni file .js è un test, come in test/testpy di Node.js, con le righe "// Flags:" e
-//     "// Env:" rispettate.
+//     "// Env:" rispettate;
+//   - napi-go.json (facoltativo) aggiunge defines a un target quando il test C li imposta nel
+//     sorgente invece che nel binding.gyp: {"targets": {"<target>": {"defines": [...], "reason": "..."}}}.
 //
-// status.json elenca i test saltati con il motivo. Variabili d'ambiente rispettate: CC,
+// status.json elenca i test saltati con il motivo, sempre ("skip") o sotto una versione di
+// Node.js ("minNodeMajor", per i test di nodejs/node main che usano funzionalità recenti).
+// Variabili d'ambiente rispettate: CC,
 // GOEXPERIMENT (es. cgocheck2).
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, rmSync, mkdirSync, statSync } from 'node:fs'
@@ -40,6 +44,7 @@ const ENV_PATTERN = /\/\/\s+Env:(.*)/
 const DEFAULT_NAPI_VERSION = 8
 const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10']])
 const EXPERIMENTAL_TAG = 'napi_go_experimental'
+const NODE_MAJOR = Number(process.versions.node.split('.')[0])
 
 class UsageError extends Error {}
 
@@ -119,7 +124,10 @@ function discover () {
       const gypFile = join(dir, 'binding.gyp')
       if (!existsSync(gypFile)) continue
       const gyp = parseGyp(gypFile)
-      const targets = (gyp.targets ?? []).map((t) => {
+      const overrides = readJSON(join(dir, 'napi-go.json'), { targets: {} }).targets ?? {}
+      const targets = (gyp.targets ?? []).map((gypTarget) => {
+        const extra = overrides[gypTarget.target_name]?.defines ?? []
+        const t = { ...gypTarget, defines: [...extra, ...(gypTarget.defines ?? [])] }
         const own = join(dir, t.target_name)
         const pkgDir = hasGoFiles(own) ? own : dir
         if (!hasGoFiles(pkgDir)) {
@@ -203,10 +211,19 @@ function report (label, id, r) {
   if (r.stderr.trim()) process.stdout.write(`  --- stderr\n${r.stderr.trimEnd()}\n`)
 }
 
+// skipReason restituisce il motivo per cui il test id va saltato, oppure null:
+//   status.skip[id]          = "motivo"                          sempre
+//   status.minNodeMajor[id]  = {"major": N, "reason": "motivo"}  con Node < N
+function skipReason (status, id) {
+  if (status.skip?.[id]) return status.skip[id]
+  const min = status.minNodeMajor?.[id]
+  if (min && NODE_MAJOR < min.major) return `requires Node.js >= ${min.major}: ${min.reason}`
+  return null
+}
+
 async function main () {
   const opts = parseArgs(process.argv.slice(2))
-  const status = readJSON(join(here, 'status.json'), { skip: {} })
-  const skips = status.skip ?? {}
+  const status = readJSON(join(here, 'status.json'), {})
   const dirs = discover().filter((d) => matches(d.id, opts.filters) || d.scripts.some((s) => matches(`${d.id}/${s.replace(/\.js$/, '')}`, opts.filters)))
   if (dirs.length === 0) throw new UsageError('no test matches the given filters')
 
@@ -231,9 +248,10 @@ async function main () {
     for (const script of d.scripts) {
       const id = `${d.id}/${script.replace(/\.js$/, '')}`
       if (!matches(id, opts.filters) && !matches(d.id, opts.filters)) continue
-      if (skips[id]) {
+      const reason = skipReason(status, id)
+      if (reason) {
         counts.skip++
-        process.stdout.write(`skip ${id} (${skips[id]})\n`)
+        process.stdout.write(`skip ${id} (${reason})\n`)
         continue
       }
       const file = join(d.dir, script)

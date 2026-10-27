@@ -22,7 +22,8 @@ GOEXPERIMENT=cgocheck2 node tests/nodesuite/run.mjs
 | `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …) |
 | `internal/napitest/` | equivalente Go di `common.h` / `common-inl.h` |
 | `js-native-api/<test>/`, `node-api/<test>/` | `binding.gyp` e `*.js` originali + porting Go (`main.go`, …) |
-| `status.json` (facoltativo) | test saltati: `{"skip": {"<suite>/<cartella>/<file>": "motivo"}}` |
+| `status.json` | test saltati, sempre (`skip`) o sotto una versione di Node.js (`minNodeMajor`) |
+| `<cartella>/napi-go.json` (facoltativo) | defines aggiuntivi di un target quando il C li imposta nel sorgente (es. `#define NAPI_VERSION 9`) |
 
 Regole del runner, riprese da `test/testpy` di Node.js:
 
@@ -60,14 +61,24 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 - Il `data` delle funzioni JS create da Go trasporta l'indice della funzione registrata in
   `napitest` (dispatch di `sys.CallbackTrampoline`), non il `data` del test C.
 - I nomi passati ai descrittori di proprietà sono stringhe C condivise e mai liberate
-  (`nt.CStr`), così i descrittori non contengono puntatori Go.
+  (`nt.CStr`, `nt.UTF16`), così i descrittori non contengono puntatori Go.
+- I finalizer passano per `sys.FinalizeTrampoline`: `nt.Finalizer(fn, hint)` restituisce la coppia
+  callback/hint da usare al posto di quella del C, e `fn` riceve il `finalize_data` di Node-API e
+  l'hint originale. La memoria che Node-API deve poter usare dopo la chiamata (stringhe e
+  ArrayBuffer esterni) si alloca con `nt.Malloc` e si libera con `nt.Free` / `nt.FreeAddr`.
 
 ## Stato
 
 | Suite | Test portati |
 |---|---|
-| js-native-api | 2_function_arguments, test_array, test_number |
+| js-native-api | 2_function_arguments, test_array, test_bigint, test_conversions, test_dataview, test_date, test_error, test_exception, test_number, test_string, test_symbol, test_typedarray |
 | node-api | 1_hello_world, test_async |
+
+Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
+li salta sotto la versione di Node.js che le introduce (oggi tre script richiedono Node.js ≥ 24).
+
+Unica deviazione dal C: `test_dataview` non chiama `node_api_is_sharedarraybuffer` (sperimentale,
+assente da node-api-headers 1.9.0); il controllo resta a `napi_create_dataview`.
 
 La valutazione completa delle due suite (copertura, esclusioni, rischi, piano) è nel documento
 di progetto `napi-go-valutazione-js-native-api.md`.

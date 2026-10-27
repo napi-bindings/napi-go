@@ -1,0 +1,17 @@
+{
+  "skip": {},
+  "minNodeMajor": {
+    "js-native-api/test_dataview/test": {
+      "major": 24,
+      "reason": "napi_create_dataview on a SharedArrayBuffer is rejected with napi_invalid_arg on Node.js 22"
+    },
+    "js-native-api/test_typedarray/test": {
+      "major": 24,
+      "reason": "the script uses Float16Array, missing on Node.js 22"
+    },
+    "js-native-api/test_typedarray/test_sharedarraybuffer": {
+      "major": 24,
+      "reason": "the script uses Float16Array, missing on Node.js 22"
+    }
+  }
+}

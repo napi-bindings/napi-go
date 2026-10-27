@@ -1,0 +1,8 @@
+{
+  "targets": {
+    "test_error": {
+      "defines": ["NAPI_VERSION=9"],
+      "reason": "test_error.c inizia con #define NAPI_VERSION 9"
+    }
+  }
+}

@@ -21,7 +21,7 @@ type createFn[T number] func(env sys.Env, value T, result *sys.Value) sys.Status
 type getValueFn[T number] func(env sys.Env, value sys.Value, result *T) sys.Status
 
 // bindingForCreate equivale a BINDING_FOR_CREATE: chiama napi_create_<tipo> con env NULL e con
-// result NULL.
+// result NULL. Lo status delle chiamate senza controllo è letto subito dopo da AddLastStatus.
 func bindingForCreate[T number](create createFn[T]) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var returnValue, callResult sys.Value

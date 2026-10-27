@@ -64,6 +64,7 @@ func init() {
 	sys.SetCallbackHandler(dispatchCallback)
 	sys.SetAsyncExecuteHandler(dispatchAsyncExecute)
 	sys.SetAsyncCompleteHandler(dispatchAsyncComplete)
+	sys.SetFinalizeHandler(dispatchFinalize)
 }
 
 func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, _ sys.Value, _ []sys.Value) sys.Value {
