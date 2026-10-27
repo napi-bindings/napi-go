@@ -1,0 +1,116 @@
+# Fase 1 — Layer 0 (pacchetto sys).
+# Da copiare in .github/workflows/sys.yml.
+name: sys
+
+on:
+  push:
+    paths: ['go.mod', 'sys/**', 'tests/e2e/**', '.github/workflows/sys.yml']
+  pull_request:
+    paths: ['go.mod', 'sys/**', 'tests/e2e/**', '.github/workflows/sys.yml']
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  generate:
+    name: generatore e test unitari
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: File generati aggiornati
+        working-directory: sys
+        run: go run ./internal/gen -check
+      - name: gofmt
+        run: test -z "$(gofmt -l sys tests)" || (gofmt -l sys tests && exit 1)
+      - name: go vet (tutti i build tag di versione)
+        run: |
+          for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental; do
+            echo "== tags: ${tags:-default}"
+            go vet -tags "$tags" ./sys/... ./tests/...
+          done
+      - name: go test (tutti i build tag di versione)
+        run: |
+          for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental; do
+            go test -count=1 -tags "$tags" ./sys/...
+          done
+
+  e2e:
+    name: ${{ matrix.os }} · node ${{ matrix.node }} · go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        node: ['22', '24']
+        go: ['1.24.x', 'stable']
+        include:
+          - os: ubuntu-latest
+            node: 'current'
+            go: 'stable'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Toolchain
+        run: go version && node --version && node -p "'Node-API ' + process.versions.napi"
+      - name: go test ./sys
+        run: go test -count=1 ./sys/...
+      - name: Build addon e2e
+        env:
+          CGO_ENABLED: '1'
+        run: node tests/e2e/build.mjs
+      - name: Test e2e
+        run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
+
+  cgocheck2:
+    name: ubuntu · GOEXPERIMENT=cgocheck2
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: go test -count=1 ./sys/...
+        env:
+          GOEXPERIMENT: cgocheck2
+      - run: node tests/e2e/build.mjs
+        env:
+          GOEXPERIMENT: cgocheck2
+      - run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
+
+  windows-zig:
+    name: windows · zig cc
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: mlugg/setup-zig@v2
+      - run: zig version && go version && node --version
+      - run: go test -count=1 ./sys/...
+        env:
+          CC: zig cc
+      - run: node tests/e2e/build.mjs
+        env:
+          CC: zig cc
+      - run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs

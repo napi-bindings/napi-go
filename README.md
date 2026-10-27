@@ -1,1 +1,25 @@
 # napi-go
+
+Binding Go per [Node-API](https://nodejs.org/api/n-api.html) (N-API): moduli nativi Node.js
+(`.node`) scritti in Go, sul modello di [napi-rs](https://napi.rs).
+
+> **Stato:** in sviluppo. Completati la Fase 0 (spike di fattibilità) e la Fase 1 (Layer 0).
+
+| Percorso | Contenuto |
+|---|---|
+| [`sys/`](sys/README.md) | Layer 0: binding 1:1 generato di Node-API 1–10 |
+| `tests/e2e/` | addon di test e suite `node:test` |
+| [`spike/`](spike/README.md) | Fase 0: prototipo e risultati di fattibilità |
+| `ci/` | workflow GitHub Actions da copiare in `.github/workflows/` |
+
+Requisiti: Go ≥ 1.24 con cgo, un compilatore C (gcc/clang, oppure `zig cc` su Windows),
+Node.js ≥ 22 per i test.
+
+```bash
+go test ./sys/...                      # test unitari, senza Node
+node tests/e2e/build.mjs               # Windows senza gcc: set CC=zig cc
+node --test tests/e2e/*.test.mjs
+```
+
+Piattaforme: Linux glibc x64/arm64, macOS arm64/x64 (x64: un solo addon Go per processo),
+Windows x64. Alpine/musl non è supportato dalle release attuali di Go.
