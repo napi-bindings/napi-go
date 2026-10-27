@@ -9,6 +9,7 @@ Binding Go per [Node-API](https://nodejs.org/api/n-api.html) (N-API): moduli nat
 |---|---|
 | [`sys/`](sys/README.md) | Layer 0: binding 1:1 generato di Node-API 1–10 |
 | `tests/e2e/` | addon di test e suite `node:test` |
+| [`tests/nodesuite/`](tests/nodesuite/README.md) | test `js-native-api` e `node-api` di Node.js portati su `sys` |
 | [`spike/`](spike/README.md) | Fase 0: prototipo e risultati di fattibilità |
 | `.github/workflows/` | CI: `sys.yml` (Layer 0) e `spike.yml` (Fase 0) |
 
@@ -19,6 +20,7 @@ Node.js ≥ 22 per i test.
 go test ./sys/...                      # test unitari, senza Node
 node tests/e2e/build.mjs               # Windows senza gcc: set CC=zig cc
 node --test tests/e2e/*.test.mjs
+node tests/nodesuite/run.mjs          # suite di Node.js portata su sys
 ```
 
 Piattaforme: Linux glibc x64/arm64, macOS arm64/x64 (x64: un solo addon Go per processo),

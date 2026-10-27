@@ -1,16 +1,17 @@
 # Layer 0 (pacchetto sys): generatore, test unitari Go e test end-to-end con Node.js.
 #
 #   generate    file generati aggiornati, gofmt, go vet e go test con ogni build tag di versione
-#   e2e         addon di test + node:test su Linux x64/arm64, macOS arm64/x64, Windows (gcc)
-#   cgocheck2   e2e con GOEXPERIMENT=cgocheck2 (regole sui puntatori di cgo)
-#   windows-zig e2e su Windows compilando con zig cc
+#   e2e         addon di test + node:test su Linux x64/arm64, macOS arm64/x64, Windows (gcc),
+#               poi i test della suite di Node.js portati su sys (tests/nodesuite)
+#   cgocheck2   e2e e nodesuite con GOEXPERIMENT=cgocheck2 (regole sui puntatori di cgo)
+#   windows-zig e2e e nodesuite su Windows compilando con zig cc
 name: sys
 
 on:
   push:
-    paths: ['go.mod', 'sys/**', 'tests/e2e/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
   pull_request:
-    paths: ['go.mod', 'sys/**', 'tests/e2e/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
   workflow_dispatch:
 
 permissions:
@@ -84,6 +85,10 @@ jobs:
         run: node tests/e2e/build.mjs
       - name: Test e2e
         run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
+      - name: Suite Node.js (js-native-api, node-api)
+        env:
+          CGO_ENABLED: '1'
+        run: node tests/nodesuite/run.mjs
 
   cgocheck2:
     name: ubuntu · GOEXPERIMENT=cgocheck2
@@ -104,6 +109,9 @@ jobs:
         env:
           GOEXPERIMENT: cgocheck2
       - run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
+      - run: node tests/nodesuite/run.mjs
+        env:
+          GOEXPERIMENT: cgocheck2
 
   windows-zig:
     name: windows · zig cc
@@ -126,3 +134,6 @@ jobs:
         env:
           CC: zig cc
       - run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
+      - run: node tests/nodesuite/run.mjs
+        env:
+          CC: zig cc
