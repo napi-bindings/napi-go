@@ -47,33 +47,39 @@ const (
 	exceptionKeySuffix  = "Exception"
 	invalidStatusPrefix = "Invalid status ["
 	invalidStatusSuffix = "]"
+	unavailableMessage  = "napitest: Node-API function not exported by this Node.js"
 )
+
+// entry è una funzione registrata; argc è il numero di argomenti della chiamata JS e serve solo
+// agli accessor, dove getter e setter condividono lo stesso data.
+type entry func(env sys.Env, info sys.CallbackInfo, argc int) sys.Value
 
 var (
 	registryMu sync.Mutex
 	// registry è copy-on-write: le letture dal CallbackHandler non prendono lock, anche quando un
-	// worker registra funzioni durante il proprio Init.
-	registry atomic.Pointer[[]Func]
+	// worker registra funzioni durante il proprio Init. L'indice 0 è riservato: un data NULL non
+	// corrisponde mai a una funzione.
+	registry atomic.Pointer[[]entry]
 
 	cstrings sync.Map // string → *byte in memoria C, mai liberata
 )
 
 func init() {
-	empty := []Func{}
-	registry.Store(&empty)
+	reserved := []entry{nil}
+	registry.Store(&reserved)
 	sys.SetCallbackHandler(dispatchCallback)
 	sys.SetAsyncExecuteHandler(dispatchAsyncExecute)
 	sys.SetAsyncCompleteHandler(dispatchAsyncComplete)
 	sys.SetFinalizeHandler(dispatchFinalize)
 }
 
-func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, _ sys.Value, _ []sys.Value) sys.Value {
+func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, _ sys.Value, args []sys.Value) sys.Value {
 	fns := *registry.Load()
-	if data >= uintptr(len(fns)) {
+	if data >= uintptr(len(fns)) || fns[data] == nil {
 		throwMessage(env, "napitest: unknown callback index "+strconv.FormatUint(uint64(data), 10))
 		return nil
 	}
-	return fns[data](env, info)
+	return fns[data](env, info, len(args))
 }
 
 // ModuleInit registra la funzione di inizializzazione del modulo (Init di NAPI_MODULE). Va
@@ -82,20 +88,40 @@ func ModuleInit(fn func(env sys.Env, exports sys.Value) sys.Value) {
 	sys.SetModuleInitHandler(fn)
 }
 
+func register(e entry) uintptr {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	old := *registry.Load()
+	next := make([]entry, len(old)+1)
+	copy(next, old)
+	next[len(old)] = e
+	registry.Store(&next)
+	return uintptr(len(old))
+}
+
 // Register rende fn chiamabile da JS e restituisce il valore da passare come data insieme a
 // sys.CallbackTrampoline (napi_create_function, napi_define_class, descrittori di proprietà).
+// Ogni chiamata aggiunge una voce: le funzioni create più volte (factory) vanno registrate una
+// volta sola, a livello di pacchetto.
 func Register(fn Func) uintptr {
 	if fn == nil {
 		panic("napitest: Register(nil)")
 	}
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	old := *registry.Load()
-	next := make([]Func, len(old)+1)
-	copy(next, old)
-	next[len(old)] = fn
-	registry.Store(&next)
-	return uintptr(len(old))
+	return register(func(env sys.Env, info sys.CallbackInfo, _ int) sys.Value { return fn(env, info) })
+}
+
+// RegisterAccessor registra una coppia getter/setter che Node-API chiama con lo stesso data: la
+// chiamata senza argomenti è il getter, quella con un argomento il setter. setter può essere nil.
+func RegisterAccessor(getter, setter Func) uintptr {
+	if getter == nil {
+		panic("napitest: RegisterAccessor with nil getter")
+	}
+	return register(func(env sys.Env, info sys.CallbackInfo, argc int) sys.Value {
+		if argc == 0 || setter == nil {
+			return getter(env, info)
+		}
+		return setter(env, info)
+	})
 }
 
 // CStr restituisce s terminata da NUL in memoria C. Le stringhe sono condivise e non vengono mai
@@ -178,6 +204,11 @@ func GetAndThrowLastError(env sys.Env) {
 // Call equivale a NODE_API_CALL_BASE: se status non è StatusOK lancia l'ultimo errore e
 // restituisce false, e il chiamante deve uscire come farebbe la macro.
 func Call(env sys.Env, status sys.Status) bool {
+	if status == sys.StatusUnavailable {
+		// Non è uno status di Node-API: la funzione manca dal Node in esecuzione.
+		throwMessage(env, unavailableMessage)
+		return false
+	}
 	if status != sys.StatusOK {
 		GetAndThrowLastError(env)
 		return false
@@ -222,6 +253,35 @@ func DeclarePropertyValue(name string, value sys.Value) sys.PropertyDescriptor {
 		Value:      value,
 		Attributes: sys.PropertyDefault,
 	}
+}
+
+// Method equivale a { name, NULL, fn, NULL, NULL, NULL, attributes, NULL }.
+func Method(name string, fn Func, attributes sys.PropertyAttributes) sys.PropertyDescriptor {
+	d := DeclareProperty(name, fn)
+	d.Attributes = attributes
+	return d
+}
+
+// Value equivale a { name, NULL, NULL, NULL, NULL, value, attributes, NULL }.
+func Value(name string, value sys.Value, attributes sys.PropertyAttributes) sys.PropertyDescriptor {
+	d := DeclarePropertyValue(name, value)
+	d.Attributes = attributes
+	return d
+}
+
+// Accessor equivale a { name, NULL, NULL, getter, setter, NULL, attributes, NULL }; setter può
+// essere nil. Getter e setter condividono il data, come in Node-API (vedi RegisterAccessor).
+func Accessor(name string, getter, setter Func, attributes sys.PropertyAttributes) sys.PropertyDescriptor {
+	d := sys.PropertyDescriptor{
+		Utf8Name:   CStr(name),
+		Getter:     sys.CallbackTrampoline,
+		Attributes: attributes,
+		Data:       RegisterAccessor(getter, setter),
+	}
+	if setter != nil {
+		d.Setter = sys.CallbackTrampoline
+	}
+	return d
 }
 
 // DefineProperties chiama napi_define_properties su tutto props (sizeof(props)/sizeof(*props)

@@ -1,10 +1,7 @@
 // Porting di test/js-native-api/test_dataview/test_dataview.c.
 //
-// Differenza: il test C, se il primo argomento non è un ArrayBuffer, verifica con
-// node_api_is_sharedarraybuffer che sia uno SharedArrayBuffer. La funzione è sperimentale e
-// manca dagli header di sys (node-api-headers 1.9.0): qui il controllo è lasciato a
-// napi_create_dataview, che rifiuta da sé un buffer non valido. Gli script JS non passano mai
-// un valore che non sia un ArrayBuffer o uno SharedArrayBuffer, quindi l'esito non cambia.
+// node_api_is_sharedarraybuffer è sperimentale e manca dagli header di sys: si chiama tramite
+// napitest.IsSharedArrayBuffer, che la risolve dal processo node.
 package main
 
 import (
@@ -42,7 +39,17 @@ func createDataView(env sys.Env, info sys.CallbackInfo) sys.Value {
 	if !nt.Call(env, sys.IsArrayBuffer(env, arraybuffer, &isArrayBuffer)) {
 		return nil
 	}
-	// Ramo !is_arraybuffer → node_api_is_sharedarraybuffer omesso: vedi il commento del file.
+
+	if !isArrayBuffer {
+		var isSharedArrayBuffer bool
+		if !nt.Call(env, nt.IsSharedArrayBuffer(env, arraybuffer, &isSharedArrayBuffer)) {
+			return nil
+		}
+		if !nt.Assert(env, isSharedArrayBuffer, "is_sharedarraybuffer",
+			"Wrong type of arguments. Expects a SharedArrayBuffer or ArrayBuffer as the first argument.") {
+			return nil
+		}
+	}
 
 	var valuetype1 sys.ValueType
 	if !nt.Call(env, sys.Typeof(env, args[1], &valuetype1)) {

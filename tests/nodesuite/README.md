@@ -49,6 +49,11 @@ Regole del runner, riprese da `test/testpy` di Node.js:
    | `napi_define_properties(env, obj, n, descs)` | `nt.DefineProperties(env, obj, descs)` |
    | `add_returned_status`, `add_last_status` | `nt.AddReturnedStatus`, `nt.AddLastStatus` |
    | `NAPI_MODULE(…, Init)`, `NAPI_MODULE_INIT()` | `func init() { nt.ModuleInit(initModule) }` |
+   | `{ "n", NULL, fn, NULL, NULL, NULL, attrs, NULL }` | `nt.Method("n", fn, attrs)` |
+   | `{ "n", NULL, NULL, get, set, NULL, attrs, NULL }` | `nt.Accessor("n", get, set, attrs)` |
+   | `{ "n", NULL, NULL, NULL, NULL, v, attrs, NULL }` | `nt.Value("n", v, attrs)` |
+   | `napi_wrap(…, finalize_cb, hint, …)` | `cb, hint := nt.Finalizer(fn, hint)` e poi `sys.Wrap(…, cb, hint, …)` |
+   | `(void*)data` in un finalizer | `nt.Pointer(data)` |
    | `napi_create_async_work(…, Execute, Complete, data, …)` | `sys.CreateAsyncWork(…, sys.AsyncExecuteTrampoline, sys.AsyncCompleteTrampoline, nt.AsyncWorkData(execute, complete, data), …)` |
 
    Il testo della condizione passato ad `Assert` va copiato dal C così com'è: la macro lo
@@ -62,6 +67,11 @@ Regole del runner, riprese da `test/testpy` di Node.js:
   `napitest` (dispatch di `sys.CallbackTrampoline`), non il `data` del test C.
 - I nomi passati ai descrittori di proprietà sono stringhe C condivise e mai liberate
   (`nt.CStr`, `nt.UTF16`), così i descrittori non contengono puntatori Go.
+- Getter e setter di un accessor condividono il `data` (come in Node-API): `nt.Accessor` registra la
+  coppia e il dispatch sceglie il getter per una chiamata senza argomenti, il setter per una con un
+  argomento. L'indice 0 del registro è riservato, così un `data` NULL non chiama mai una funzione.
+- Le funzioni create più volte (factory) si registrano una volta sola, a livello di pacchetto:
+  ogni `nt.Register` aggiunge una voce al registro.
 - I finalizer passano per `sys.FinalizeTrampoline`: `nt.Finalizer(fn, hint)` restituisce la coppia
   callback/hint da usare al posto di quella del C, e `fn` riceve il `finalize_data` di Node-API e
   l'hint originale. La memoria che Node-API deve poter usare dopo la chiamata (stringhe e
@@ -71,14 +81,27 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 
 | Suite | Test portati |
 |---|---|
-| js-native-api | 2_function_arguments, test_array, test_bigint, test_conversions, test_dataview, test_date, test_error, test_exception, test_number, test_string, test_symbol, test_typedarray |
+| js-native-api | 2_function_arguments, 3_callbacks, 4_object_factory, 5_function_factory, test_array, test_bigint, test_constructor, test_conversions, test_dataview, test_date, test_error, test_exception, test_function, test_general, test_handle_scope, test_new_target, test_number, test_object, test_promise, test_properties, test_string, test_symbol, test_typedarray |
 | node-api | 1_hello_world, test_async |
 
 Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
 li salta sotto la versione di Node.js che le introduce (oggi tre script richiedono Node.js ≥ 24).
 
-Unica deviazione dal C: `test_dataview` non chiama `node_api_is_sharedarraybuffer` (sperimentale,
-assente da node-api-headers 1.9.0); il controllo resta a `napi_create_dataview`.
+### API sperimentali
+
+Quattro funzioni usate dai test non sono negli header di `sys` (node-api-headers 1.9.0).
+`napitest` le risolve dal processo node, come fa `sys/loader.c`:
+
+| Funzione | Usata da | Se il Node in esecuzione non la esporta |
+|---|---|---|
+| `node_api_post_finalizer` | test_general/testFinalizer | errore `napitest: Node-API function not exported…` |
+| `node_api_is_sharedarraybuffer` | test_dataview | come sopra |
+| `node_api_set_prototype` | test_general | `Object.setPrototypeOf` |
+| `node_api_create_object_with_properties` | test_object | `Object.create` + `napi_set_property` |
+
+Per le ultime due l'equivalente con API stabili ha lo stesso effetto osservabile negli script; serve
+solo a non perdere il resto di test_object e test_general sulle versioni di Node.js che non le
+hanno ancora.
 
 La valutazione completa delle due suite (copertura, esclusioni, rischi, piano) è nel documento
 di progetto `napi-go-valutazione-js-native-api.md`.
