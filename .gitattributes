@@ -1,0 +1,3 @@
+# LF in ogni checkout, anche su Windows con core.autocrlf=true: il generatore di sys scrive LF e
+# TestGeneratedFilesUpToDate / gen -check confrontano i file zz_* byte per byte.
+* text=auto eol=lf
