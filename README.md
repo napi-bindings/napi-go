@@ -10,7 +10,7 @@ Binding Go per [Node-API](https://nodejs.org/api/n-api.html) (N-API): moduli nat
 | [`sys/`](sys/README.md) | Layer 0: binding 1:1 generato di Node-API 1–10 |
 | `tests/e2e/` | addon di test e suite `node:test` |
 | [`spike/`](spike/README.md) | Fase 0: prototipo e risultati di fattibilità |
-| `ci/` | workflow GitHub Actions da copiare in `.github/workflows/` |
+| `.github/workflows/` | CI: `sys.yml` (Layer 0) e `spike.yml` (Fase 0) |
 
 Requisiti: Go ≥ 1.24 con cgo, un compilatore C (gcc/clang, oppure `zig cc` su Windows),
 Node.js ≥ 22 per i test.
