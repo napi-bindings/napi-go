@@ -23,7 +23,8 @@ const variants = [
 mkdirSync(out, { recursive: true })
 for (const v of variants) {
   const target = join(out, `${v.name}.node`)
-  const ldflags = ['-s', '-w', ...(v.ldflagsX ? ['-X', v.ldflagsX] : [])].join(' ')
+  // Senza -s: la tabella dei simboli resta, così gli stack di sample (diagnostica CI) hanno i nomi Go.
+  const ldflags = ['-w', ...(v.ldflagsX ? ['-X', v.ldflagsX] : [])].join(' ')
   const args = ['build', '-buildmode=c-shared', '-buildvcs=false', '-trimpath', `-ldflags=${ldflags}`]
   if (v.tags.length) args.push(`-tags=${v.tags.join(',')}`)
   args.push('-o', target, v.pkg)
