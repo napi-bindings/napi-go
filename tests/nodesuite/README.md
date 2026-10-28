@@ -23,7 +23,7 @@ GOEXPERIMENT=cgocheck2 node tests/nodesuite/run.mjs
 | `fixtures/` | i file di `test/fixtures` usati dagli script (oggi `dotenv/uv-threadpool.env`) |
 | `internal/napitest/` | equivalente Go di `common.h` / `common-inl.h` |
 | `js-native-api/<test>/`, `node-api/<test>/` | `binding.gyp` e `*.js` originali + porting Go (`main.go`, …) |
-| `status.json` | test saltati, sempre (`skip`), sotto una versione di Node.js (`minNodeMajor`) o su alcune piattaforme (`skipPlatforms`, es. `darwin-x64`) |
+| `status.json` | test saltati, sempre (`skip`), sotto una versione di Node.js (`minNodeMajor`, oppure `minNodeVersion` con un minimo per linea di release) o su alcune piattaforme (`skipPlatforms`, es. `darwin-x64`) |
 | `<cartella>/napi-go.json` (facoltativo) | defines aggiuntivi di un target quando il C li imposta nel sorgente (es. `#define NAPI_VERSION 9`) |
 
 Regole del runner, riprese da `test/testpy` di Node.js:
@@ -112,10 +112,11 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 | node-api | gruppi A e A': 1_hello_world, test_async, test_async_context, test_buffer, test_cleanup_hook, test_env_teardown_gc, test_exception, test_fatal, test_fatal_exception, test_general, test_instance_data, test_make_callback, test_make_callback_recurse, test_reference_by_node_api_version, test_threadsafe_function, test_threadsafe_function_abort, test_threadsafe_function_shutdown, test_uv_threadpool_size, test_worker_buffer_callback, test_worker_terminate, test_worker_terminate_finalization |
 
 Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
-li salta sotto la versione di Node.js che le introduce (oggi cinque script richiedono Node.js ≥ 24
-e uno ≥ 25). Per test_threadsafe_function_abort e test_threadsafe_function_shutdown il criterio è
-la versione principale: lo script è arrivato in una 24.x recente insieme alla modifica di Node.js
-che verifica.
+li salta sotto la versione di Node.js che le introduce. `minNodeMajor` basta quando la
+funzionalità arriva con una major; quando arriva con minor diverse per ogni linea di release (i
+backport) si usa `minNodeVersion`, con il primo rilascio di ogni linea (es. `22.23.3`, `24.16.0`,
+`26.1.0`): le linee senza minimo, se non sono più recenti di tutte, non hanno la funzionalità. I
+minimi sono ricavati dai tag di release di nodejs/node.
 
 Su macOS x64 napi-go ammette un solo runtime Go per processo (vedi i limiti noti in `sys/README.md`):
 gli script che caricano due addon nello stesso processo (js-native-api/test_cannot_run_js,

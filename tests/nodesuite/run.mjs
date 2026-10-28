@@ -21,8 +21,9 @@
 //     sorgente invece che nel binding.gyp: {"targets": {"<target>": {"defines": [...], "reason": "..."}}}.
 //
 // status.json elenca i test saltati con il motivo, sempre ("skip"), sotto una versione di
-// Node.js ("minNodeMajor", per i test di nodejs/node main che usano funzionalità recenti) o su
-// alcune piattaforme ("skipPlatforms", per i limiti di piattaforma di napi-go).
+// Node.js ("minNodeMajor" o, quando la funzionalità arriva con una minor diversa per ogni linea di
+// release, "minNodeVersion"; servono per i test di nodejs/node main che usano funzionalità
+// recenti) o su alcune piattaforme ("skipPlatforms", per i limiti di piattaforma di napi-go).
 // Variabili d'ambiente rispettate: CC,
 // GOEXPERIMENT (es. cgocheck2). UV_THREADPOOL_SIZE e NODE_OPTIONS non arrivano agli script.
 import { spawn } from 'node:child_process'
@@ -46,6 +47,9 @@ const DEFAULT_NAPI_VERSION = 8
 const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10']])
 const EXPERIMENTAL_TAG = 'napi_go_experimental'
 const NODE_MAJOR = Number(process.versions.node.split('.')[0])
+const NODE_VERSION = process.versions.node
+// Parti di una versione Node.js confrontate da compareVersions: major, minor, patch.
+const VERSION_PARTS = 3
 // Variabili d'ambiente tolte ai processi di test, come nella CI di Node.js: cambiano il
 // comportamento di libuv o di node e alcuni script ne verificano il valore di default (es.
 // node-api/test_uv_threadpool_size). Una riga "// Env:" dello script le può reimpostare.
@@ -229,14 +233,41 @@ function report (label, id, r) {
 // skipReason restituisce il motivo per cui il test id va saltato, oppure null:
 //   status.skip[id]          = "motivo"                          sempre
 //   status.minNodeMajor[id]  = {"major": N, "reason": "motivo"}  con Node < N
+//   status.minNodeVersion[id] = {"versions": ["22.23.3", "24.16.0"], "reason": "motivo"}
+//                               (vedi versionSupported)
 //   status.skipPlatforms[id] = {"platforms": ["darwin-x64"], "reason": "motivo"}  su quelle piattaforme
 function skipReason (status, id) {
   if (status.skip?.[id]) return status.skip[id]
   const min = status.minNodeMajor?.[id]
   if (min && NODE_MAJOR < min.major) return `requires Node.js >= ${min.major}: ${min.reason}`
+  const minVersion = status.minNodeVersion?.[id]
+  if (minVersion && !versionSupported(NODE_VERSION, minVersion.versions)) {
+    return `requires Node.js ${minVersion.versions.map((v) => '>= ' + v).join(' or ')} in its release line: ${minVersion.reason}`
+  }
   const platforms = status.skipPlatforms?.[id]
   if (platforms?.platforms?.includes(PLATFORM)) return `not supported on ${PLATFORM}: ${platforms.reason}`
   return null
+}
+
+// compareVersions confronta due versioni "major.minor.patch" (senza prefisso v né suffissi).
+function compareVersions (a, b) {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < VERSION_PARTS; i++) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i]
+  }
+  return 0
+}
+
+// versionSupported dice se version soddisfa un elenco di minimi, uno per linea di release:
+// con un minimo per la stessa major serve version >= minimo; una major senza minimo è
+// supportata solo se più recente di tutte quelle elencate (le linee intermedie non hanno la
+// funzionalità).
+function versionSupported (version, minimums) {
+  const major = Number(version.split('.')[0])
+  const sameLine = minimums.find((m) => Number(m.split('.')[0]) === major)
+  if (sameLine) return compareVersions(version, sameLine) >= 0
+  return minimums.every((m) => Number(m.split('.')[0]) < major)
 }
 
 async function main () {
