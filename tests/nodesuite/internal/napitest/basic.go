@@ -16,7 +16,9 @@ import (
 
 // Equivalenti delle macro "basic" di common.h, usate nei finalizer che girano durante il GC
 // (node_api_basic_env): lì non si può lanciare un'eccezione JS, quindi un fallimento termina il
-// processo con abort(), come nel C.
+// processo con abort(), come nel C. L'errore delle scritture su stderr che precedono abort() non
+// è controllato di proposito: il processo termina subito dopo e non c'è altro canale a cui
+// riportarlo (come il fprintf del C).
 
 // Abort equivale ad abort(): termina il processo con SIGABRT (exit code 134 su Windows).
 func Abort() {

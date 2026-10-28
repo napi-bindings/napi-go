@@ -20,8 +20,9 @@
 //   - napi-go.json (facoltativo) aggiunge defines a un target quando il test C li imposta nel
 //     sorgente invece che nel binding.gyp: {"targets": {"<target>": {"defines": [...], "reason": "..."}}}.
 //
-// status.json elenca i test saltati con il motivo, sempre ("skip") o sotto una versione di
-// Node.js ("minNodeMajor", per i test di nodejs/node main che usano funzionalità recenti).
+// status.json elenca i test saltati con il motivo, sempre ("skip"), sotto una versione di
+// Node.js ("minNodeMajor", per i test di nodejs/node main che usano funzionalità recenti) o su
+// alcune piattaforme ("skipPlatforms", per i limiti di piattaforma di napi-go).
 // Variabili d'ambiente rispettate: CC,
 // GOEXPERIMENT (es. cgocheck2).
 import { spawn } from 'node:child_process'
@@ -45,6 +46,8 @@ const DEFAULT_NAPI_VERSION = 8
 const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10']])
 const EXPERIMENTAL_TAG = 'napi_go_experimental'
 const NODE_MAJOR = Number(process.versions.node.split('.')[0])
+// Piattaforma nel formato di status.skipPlatforms, es. "darwin-x64".
+const PLATFORM = `${process.platform}-${process.arch}`
 
 class UsageError extends Error {}
 
@@ -214,10 +217,13 @@ function report (label, id, r) {
 // skipReason restituisce il motivo per cui il test id va saltato, oppure null:
 //   status.skip[id]          = "motivo"                          sempre
 //   status.minNodeMajor[id]  = {"major": N, "reason": "motivo"}  con Node < N
+//   status.skipPlatforms[id] = {"platforms": ["darwin-x64"], "reason": "motivo"}  su quelle piattaforme
 function skipReason (status, id) {
   if (status.skip?.[id]) return status.skip[id]
   const min = status.minNodeMajor?.[id]
   if (min && NODE_MAJOR < min.major) return `requires Node.js >= ${min.major}: ${min.reason}`
+  const platforms = status.skipPlatforms?.[id]
+  if (platforms?.platforms?.includes(PLATFORM)) return `not supported on ${PLATFORM}: ${platforms.reason}`
   return null
 }
 

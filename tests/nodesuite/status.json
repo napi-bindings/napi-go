@@ -13,5 +13,13 @@
       "major": 24,
       "reason": "the script uses Float16Array, missing on Node.js 22"
     }
+  },
+  "skipPlatforms": {
+    "js-native-api/test_cannot_run_js/test": {
+      "platforms": [
+        "darwin-x64"
+      ],
+      "reason": "the script loads two Go addons (test_pending_exception, test_cannot_run_js) in one process; on macOS x64 napi-go supports one Go runtime per process and rejects the second with ERR_NAPI_GO_FOREIGN_RUNTIME"
+    }
   }
 }

@@ -22,7 +22,7 @@ GOEXPERIMENT=cgocheck2 node tests/nodesuite/run.mjs
 | `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …); `require-as.js` è copiato senza modifiche |
 | `internal/napitest/` | equivalente Go di `common.h` / `common-inl.h` |
 | `js-native-api/<test>/`, `node-api/<test>/` | `binding.gyp` e `*.js` originali + porting Go (`main.go`, …) |
-| `status.json` | test saltati, sempre (`skip`) o sotto una versione di Node.js (`minNodeMajor`) |
+| `status.json` | test saltati, sempre (`skip`), sotto una versione di Node.js (`minNodeMajor`) o su alcune piattaforme (`skipPlatforms`, es. `darwin-x64`) |
 | `<cartella>/napi-go.json` (facoltativo) | defines aggiuntivi di un target quando il C li imposta nel sorgente (es. `#define NAPI_VERSION 9`) |
 
 Regole del runner, riprese da `test/testpy` di Node.js:
@@ -99,6 +99,10 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 
 Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
 li salta sotto la versione di Node.js che le introduce (oggi tre script richiedono Node.js ≥ 24).
+
+Su macOS x64 napi-go ammette un solo runtime Go per processo (vedi i limiti noti in `sys/README.md`):
+gli script che caricano due addon nello stesso processo (oggi js-native-api/test_cannot_run_js) sono
+in `skipPlatforms` per `darwin-x64`. Sulle altre piattaforme girano normalmente.
 
 ### API sperimentali
 
