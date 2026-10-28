@@ -17,6 +17,8 @@
 #define GN_MESSAGE_MAX 256
 
 NAPI_MODULE_INIT() {
+  /* Prima di tutto: il runtime Go è già partito e non deve essere scaricato (pin.c). */
+  gn_pin_module();
   const char* first_missing = NULL;
   int missing = gn_api_load_once(&first_missing);
   if (missing != 0) {

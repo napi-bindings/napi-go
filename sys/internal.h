@@ -48,4 +48,7 @@ static inline void gn_leave(void) {}
 /* sigfix.c: ripristina SA_RESETHAND sugli handler di Node (macOS). */
 void gn_repair_node_signal_handlers(void);
 
+/* pin.c: tiene il modulo in memoria fino alla fine del processo (dlclose dei worker, macOS). */
+void gn_pin_module(void);
+
 #endif /* NAPI_GO_INTERNAL_H */

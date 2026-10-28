@@ -37,6 +37,7 @@ Esempio completo: `tests/e2e/addons/sysbasic`.
 | `trampoline.c` | trampolini C (callback, finalizer, TSFN, async work, cleanup hook) |
 | `guard.c` | guardia contro un secondo runtime Go (solo macOS x64) |
 | `sigfix.c` | ripristino di `SA_RESETHAND` su `node::SignalExit` (macOS) |
+| `pin.c` | il `.node` resta in memoria anche dopo il `dlclose` di un worker (macOS) |
 
 Per rigenerare: `go generate ./sys`. La CI verifica con `go run ./internal/gen -check` che i file
 generati siano aggiornati. Le decisioni non deducibili dagli header (eccezioni dei parametri,
