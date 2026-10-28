@@ -15,9 +15,10 @@ export const hostNapiVersion = Number(process.versions.napi)
 
 const CHILD_TIMEOUT_MS = 60_000
 
-// nodeEval esegue codice in un processo Node separato e ne restituisce l'esito.
+// nodeEval esegue codice in un processo Node separato e ne restituisce l'esito. Allo scadere di
+// timeout il figlio riceve SIGKILL: un processo bloccato può non reagire a SIGTERM.
 export function nodeEval (code, { nodeArgs = [], timeout = CHILD_TIMEOUT_MS } = {}) {
-  const r = spawnSync(process.execPath, [...nodeArgs, '-e', code], { encoding: 'utf8', timeout })
+  const r = spawnSync(process.execPath, [...nodeArgs, '-e', code], { encoding: 'utf8', timeout, killSignal: 'SIGKILL' })
   if (r.error) throw r.error
   return r
 }

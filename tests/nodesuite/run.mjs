@@ -44,6 +44,8 @@ const CLOSE_GRACE_MS = 5_000
 const SAMPLE_SECONDS = 2
 // Inizio della sezione di sample con l'elenco delle librerie caricate, omessa dal report.
 const SAMPLE_IMAGES_HEADER = '\nBinary Images:'
+// Exit code di taskkill quando il processo non esiste (già terminato).
+const TASKKILL_NOT_FOUND = 128
 const EXIT_FAILURE = 1
 const MIN_JOBS = 1
 const SKIP_MARKER = '1..0 # Skipped'
@@ -193,7 +195,7 @@ function run (cmd, args, options) {
       ? setTimeout(async () => {
         timedOut = true
         diagnostics = await describeHang(child.pid)
-        killTree(child)
+        diagnostics += killTree(child)
       }, timeout)
       : null
     child.stdout.on('data', (d) => { stdout += d })
@@ -206,17 +208,23 @@ function run (cmd, args, options) {
   })
 }
 
-// killTree termina il processo e tutti i suoi discendenti.
+// killTree termina il processo e tutti i suoi discendenti; restituisce la descrizione dell'errore
+// se non ci riesce, altrimenti una stringa vuota.
 function killTree (child) {
   if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
-    return
+    const r = spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { encoding: 'utf8' })
+    if (r.error) return `  --- kill failed: ${r.error.message}\n`
+    // 128: processo non trovato, cioè già terminato.
+    if (r.status !== 0 && r.status !== TASKKILL_NOT_FOUND) return `  --- kill failed: taskkill exit ${r.status}: ${r.stderr.trim()}\n`
+    return ''
   }
   try {
     process.kill(-child.pid, 'SIGKILL')
-  } catch {
-    // Il gruppo non esiste più: tutti i processi sono già terminati.
+  } catch (err) {
+    // ESRCH: il gruppo non esiste più, tutti i processi sono già terminati.
+    if (err.code !== 'ESRCH') return `  --- kill failed: ${err.message}\n`
   }
+  return ''
 }
 
 // describeHang descrive i processi del gruppo pgid (Unix): elenco con ps e, su macOS, lo stack di
@@ -224,6 +232,7 @@ function killTree (child) {
 async function describeHang (pgid) {
   if (process.platform === 'win32') return ''
   const ps = await run('ps', ['-A', '-o', 'pid=,pgid=,ppid=,stat=,etime=,command='], {})
+  if (ps.code !== 0) return `  --- ps failed: exit ${ps.code}: ${ps.stderr.trim()}\n`
   const rows = ps.stdout.split('\n').filter((l) => l.trim().split(/\s+/)[1] === String(pgid))
   let out = `  --- processes (pid pgid ppid stat etime command)\n${rows.join('\n')}\n`
   if (process.platform === 'darwin') {
@@ -240,7 +249,8 @@ async function describeHang (pgid) {
 
 async function buildTarget (t) {
   mkdirSync(dirname(t.out), { recursive: true })
-  const args = ['build', '-buildmode=c-shared', '-buildvcs=false', '-trimpath', '-ldflags=-s -w']
+  // Senza -s: la tabella dei simboli resta, così sample (describeHang) dà i nomi delle funzioni Go.
+  const args = ['build', '-buildmode=c-shared', '-buildvcs=false', '-trimpath', '-ldflags=-w']
   if (t.tags.length) args.push(`-tags=${t.tags.join(',')}`)
   args.push('-o', t.out, t.pkg)
   const r = await run('go', args, { cwd: root, env: { ...process.env, CGO_ENABLED: '1' } })
