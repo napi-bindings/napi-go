@@ -24,6 +24,7 @@ typedef napi_status (*gn_is_sab_fn)(napi_env, napi_value, bool*);
 typedef napi_status (*gn_set_prototype_fn)(napi_env, napi_value, napi_value);
 typedef napi_status (*gn_create_object_with_properties_fn)(napi_env, napi_value, napi_value*,
                                                            napi_value*, size_t, napi_value*);
+typedef napi_status (*gn_create_sab_fn)(napi_env, size_t, void**, napi_value*);
 
 // gn_test_sym cerca una funzione Node-API nel processo host, come sys/loader.c.
 static void* gn_test_sym(const char* name) {
@@ -63,6 +64,11 @@ static napi_status gn_test_create_object_with_properties(void* fn, napi_env env,
                                                          napi_value* names, napi_value* values,
                                                          size_t count, napi_value* result) {
   return ((gn_create_object_with_properties_fn)fn)(env, proto, names, values, count, result);
+}
+
+static napi_status gn_test_create_sab(void* fn, napi_env env, size_t byte_length, void** data,
+                                      napi_value* result) {
+  return ((gn_create_sab_fn)fn)(env, byte_length, data, result);
 }
 */
 import "C"
@@ -107,6 +113,7 @@ var (
 	isSharedArrayBufferSym        = &symbol{name: "node_api_is_sharedarraybuffer"}
 	setPrototypeSym               = &symbol{name: "node_api_set_prototype"}
 	createObjectWithPropertiesSym = &symbol{name: "node_api_create_object_with_properties"}
+	createSharedArrayBufferSym    = &symbol{name: "node_api_create_sharedarraybuffer"}
 )
 
 // Le funzioni seguenti chiamano API sperimentali di Node-API che sys non espone ancora
@@ -135,6 +142,17 @@ func IsSharedArrayBuffer(env sys.Env, value sys.Value, result *bool) sys.Status 
 		*result = bool(out)
 	}
 	return st
+}
+
+// CreateSharedArrayBuffer chiama node_api_create_sharedarraybuffer. data e result sono scritti
+// da Node-API, come nell'API C.
+func CreateSharedArrayBuffer(env sys.Env, byteLength uint, data *unsafe.Pointer, result *sys.Value) sys.Status {
+	fn := createSharedArrayBufferSym.lookup()
+	if fn == nil {
+		return sys.StatusUnavailable
+	}
+	return sys.Status(C.gn_test_create_sab(fn, C.napi_env(unsafe.Pointer(env)), C.size_t(byteLength), data,
+		(*C.napi_value)(unsafe.Pointer(result))))
 }
 
 // SetPrototype chiama node_api_set_prototype. Se il Node in esecuzione non la esporta usa

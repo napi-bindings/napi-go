@@ -19,7 +19,7 @@ GOEXPERIMENT=cgocheck2 node tests/nodesuite/run.mjs
 | Percorso | Contenuto |
 |---|---|
 | `run.mjs` | runner: compila i target di ogni `binding.gyp`, esegue ogni `.js` con le sue righe `// Flags:` e `// Env:` |
-| `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …) |
+| `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …); `require-as.js` è copiato senza modifiche |
 | `internal/napitest/` | equivalente Go di `common.h` / `common-inl.h` |
 | `js-native-api/<test>/`, `node-api/<test>/` | `binding.gyp` e `*.js` originali + porting Go (`main.go`, …) |
 | `status.json` | test saltati, sempre (`skip`) o sotto una versione di Node.js (`minNodeMajor`) |
@@ -31,6 +31,9 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 - un test passa se il processo esce con codice 0; `1..0 # Skipped` in stdout lo conta come saltato;
 - per ogni target del `binding.gyp` il sorgente Go sta in `<cartella>/<target>/`, oppure nella
   cartella stessa quando il target è uno solo; l'addon va in `build/Release/<target>.node`;
+- quando più target compilano lo stesso sorgente C (es. con defines diversi) il porting sta in un
+  pacchetto `<cartella>/internal/<nome>/` e ogni `<target>/main.go` registra solo il suo `Init`;
+  le differenze di `#if NAPI_VERSION` passano per `sys.DeclaredVersion`;
 - i defines del target scelgono il build tag di `sys`: nessuno → Node-API 8, `NAPI_VERSION=9` →
   `napi_go_v9`, `NAPI_VERSION=10` → `napi_go_v10`, `NAPI_EXPERIMENTAL` → `napi_go_experimental`.
 
@@ -45,6 +48,9 @@ Regole del runner, riprese da `test/testpy` di Node.js:
    | `NODE_API_CALL(env, call)` | `if !nt.Call(env, call) { return nil }` |
    | `NODE_API_CALL_RETURN_VOID(env, call)` | `if !nt.Call(env, call) { return }` |
    | `NODE_API_ASSERT(env, cond, msg)` | `if !nt.Assert(env, cond, "<cond come nel C>", msg) { return nil }` |
+   | `NODE_API_BASIC_CALL_RETURN_VOID(env, call)` | `if !nt.BasicCall(env, call) { return }` (stderr + `abort()`) |
+   | `NODE_API_BASIC_ASSERT_RETURN_VOID(cond, msg)` | `if !nt.BasicAssert(cond, "<cond come nel C>", msg) { return }` |
+   | `assert(expr)` di `<assert.h>`, `abort()` | `nt.CAssert(cond, "<expr come nel C>")`, `nt.Abort()` |
    | `DECLARE_NODE_API_PROPERTY(name, fn)` | `nt.DeclareProperty(name, fn)` |
    | `napi_define_properties(env, obj, n, descs)` | `nt.DefineProperties(env, obj, descs)` |
    | `add_returned_status`, `add_last_status` | `nt.AddReturnedStatus`, `nt.AddLastStatus` |
@@ -53,6 +59,8 @@ Regole del runner, riprese da `test/testpy` di Node.js:
    | `{ "n", NULL, NULL, get, set, NULL, attrs, NULL }` | `nt.Accessor("n", get, set, attrs)` |
    | `{ "n", NULL, NULL, NULL, NULL, v, attrs, NULL }` | `nt.Value("n", v, attrs)` |
    | `napi_wrap(…, finalize_cb, hint, …)` | `cb, hint := nt.Finalizer(fn, hint)` e poi `sys.Wrap(…, cb, hint, …)` |
+   | `napi_remove_wrap` riuscita | `nt.DiscardFinalizer(hint)`: Node-API non chiamerà più il finalizer |
+   | `new MyObject` passato a `napi_wrap` | `cgo.NewHandle(obj)`; il `Destructor` fa `Value()` e `Delete()` |
    | `(void*)data` in un finalizer | `nt.Pointer(data)` |
    | `napi_create_async_work(…, Execute, Complete, data, …)` | `sys.CreateAsyncWork(…, sys.AsyncExecuteTrampoline, sys.AsyncCompleteTrampoline, nt.AsyncWorkData(execute, complete, data), …)` |
 
@@ -72,6 +80,11 @@ Regole del runner, riprese da `test/testpy` di Node.js:
   argomento. L'indice 0 del registro è riservato, così un `data` NULL non chiama mai una funzione.
 - Le funzioni create più volte (factory) si registrano una volta sola, a livello di pacchetto:
   ogni `nt.Register` aggiunge una voce al registro.
+- Le classi C++ diventano struct Go e il puntatore nativo di `napi_wrap` / `napi_add_finalizer`
+  è un `cgo.Handle`. Le struct che il C alloca con `malloc` e passa come instance data o come
+  `finalize_data` (con dentro solo tipi C come `napi_ref`) restano in memoria C (`nt.Malloc`).
+  Un finalizer annullato cancellando il suo riferimento (6_object_wrap/nested_wrap) non viene
+  più chiamato e il suo `nt.Finalizer` resta allocato, come la memoria nel C.
 - I finalizer passano per `sys.FinalizeTrampoline`: `nt.Finalizer(fn, hint)` restituisce la coppia
   callback/hint da usare al posto di quella del C, e `fn` riceve il `finalize_data` di Node-API e
   l'hint originale. La memoria che Node-API deve poter usare dopo la chiamata (stringhe e
@@ -81,7 +94,7 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 
 | Suite | Test portati |
 |---|---|
-| js-native-api | 2_function_arguments, 3_callbacks, 4_object_factory, 5_function_factory, test_array, test_bigint, test_constructor, test_conversions, test_dataview, test_date, test_error, test_exception, test_function, test_general, test_handle_scope, test_new_target, test_number, test_object, test_promise, test_properties, test_string, test_symbol, test_typedarray |
+| js-native-api | tutti i 32: 2_function_arguments, 3_callbacks, 4_object_factory, 5_function_factory, 6_object_wrap, 7_factory_wrap, 8_passing_wrapped, test_array, test_bigint, test_cannot_run_js, test_constructor, test_conversions, test_dataview, test_date, test_error, test_exception, test_finalizer, test_function, test_general, test_handle_scope, test_instance_data, test_new_target, test_number, test_object, test_promise, test_properties, test_reference, test_reference_double_free, test_sharedarraybuffer, test_string, test_symbol, test_typedarray |
 | node-api | 1_hello_world, test_async |
 
 Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
@@ -89,13 +102,14 @@ li salta sotto la versione di Node.js che le introduce (oggi tre script richiedo
 
 ### API sperimentali
 
-Quattro funzioni usate dai test non sono negli header di `sys` (node-api-headers 1.9.0).
+Cinque funzioni usate dai test non sono negli header di `sys` (node-api-headers 1.9.0).
 `napitest` le risolve dal processo node, come fa `sys/loader.c`:
 
 | Funzione | Usata da | Se il Node in esecuzione non la esporta |
 |---|---|---|
-| `node_api_post_finalizer` | test_general/testFinalizer | errore `napitest: Node-API function not exported…` |
-| `node_api_is_sharedarraybuffer` | test_dataview | come sopra |
+| `node_api_post_finalizer` | test_general/testFinalizer, test_finalizer | errore `napitest: Node-API function not exported…` |
+| `node_api_is_sharedarraybuffer` | test_dataview, test_sharedarraybuffer | come sopra |
+| `node_api_create_sharedarraybuffer` | test_sharedarraybuffer | come sopra |
 | `node_api_set_prototype` | test_general | `Object.setPrototypeOf` |
 | `node_api_create_object_with_properties` | test_object | `Object.create` + `napi_set_property` |
 

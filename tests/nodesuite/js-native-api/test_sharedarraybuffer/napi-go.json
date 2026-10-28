@@ -1,0 +1,8 @@
+{
+  "targets": {
+    "test_sharedarraybuffer": {
+      "defines": ["NAPI_EXPERIMENTAL"],
+      "reason": "test_sharedarraybuffer.c inizia con #define NAPI_EXPERIMENTAL (node_api_is_sharedarraybuffer, node_api_create_sharedarraybuffer)"
+    }
+  }
+}
