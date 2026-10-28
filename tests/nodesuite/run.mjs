@@ -42,6 +42,8 @@ const TEST_TIMEOUT_MS = 120_000
 const CLOSE_GRACE_MS = 5_000
 // Durata di ogni campionamento dello stack con sample (macOS) prima del kill per timeout.
 const SAMPLE_SECONDS = 2
+// Inizio della sezione di sample con l'elenco delle librerie caricate, omessa dal report.
+const SAMPLE_IMAGES_HEADER = '\nBinary Images:'
 const EXIT_FAILURE = 1
 const MIN_JOBS = 1
 const SKIP_MARKER = '1..0 # Skipped'
@@ -228,7 +230,9 @@ async function describeHang (pgid) {
     for (const row of rows) {
       const pid = row.trim().split(/\s+/)[0]
       const s = await run('sample', [pid, String(SAMPLE_SECONDS)], {})
-      out += `  --- sample ${pid}\n${s.stdout}${s.stderr}\n`
+      // Basta il call graph: l'elenco delle librerie caricate supera da solo le centinaia di righe.
+      const callGraph = s.stdout.split(SAMPLE_IMAGES_HEADER)[0].trimEnd()
+      out += `  --- sample ${pid}\n${callGraph}\n${s.stderr}`
     }
   }
   return out
