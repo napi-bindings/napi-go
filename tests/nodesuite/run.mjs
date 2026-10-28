@@ -26,7 +26,7 @@
 // recenti) o su alcune piattaforme ("skipPlatforms", per i limiti di piattaforma di napi-go).
 // Variabili d'ambiente rispettate: CC,
 // GOEXPERIMENT (es. cgocheck2). UV_THREADPOOL_SIZE e NODE_OPTIONS non arrivano agli script.
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, rmSync, mkdirSync, statSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { dirname, join, relative, sep } from 'node:path'
@@ -37,6 +37,11 @@ const root = join(here, '..', '..')
 const SUITES = ['js-native-api', 'node-api']
 const BUILD_SUBDIR = join('build', 'Release')
 const TEST_TIMEOUT_MS = 120_000
+// Dopo il kill per timeout, attesa massima della chiusura di stdout/stderr: un discendente uscito
+// dal gruppo di processi può tenerle aperte per sempre.
+const CLOSE_GRACE_MS = 5_000
+// Durata di ogni campionamento dello stack con sample (macOS) prima del kill per timeout.
+const SAMPLE_SECONDS = 2
 const EXIT_FAILURE = 1
 const MIN_JOBS = 1
 const SKIP_MARKER = '1..0 # Skipped'
@@ -161,18 +166,72 @@ function matches (id, filters) {
 }
 
 // run esegue un comando e ne raccoglie l'esito senza lanciare eccezioni.
+//
+// Con options.timeout il processo parte in un gruppo proprio (Unix) e allo scadere si termina
+// l'intero albero: molti script lanciano processi figli (common/require-as) che ereditano
+// stdout/stderr, e un figlio sopravvissuto terrebbe aperte le pipe bloccando il runner.
+// Prima del kill si raccoglie lo stato dei processi bloccati (describeHang).
 function run (cmd, args, options) {
+  const { timeout, ...spawnOptions } = options
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] })
+    const group = Boolean(timeout) && process.platform !== 'win32'
+    const child = spawn(cmd, args, { ...spawnOptions, detached: group, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
     let timedOut = false
-    const timer = options.timeout ? setTimeout(() => { timedOut = true; child.kill('SIGKILL') }, options.timeout) : null
+    let diagnostics = ''
+    let settled = false
+    const finish = (code, signal, extra = '') => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({ code, signal, stdout, stderr: stderr + extra, timedOut, diagnostics })
+    }
+    const timer = timeout
+      ? setTimeout(async () => {
+        timedOut = true
+        diagnostics = await describeHang(child.pid)
+        killTree(child)
+      }, timeout)
+      : null
     child.stdout.on('data', (d) => { stdout += d })
     child.stderr.on('data', (d) => { stderr += d })
-    child.on('error', (err) => { clearTimeout(timer); resolve({ code: null, signal: null, stdout, stderr: stderr + err.message, timedOut }) })
-    child.on('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, stdout, stderr, timedOut }) })
+    child.on('error', (err) => finish(null, null, err.message))
+    child.on('exit', (code, signal) => {
+      if (timedOut) setTimeout(() => finish(code, signal), CLOSE_GRACE_MS)
+    })
+    child.on('close', (code, signal) => finish(code, signal))
   })
+}
+
+// killTree termina il processo e tutti i suoi discendenti.
+function killTree (child) {
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+    return
+  }
+  try {
+    process.kill(-child.pid, 'SIGKILL')
+  } catch {
+    // Il gruppo non esiste più: tutti i processi sono già terminati.
+  }
+}
+
+// describeHang descrive i processi del gruppo pgid (Unix): elenco con ps e, su macOS, lo stack di
+// ogni processo con sample. Su Windows restituisce una stringa vuota.
+async function describeHang (pgid) {
+  if (process.platform === 'win32') return ''
+  const ps = await run('ps', ['-A', '-o', 'pid=,pgid=,ppid=,stat=,etime=,command='], {})
+  const rows = ps.stdout.split('\n').filter((l) => l.trim().split(/\s+/)[1] === String(pgid))
+  let out = `  --- processes (pid pgid ppid stat etime command)\n${rows.join('\n')}\n`
+  if (process.platform === 'darwin') {
+    for (const row of rows) {
+      const pid = row.trim().split(/\s+/)[0]
+      const s = await run('sample', [pid, String(SAMPLE_SECONDS)], {})
+      out += `  --- sample ${pid}\n${s.stdout}${s.stderr}\n`
+    }
+  }
+  return out
 }
 
 async function buildTarget (t) {
@@ -228,6 +287,7 @@ function report (label, id, r) {
   process.stdout.write(`  ${reason}\n`)
   if (r.stdout.trim()) process.stdout.write(`  --- stdout\n${r.stdout.trimEnd()}\n`)
   if (r.stderr.trim()) process.stdout.write(`  --- stderr\n${r.stderr.trimEnd()}\n`)
+  if (r.diagnostics) process.stdout.write(r.diagnostics)
 }
 
 // skipReason restituisce il motivo per cui il test id va saltato, oppure null:
