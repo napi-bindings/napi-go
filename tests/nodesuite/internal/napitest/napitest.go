@@ -71,6 +71,8 @@ func init() {
 	sys.SetAsyncExecuteHandler(dispatchAsyncExecute)
 	sys.SetAsyncCompleteHandler(dispatchAsyncComplete)
 	sys.SetFinalizeHandler(dispatchFinalize)
+	sys.SetCallJSHandler(dispatchCallJS)
+	sys.SetCleanupHookHandler(dispatchCleanupHook)
 }
 
 func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, _ sys.Value, args []sys.Value) sys.Value {
@@ -224,6 +226,15 @@ func Assert(env sys.Env, cond bool, expr, message string) bool {
 		return false
 	}
 	return true
+}
+
+// AssertStatus equivale a NODE_API_ASSERT_STATUS: se cond è falsa lancia l'errore di Assert e
+// restituisce StatusGenericFailure, altrimenti StatusOK.
+func AssertStatus(env sys.Env, cond bool, expr, message string) sys.Status {
+	if !Assert(env, cond, expr, message) {
+		return sys.StatusGenericFailure
+	}
+	return sys.StatusOK
 }
 
 // DeclareProperty equivale a DECLARE_NODE_API_PROPERTY.

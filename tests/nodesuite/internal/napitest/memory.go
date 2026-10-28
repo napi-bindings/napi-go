@@ -10,6 +10,8 @@ static void gn_test_free_addr(uintptr_t addr) { free((void*)addr); }
 import "C"
 
 import (
+	"fmt"
+	"os"
 	"runtime/cgo"
 	"sync"
 	"unicode/utf16"
@@ -19,10 +21,22 @@ import (
 )
 
 // Malloc equivale a malloc(size): memoria C, quindi utilizzabile da Node-API anche dopo la
-// chiamata (stringhe e ArrayBuffer esterni). Restituisce nil se l'allocazione fallisce.
+// chiamata (stringhe e ArrayBuffer esterni). I test C usano il risultato di malloc senza
+// controllarlo; qui un'allocazione fallita termina il processo con un messaggio (outOfMemory)
+// invece di scrivere su NULL, quindi i chiamanti non devono controllare nil. Con size 0 il
+// risultato può essere nil, come per malloc(0).
 func Malloc(size uint) unsafe.Pointer {
-	return C.malloc(C.size_t(size))
+	p := C.malloc(C.size_t(size))
+	if p == nil && size > 0 {
+		// L'errore della scrittura non è controllato: il processo termina subito dopo.
+		fmt.Fprintln(os.Stderr, outOfMemory)
+		Abort()
+	}
+	return p
 }
+
+// outOfMemory è il messaggio di Malloc quando l'allocazione fallisce.
+const outOfMemory = "napitest: out of memory"
 
 // Free equivale a free(p).
 func Free(p unsafe.Pointer) {
@@ -47,7 +61,7 @@ func UTF16(s string) *uint16 {
 	const unitSize = unsafe.Sizeof(uint16(0))
 	p := (*uint16)(Malloc(uint(len(units)+1) * uint(unitSize)))
 	if p == nil {
-		panic("napitest: out of memory")
+		panic(outOfMemory)
 	}
 	buf := unsafe.Slice(p, len(units)+1)
 	copy(buf, units)
@@ -85,12 +99,26 @@ func DiscardFinalizer(token uintptr) {
 	cgo.Handle(token).Delete()
 }
 
+// dispatchFinalize riceve come hint il token di Finalizer oppure, per il thread_finalize_cb di una
+// threadsafe function, il context creato da ThreadsafeFunction (Node-API passa il context come
+// hint del finalizer della TSFN).
 func dispatchFinalize(env sys.Env, data, token uintptr) {
 	if token == 0 {
 		panic("napitest: sys.FinalizeTrampoline used without napitest.Finalizer")
 	}
 	h := cgo.Handle(token)
-	f := h.Value().(*finalizer)
-	h.Delete()
-	f.fn(env, data, f.hint)
+	switch f := h.Value().(type) {
+	case *finalizer:
+		h.Delete()
+		f.fn(env, data, f.hint)
+	case *threadsafeFunction:
+		// Il token non si rilascia: dopo il thread_finalize_cb Node-API può ancora chiamare
+		// call_js_cb (con env NULL) per gli elementi rimasti in coda, e non segnala quando ha
+		// finito (vedi ThreadsafeFunction).
+		if f.finalize != nil {
+			f.finalize(env, data, f.context)
+		}
+	default:
+		panic("napitest: unexpected finalizer token")
+	}
 }

@@ -25,6 +25,12 @@ typedef napi_status (*gn_set_prototype_fn)(napi_env, napi_value, napi_value);
 typedef napi_status (*gn_create_object_with_properties_fn)(napi_env, napi_value, napi_value*,
                                                            napi_value*, size_t, napi_value*);
 typedef napi_status (*gn_create_sab_fn)(napi_env, size_t, void**, napi_value*);
+typedef void (*gn_noenv_finalize_fn)(void*, void*);
+typedef napi_status (*gn_create_external_sab_fn)(napi_env, void*, size_t, gn_noenv_finalize_fn,
+                                                 void*, napi_value*);
+
+// noenv.c
+void gn_test_noenv_finalize(void* data, void* hint);
 
 // gn_test_sym cerca una funzione Node-API nel processo host, come sys/loader.c.
 static void* gn_test_sym(const char* name) {
@@ -70,10 +76,19 @@ static napi_status gn_test_create_sab(void* fn, napi_env env, size_t byte_length
                                       napi_value* result) {
   return ((gn_create_sab_fn)fn)(env, byte_length, data, result);
 }
+
+static napi_status gn_test_create_external_sab(void* fn, napi_env env, uintptr_t data,
+                                               size_t byte_length, int has_finalizer,
+                                               uintptr_t hint, napi_value* result) {
+  return ((gn_create_external_sab_fn)fn)(env, (void*)data, byte_length,
+                                         has_finalizer ? gn_test_noenv_finalize : NULL,
+                                         (void*)hint, result);
+}
 */
 import "C"
 
 import (
+	"runtime/cgo"
 	"sync"
 	"unsafe"
 
@@ -114,6 +129,7 @@ var (
 	setPrototypeSym               = &symbol{name: "node_api_set_prototype"}
 	createObjectWithPropertiesSym = &symbol{name: "node_api_create_object_with_properties"}
 	createSharedArrayBufferSym    = &symbol{name: "node_api_create_sharedarraybuffer"}
+	createExternalSABSym          = &symbol{name: "node_api_create_external_sharedarraybuffer"}
 )
 
 // Le funzioni seguenti chiamano API sperimentali di Node-API che sys non espone ancora
@@ -153,6 +169,29 @@ func CreateSharedArrayBuffer(env sys.Env, byteLength uint, data *unsafe.Pointer,
 	}
 	return sys.Status(C.gn_test_create_sab(fn, C.napi_env(unsafe.Pointer(env)), C.size_t(byteLength), data,
 		(*C.napi_value)(unsafe.Pointer(result))))
+}
+
+// CreateExternalSharedArrayBuffer chiama node_api_create_external_sharedarraybuffer. finalize
+// può essere nil (finalize_cb NULL); altrimenti riceve data e hint invariati, anche da un thread
+// che non è quello di JS.
+func CreateExternalSharedArrayBuffer(env sys.Env, data uintptr, byteLength uint, finalize NoEnvFinalizeFunc,
+	hint uintptr, result *sys.Value) sys.Status {
+	fn := createExternalSABSym.lookup()
+	if fn == nil {
+		return sys.StatusUnavailable
+	}
+	var hasFinalizer C.int
+	token := hint
+	if finalize != nil {
+		hasFinalizer = 1
+		token = uintptr(cgo.NewHandle(&noEnvFinalizer{fn: finalize, hint: hint}))
+	}
+	st := sys.Status(C.gn_test_create_external_sab(fn, C.napi_env(unsafe.Pointer(env)), C.uintptr_t(data),
+		C.size_t(byteLength), hasFinalizer, C.uintptr_t(token), (*C.napi_value)(unsafe.Pointer(result))))
+	if st != sys.StatusOK && finalize != nil {
+		cgo.Handle(token).Delete()
+	}
+	return st
 }
 
 // SetPrototype chiama node_api_set_prototype. Se il Node in esecuzione non la esporta usa

@@ -24,7 +24,7 @@
 // Node.js ("minNodeMajor", per i test di nodejs/node main che usano funzionalità recenti) o su
 // alcune piattaforme ("skipPlatforms", per i limiti di piattaforma di napi-go).
 // Variabili d'ambiente rispettate: CC,
-// GOEXPERIMENT (es. cgocheck2).
+// GOEXPERIMENT (es. cgocheck2). UV_THREADPOOL_SIZE e NODE_OPTIONS non arrivano agli script.
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, rmSync, mkdirSync, statSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
@@ -46,6 +46,10 @@ const DEFAULT_NAPI_VERSION = 8
 const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10']])
 const EXPERIMENTAL_TAG = 'napi_go_experimental'
 const NODE_MAJOR = Number(process.versions.node.split('.')[0])
+// Variabili d'ambiente tolte ai processi di test, come nella CI di Node.js: cambiano il
+// comportamento di libuv o di node e alcuni script ne verificano il valore di default (es.
+// node-api/test_uv_threadpool_size). Una riga "// Env:" dello script le può reimpostare.
+const STRIPPED_ENV = ['UV_THREADPOOL_SIZE', 'NODE_OPTIONS']
 // Piattaforma nel formato di status.skipPlatforms, es. "darwin-x64".
 const PLATFORM = `${process.platform}-${process.arch}`
 
@@ -205,6 +209,14 @@ function scriptConfig (file) {
   return { flags, env }
 }
 
+// testEnv è l'ambiente di un processo di test: quello del runner senza STRIPPED_ENV, più le
+// variabili della riga "// Env:".
+function testEnv (scriptEnv) {
+  const env = { ...process.env }
+  for (const name of STRIPPED_ENV) delete env[name]
+  return { ...env, ...scriptEnv }
+}
+
 function report (label, id, r) {
   process.stdout.write(`${label} ${id}\n`)
   if (!r) return
@@ -262,7 +274,7 @@ async function main () {
       }
       const file = join(d.dir, script)
       const { flags, env } = scriptConfig(file)
-      const r = await run(process.execPath, [...flags, file], { cwd: here, env: { ...process.env, ...env }, timeout: TEST_TIMEOUT_MS })
+      const r = await run(process.execPath, [...flags, file], { cwd: here, env: testEnv(env), timeout: TEST_TIMEOUT_MS })
       if (r.code === 0 && !r.timedOut) {
         const skipped = r.stdout.startsWith(SKIP_MARKER)
         counts[skipped ? 'skip' : 'pass']++

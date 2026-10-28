@@ -12,6 +12,18 @@
     "js-native-api/test_typedarray/test_sharedarraybuffer": {
       "major": 24,
       "reason": "the script uses Float16Array, missing on Node.js 22"
+    },
+    "node-api/test_async_context/test-gcable-callback": {
+      "major": 25,
+      "reason": "since Node.js 25 napi_async_init keeps the resource object alive; the script from nodejs/node main asserts the new behavior (older releases ship a version of the script that expects the resource to be collected)"
+    },
+    "node-api/test_threadsafe_function_abort/test": {
+      "major": 24,
+      "reason": "the script ships with a Node.js change in recent 24.x releases; on Node.js 22 the thread finalizer runs before the queued item reaches call_js_cb, so its assertion fails"
+    },
+    "node-api/test_threadsafe_function_shutdown/test": {
+      "major": 24,
+      "reason": "the script ships with a Node.js change in recent 24.x releases; on Node.js 22 threads still calling napi_call_threadsafe_function during environment shutdown make the process abort"
     }
   },
   "skipPlatforms": {
@@ -20,6 +32,12 @@
         "darwin-x64"
       ],
       "reason": "the script loads two Go addons (test_pending_exception, test_cannot_run_js) in one process; on macOS x64 napi-go supports one Go runtime per process and rejects the second with ERR_NAPI_GO_FOREIGN_RUNTIME"
+    },
+    "node-api/test_reference_by_node_api_version/test": {
+      "platforms": [
+        "darwin-x64"
+      ],
+      "reason": "the script loads two Go addons (test_reference_obj_only, test_reference_all_types) in one process; on macOS x64 napi-go supports one Go runtime per process and rejects the second with ERR_NAPI_GO_FOREIGN_RUNTIME"
     }
   }
 }

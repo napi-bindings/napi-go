@@ -19,7 +19,8 @@ GOEXPERIMENT=cgocheck2 node tests/nodesuite/run.mjs
 | Percorso | Contenuto |
 |---|---|
 | `run.mjs` | runner: compila i target di ogni `binding.gyp`, esegue ogni `.js` con le sue righe `// Flags:` e `// Env:` |
-| `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …); `require-as.js` è copiato senza modifiche |
+| `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …); `require-as.js`, `tick.js`, `tmpdir.js` e `report.js` sono copiati senza modifiche |
+| `fixtures/` | i file di `test/fixtures` usati dagli script (oggi `dotenv/uv-threadpool.env`) |
 | `internal/napitest/` | equivalente Go di `common.h` / `common-inl.h` |
 | `js-native-api/<test>/`, `node-api/<test>/` | `binding.gyp` e `*.js` originali + porting Go (`main.go`, …) |
 | `status.json` | test saltati, sempre (`skip`), sotto una versione di Node.js (`minNodeMajor`) o su alcune piattaforme (`skipPlatforms`, es. `darwin-x64`) |
@@ -35,7 +36,9 @@ Regole del runner, riprese da `test/testpy` di Node.js:
   pacchetto `<cartella>/internal/<nome>/` e ogni `<target>/main.go` registra solo il suo `Init`;
   le differenze di `#if NAPI_VERSION` passano per `sys.DeclaredVersion`;
 - i defines del target scelgono il build tag di `sys`: nessuno → Node-API 8, `NAPI_VERSION=9` →
-  `napi_go_v9`, `NAPI_VERSION=10` → `napi_go_v10`, `NAPI_EXPERIMENTAL` → `napi_go_experimental`.
+  `napi_go_v9`, `NAPI_VERSION=10` → `napi_go_v10`, `NAPI_EXPERIMENTAL` → `napi_go_experimental`;
+- gli script girano senza `UV_THREADPOOL_SIZE` e `NODE_OPTIONS` dell'ambiente del runner, come
+  nella CI di Node.js (una riga `// Env:` le può reimpostare); `tmpdir` usa `tests/nodesuite/.tmp.0`.
 
 ## Come si porta un test
 
@@ -51,6 +54,8 @@ Regole del runner, riprese da `test/testpy` di Node.js:
    | `NODE_API_BASIC_CALL_RETURN_VOID(env, call)` | `if !nt.BasicCall(env, call) { return }` (stderr + `abort()`) |
    | `NODE_API_BASIC_ASSERT_RETURN_VOID(cond, msg)` | `if !nt.BasicAssert(cond, "<cond come nel C>", msg) { return }` |
    | `assert(expr)` di `<assert.h>`, `abort()` | `nt.CAssert(cond, "<expr come nel C>")`, `nt.Abort()` |
+   | `NODE_API_ASSERT_STATUS(env, cond, msg)` | `nt.AssertStatus(env, cond, "<cond come nel C>", msg)` |
+   | `NODE_API_CHECK_STATUS(call)` | `if st := call; st != sys.StatusOK { return st }` |
    | `DECLARE_NODE_API_PROPERTY(name, fn)` | `nt.DeclareProperty(name, fn)` |
    | `napi_define_properties(env, obj, n, descs)` | `nt.DefineProperties(env, obj, descs)` |
    | `add_returned_status`, `add_last_status` | `nt.AddReturnedStatus`, `nt.AddLastStatus` |
@@ -63,6 +68,9 @@ Regole del runner, riprese da `test/testpy` di Node.js:
    | `new MyObject` passato a `napi_wrap` | `cgo.NewHandle(obj)`; il `Destructor` fa `Value()` e `Delete()` |
    | `(void*)data` in un finalizer | `nt.Pointer(data)` |
    | `napi_create_async_work(…, Execute, Complete, data, …)` | `sys.CreateAsyncWork(…, sys.AsyncExecuteTrampoline, sys.AsyncCompleteTrampoline, nt.AsyncWorkData(execute, complete, data), …)` |
+   | `napi_create_threadsafe_function(…, fin_data, fin_cb, context, call_js, …)` | `callJS, fin, ctx := nt.ThreadsafeFunction(callJs, finCb, context)` e poi `sys.CreateThreadsafeFunction(…, fin_data, fin, ctx, callJS, …)`; `nt.GetThreadsafeFunctionContext` restituisce il context originale |
+   | `napi_add_env_cleanup_hook(env, fn, arg)` | `var hook = nt.RegisterCleanupHook(fn)` a livello di pacchetto, poi `sys.AddEnvCleanupHook(env, sys.CleanupHookTrampoline, hook.Arg(arg))` (stesso valore per la remove) |
+   | `uv_thread_create` / `uv_thread_join`, `uv_sleep`, `uv_hrtime` | `nt.Thread` (`Create`, `Join`), `nt.Sleep`, `nt.HRTime` |
 
    Il testo della condizione passato ad `Assert` va copiato dal C così com'è: la macro lo
    inserisce nel messaggio e gli script lo confrontano con espressioni regolari.
@@ -85,28 +93,38 @@ Regole del runner, riprese da `test/testpy` di Node.js:
   `finalize_data` (con dentro solo tipi C come `napi_ref`) restano in memoria C (`nt.Malloc`).
   Un finalizer annullato cancellando il suo riferimento (6_object_wrap/nested_wrap) non viene
   più chiamato e il suo `nt.Finalizer` resta allocato, come la memoria nel C.
+- Il context di una TSFN è un token di `napitest` e non viene mai rilasciato: Node-API chiama
+  `call_js_cb` con env NULL per gli elementi rimasti in coda anche dopo il `thread_finalize_cb` e
+  non segnala quando ha finito. Il `thread_finalize_cb` riceve il context originale come hint.
 - I finalizer passano per `sys.FinalizeTrampoline`: `nt.Finalizer(fn, hint)` restituisce la coppia
   callback/hint da usare al posto di quella del C, e `fn` riceve il `finalize_data` di Node-API e
   l'hint originale. La memoria che Node-API deve poter usare dopo la chiamata (stringhe e
   ArrayBuffer esterni) si alloca con `nt.Malloc` e si libera con `nt.Free` / `nt.FreeAddr`.
+  `nt.Malloc` non restituisce mai NULL per una dimensione non nulla: se l'allocazione fallisce
+  termina il processo con un messaggio, perché i test C usano il risultato di `malloc` senza
+  controllarlo.
 
 ## Stato
 
 | Suite | Test portati |
 |---|---|
 | js-native-api | tutti i 32: 2_function_arguments, 3_callbacks, 4_object_factory, 5_function_factory, 6_object_wrap, 7_factory_wrap, 8_passing_wrapped, test_array, test_bigint, test_cannot_run_js, test_constructor, test_conversions, test_dataview, test_date, test_error, test_exception, test_finalizer, test_function, test_general, test_handle_scope, test_instance_data, test_new_target, test_number, test_object, test_promise, test_properties, test_reference, test_reference_double_free, test_sharedarraybuffer, test_string, test_symbol, test_typedarray |
-| node-api | 1_hello_world, test_async |
+| node-api | gruppi A e A': 1_hello_world, test_async, test_async_context, test_buffer, test_cleanup_hook, test_env_teardown_gc, test_exception, test_fatal, test_fatal_exception, test_general, test_instance_data, test_make_callback, test_make_callback_recurse, test_reference_by_node_api_version, test_threadsafe_function, test_threadsafe_function_abort, test_threadsafe_function_shutdown, test_uv_threadpool_size, test_worker_buffer_callback, test_worker_terminate, test_worker_terminate_finalization |
 
 Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
-li salta sotto la versione di Node.js che le introduce (oggi tre script richiedono Node.js ≥ 24).
+li salta sotto la versione di Node.js che le introduce (oggi cinque script richiedono Node.js ≥ 24
+e uno ≥ 25). Per test_threadsafe_function_abort e test_threadsafe_function_shutdown il criterio è
+la versione principale: lo script è arrivato in una 24.x recente insieme alla modifica di Node.js
+che verifica.
 
 Su macOS x64 napi-go ammette un solo runtime Go per processo (vedi i limiti noti in `sys/README.md`):
-gli script che caricano due addon nello stesso processo (oggi js-native-api/test_cannot_run_js) sono
+gli script che caricano due addon nello stesso processo (js-native-api/test_cannot_run_js,
+node-api/test_reference_by_node_api_version) sono
 in `skipPlatforms` per `darwin-x64`. Sulle altre piattaforme girano normalmente.
 
 ### API sperimentali
 
-Cinque funzioni usate dai test non sono negli header di `sys` (node-api-headers 1.9.0).
+Sei funzioni usate dai test non sono negli header di `sys` (node-api-headers 1.9.0).
 `napitest` le risolve dal processo node, come fa `sys/loader.c`:
 
 | Funzione | Usata da | Se il Node in esecuzione non la esporta |
@@ -114,6 +132,7 @@ Cinque funzioni usate dai test non sono negli header di `sys` (node-api-headers 
 | `node_api_post_finalizer` | test_general/testFinalizer, test_finalizer | errore `napitest: Node-API function not exported…` |
 | `node_api_is_sharedarraybuffer` | test_dataview, test_sharedarraybuffer | come sopra |
 | `node_api_create_sharedarraybuffer` | test_sharedarraybuffer | come sopra |
+| `node_api_create_external_sharedarraybuffer` | node-api/test_buffer | come sopra; il finalizer senza env passa per un trampolino C di `napitest` (`noenv.c`) |
 | `node_api_set_prototype` | test_general | `Object.setPrototypeOf` |
 | `node_api_create_object_with_properties` | test_object | `Object.create` + `napi_set_property` |
 

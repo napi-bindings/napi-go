@@ -20,3 +20,4 @@ tests/e2e/build/
 
 # Addon della suite Node.js portata (tests/nodesuite)
 tests/nodesuite/**/build/
+tests/nodesuite/.tmp.*/
