@@ -13,6 +13,8 @@ const isLinux = process.platform === 'linux';
 
 // Gli addon napi-go vengono sempre messi in build/Release dal runner.
 const buildType = 'Release';
+// isDebug è sempre falso: gli addon napi-go non hanno una build Debug.
+const isDebug = false;
 
 // Exit code e segnali di un processo node terminato con abort (vedi nodeProcessAborted).
 const ABORT_EXIT_CODES = [132, 133, 134];
@@ -139,6 +141,7 @@ function nodeProcessAborted(exitCode, signal) {
 
 module.exports = {
   buildType,
+  isDebug,
   isLinux,
   isMacOS,
   isWindows,

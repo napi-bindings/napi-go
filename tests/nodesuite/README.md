@@ -19,8 +19,8 @@ GOEXPERIMENT=cgocheck2 node tests/nodesuite/run.mjs
 | Percorso | Contenuto |
 |---|---|
 | `run.mjs` | runner: compila i target di ogni `binding.gyp`, esegue ogni `.js` con le sue righe `// Flags:` e `// Env:` |
-| `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …); `require-as.js`, `tick.js`, `tmpdir.js` e `report.js` sono copiati senza modifiche |
-| `fixtures/` | i file di `test/fixtures` usati dagli script (oggi `dotenv/uv-threadpool.env`) |
+| `common/` | sostituto minimo di `test/common` di Node.js (`mustCall`, `buildType`, `nodeProcessAborted`, …); `require-as.js`, `tick.js`, `tmpdir.js`, `report.js`, `fixtures.js`, `child_process.js` e `sea.js` sono copiati senza modifiche |
+| `fixtures/` | i file di `test/fixtures` usati dagli script (`dotenv/uv-threadpool.env`, `sea/addon/`) |
 | `internal/napitest/` | equivalente Go di `common.h` / `common-inl.h` |
 | `js-native-api/<test>/`, `node-api/<test>/` | `binding.gyp` e `*.js` originali + porting Go (`main.go`, …) |
 | `status.json` | test saltati, sempre (`skip`), sotto una versione di Node.js (`minNodeMajor`, oppure `minNodeVersion` con un minimo per linea di release) o su alcune piattaforme (`skipPlatforms`, es. `darwin-x64`) |
@@ -119,7 +119,7 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 | Suite | Test portati |
 |---|---|
 | js-native-api | tutti i 32: 2_function_arguments, 3_callbacks, 4_object_factory, 5_function_factory, 6_object_wrap, 7_factory_wrap, 8_passing_wrapped, test_array, test_bigint, test_cannot_run_js, test_constructor, test_conversions, test_dataview, test_date, test_error, test_exception, test_finalizer, test_function, test_general, test_handle_scope, test_instance_data, test_new_target, test_number, test_object, test_promise, test_properties, test_reference, test_reference_double_free, test_sharedarraybuffer, test_string, test_symbol, test_typedarray |
-| node-api | 27 su 28 (escluso test_sea_addon, che richiede una Single Executable Application): 1_hello_world, test_async, test_async_cleanup_hook, test_callback_scope, test_init_order, test_module_version_mismatch, test_null_init, test_uv_loop, test_async_context, test_buffer, test_cleanup_hook, test_env_teardown_gc, test_exception, test_fatal, test_fatal_exception, test_general, test_instance_data, test_make_callback, test_make_callback_recurse, test_reference_by_node_api_version, test_threadsafe_function, test_threadsafe_function_abort, test_threadsafe_function_shutdown, test_uv_threadpool_size, test_worker_buffer_callback, test_worker_terminate, test_worker_terminate_finalization |
+| node-api | tutti i 28: 1_hello_world, test_async, test_async_cleanup_hook, test_callback_scope, test_init_order, test_module_version_mismatch, test_null_init, test_uv_loop, test_async_context, test_buffer, test_cleanup_hook, test_env_teardown_gc, test_exception, test_fatal, test_fatal_exception, test_general, test_instance_data, test_make_callback, test_make_callback_recurse, test_reference_by_node_api_version, test_sea_addon, test_threadsafe_function, test_threadsafe_function_abort, test_threadsafe_function_shutdown, test_uv_threadpool_size, test_worker_buffer_callback, test_worker_terminate, test_worker_terminate_finalization |
 
 Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
 li salta sotto la versione di Node.js che le introduce. `minNodeMajor` basta quando la
