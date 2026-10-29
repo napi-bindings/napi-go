@@ -54,8 +54,10 @@ const DEFAULT_NAPI_VERSION = 8
 // node-api/test_module_version_mismatch: sys la dichiara solo con un build tag riservato ai test.
 const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10'], [2147483646, 'napi_go_test_version_mismatch']])
 const EXPERIMENTAL_TAG = 'napi_go_experimental'
-const NODE_MAJOR = Number(process.versions.node.split('.')[0])
-const NODE_VERSION = process.versions.node
+// NODE_VERSION è process.versions.node senza il suffisso di prerelease (es. "27.0.0-alpha.0.0.0"
+// → "27.0.0"), che compareVersions non saprebbe confrontare.
+const NODE_VERSION = process.versions.node.replace(/-.*$/, '')
+const NODE_MAJOR = Number(NODE_VERSION.split('.')[0])
 // Parti di una versione Node.js confrontate da compareVersions: major, minor, patch.
 const VERSION_PARTS = 3
 // Variabili d'ambiente tolte ai processi di test, come nella CI di Node.js: cambiano il

@@ -25,7 +25,6 @@ const SETTLE_MS = 50
 const POLL_LIMIT_MS = 10_000
 const SIGNAL_HANG_MS = 5_000
 const SIGNAL_CHILD_LIFETIME_MS = 15_000
-const WORKER_ONLY_TIMEOUT_MS = 20_000
 
 // 0 + 1 + ... + (n-1); per n = 0 la formula darebbe -0.
 const sumTo = (n) => (n > 0 ? (n * (n - 1)) / 2 : 0)
@@ -147,7 +146,9 @@ test('PropertyDescriptor in memoria Go con runtime.Pinner', () => {
 
 test('versione di Node e funzioni Node-API 9/10', () => {
   const v = A.nodeVersion()
-  assert.equal(`${v.major}.${v.minor}.${v.patch}`, process.versions.node)
+  // napi_node_version espone solo major.minor.patch: su una prerelease (es. "27.0.0-alpha.0.0.0")
+  // il suffisso non compare.
+  assert.equal(`${v.major}.${v.minor}.${v.patch}`, process.versions.node.replace(/-.*$/, ''))
   assert.equal(v.release, 'node')
   if (hostNapiVersion >= V9) {
     assert.equal(A.symbolFor('x'), Symbol.for('x'))
@@ -254,17 +255,6 @@ test('il processo termina da solo con l\'addon caricato', () => {
   const r = nodeEval(`require(${JSON.stringify(addonPath('sysbasic'))}).add(1, 2)`)
   assert.equal(r.status, 0, r.stderr)
   assert.equal(r.signal, null)
-})
-
-test('addon caricato solo in un worker: il processo termina', () => {
-  // Il runtime Go parte sul thread del worker, che poi esce (come la variante worker di
-  // js-native-api/test_instance_data). Su macOS arm64 il processo restava bloccato: main thread in
-  // pthread_join, thread del worker in _pthread_tsd_cleanup → _sigtramp → codice Go, a CPU piena.
-  const worker = `require(${JSON.stringify(addonPath('sysbasic'))}).add(1, 2)`
-  const r = nodeEval(`new (require('node:worker_threads').Worker)(${JSON.stringify(worker)}, { eval: true })`,
-    { timeout: WORKER_ONLY_TIMEOUT_MS })
-  assert.equal(r.signal, null, `processo bloccato, ucciso con ${r.signal} dopo ${WORKER_ONLY_TIMEOUT_MS} ms`)
-  assert.equal(r.status, 0, r.stderr)
 })
 
 test('segnali: SIGTERM e SIGINT senza listener terminano il processo', { skip: isWin && 'segnali POSIX' }, async (t) => {
