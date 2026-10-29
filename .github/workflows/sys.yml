@@ -43,13 +43,13 @@ jobs:
         run: test -z "$(gofmt -l sys tests)" || (gofmt -l sys tests && exit 1)
       - name: go vet (tutti i build tag di versione)
         run: |
-          for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental; do
+          for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             echo "== tags: ${tags:-default}"
             go vet -tags "$tags" ./sys/... ./tests/...
           done
       - name: go test (tutti i build tag di versione)
         run: |
-          for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental; do
+          for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             go test -count=1 -tags "$tags" ./sys/...
           done
 
@@ -85,29 +85,7 @@ jobs:
         run: node tests/e2e/build.mjs
       - name: Test e2e
         run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
-      # Addon caricato solo in un worker: su macOS arm64 il processo non termina. Se è ancora vivo
-      # dopo HANG_S secondi se ne registra lo stack (con i simboli Go: build e2e senza -s).
-      - name: Diagnostica macOS · addon caricato solo in un worker
-        if: ${{ failure() && runner.os == 'macOS' }}
-        env:
-          ADDON: ${{ github.workspace }}/tests/e2e/build/sysbasic.node
-          HANG_S: '10'
-          SAMPLE_S: '3'
-        run: |
-          node -e "new (require('node:worker_threads').Worker)('require(process.env.ADDON).add(1, 2)', { eval: true })" &
-          pid=$!
-          # Il processo bloccato va terminato comunque, anche se ps o sample falliscono.
-          trap 'kill -KILL "$pid" 2>/dev/null || true' EXIT
-          sleep "$HANG_S"
-          if kill -0 "$pid" 2>/dev/null; then
-            ps -M -p "$pid" || echo "ps fallito (exit $?)"
-            sample "$pid" "$SAMPLE_S" | sed '/^Binary Images:/,$d' || echo "sample fallito (exit $?)"
-          else
-            rc=0; wait "$pid" || rc=$?
-            echo "il processo è terminato da solo (exit $rc)"
-          fi
       - name: Suite Node.js (js-native-api, node-api)
-        if: ${{ !cancelled() }}   # gira anche se l'e2e fallisce: i due insiemi di test sono indipendenti
         env:
           CGO_ENABLED: '1'
         run: node tests/nodesuite/run.mjs

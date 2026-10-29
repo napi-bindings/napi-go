@@ -73,6 +73,7 @@ func init() {
 	sys.SetFinalizeHandler(dispatchFinalize)
 	sys.SetCallJSHandler(dispatchCallJS)
 	sys.SetCleanupHookHandler(dispatchCleanupHook)
+	sys.SetAsyncCleanupHookHandler(dispatchAsyncCleanupHook)
 }
 
 func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, _ sys.Value, args []sys.Value) sys.Value {

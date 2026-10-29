@@ -41,6 +41,12 @@
         "26.0.0"
       ],
       "reason": "the script ships with a Node.js change in these releases; on Node.js 22 threads still calling napi_call_threadsafe_function during environment shutdown make the process abort"
+    },
+    "node-api/test_module_version_mismatch/test": {
+      "versions": [
+        "26.11.0"
+      ],
+      "reason": "older Node.js releases crash (SIGSEGV) instead of throwing when an add-on declares an unsupported Node-API version, also with the original C add-on; the script ships with the fix in 26.11.0"
     }
   },
   "skipPlatforms": {

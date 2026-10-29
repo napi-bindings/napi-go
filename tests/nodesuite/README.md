@@ -36,7 +36,11 @@ Regole del runner, riprese da `test/testpy` di Node.js:
   pacchetto `<cartella>/internal/<nome>/` e ogni `<target>/main.go` registra solo il suo `Init`;
   le differenze di `#if NAPI_VERSION` passano per `sys.DeclaredVersion`;
 - i defines del target scelgono il build tag di `sys`: nessuno → Node-API 8, `NAPI_VERSION=9` →
-  `napi_go_v9`, `NAPI_VERSION=10` → `napi_go_v10`, `NAPI_EXPERIMENTAL` → `napi_go_experimental`;
+  `napi_go_v9`, `NAPI_VERSION=10` → `napi_go_v10`, `NAPI_EXPERIMENTAL` → `napi_go_experimental`,
+  `NAPI_VERSION=2147483646` → `napi_go_test_version_mismatch` (solo test_module_version_mismatch);
+- un test che supera i 120 s viene terminato con tutti i processi figli (gruppo di processi su
+  POSIX, `taskkill /T` su Windows) e il rapporto include `ps` e, su macOS, lo stack dei thread
+  (`sample`);
 - gli script girano senza `UV_THREADPOOL_SIZE` e `NODE_OPTIONS` dell'ambiente del runner, come
   nella CI di Node.js (una riga `// Env:` le può reimpostare); `tmpdir` usa `tests/nodesuite/.tmp.0`.
 
@@ -71,11 +75,17 @@ Regole del runner, riprese da `test/testpy` di Node.js:
    | `napi_create_threadsafe_function(…, fin_data, fin_cb, context, call_js, …)` | `callJS, fin, ctx := nt.ThreadsafeFunction(callJs, finCb, context)` e poi `sys.CreateThreadsafeFunction(…, fin_data, fin, ctx, callJS, …)`; `nt.GetThreadsafeFunctionContext` restituisce il context originale |
    | `napi_add_env_cleanup_hook(env, fn, arg)` | `var hook = nt.RegisterCleanupHook(fn)` a livello di pacchetto, poi `sys.AddEnvCleanupHook(env, sys.CleanupHookTrampoline, hook.Arg(arg))` (stesso valore per la remove) |
    | `uv_thread_create` / `uv_thread_join`, `uv_sleep`, `uv_hrtime` | `nt.Thread` (`Create`, `Join`), `nt.Sleep`, `nt.HRTime` |
+   | `napi_add_async_cleanup_hook(env, fn, arg, &h)` | `var hook = nt.RegisterAsyncCleanupHook(fn)`, poi `sys.AddAsyncCleanupHook(env, sys.AsyncCleanupHookTrampoline, hook.Arg(arg), &h)` |
+   | `uv_check_*`, `uv_idle_*`, `uv_async_*`, `uv_close`, `uv_queue_work` sul loop di Node | shim `nt.UV*` (`uv.go`): handle e richieste in memoria C (`nt.NewUVHandle`, `nt.NewUVReq`), callback Go |
 
    Il testo della condizione passato ad `Assert` va copiato dal C così com'è: la macro lo
    inserisce nel messaggio e gli script lo confrontano con espressioni regolari.
 3. Le utilità di libuv usate solo come strumento del test (`uv_sleep`, `uv_thread_create`,
-   `uv_mutex_*`) si sostituiscono con l'equivalente Go, segnalandolo nel commento del file.
+   `uv_mutex_*`) si sostituiscono con l'equivalente Go, segnalandolo nel commento del file. Le
+   funzioni che lavorano sul loop di Node.js (handle, `uv_queue_work`) passano per lo shim di
+   `napitest`: le funzioni `uv_*` si risolvono dal processo node come le API Node-API, e dell'ABI di
+   libuv si usano solo i valori degli enum dei tipi e il campo `data` iniziale di handle e
+   richieste (stabili in libuv 1.x); la dimensione arriva da `uv_handle_size` / `uv_req_size`.
 
 ## Differenze inevitabili rispetto al C
 
@@ -109,7 +119,7 @@ Regole del runner, riprese da `test/testpy` di Node.js:
 | Suite | Test portati |
 |---|---|
 | js-native-api | tutti i 32: 2_function_arguments, 3_callbacks, 4_object_factory, 5_function_factory, 6_object_wrap, 7_factory_wrap, 8_passing_wrapped, test_array, test_bigint, test_cannot_run_js, test_constructor, test_conversions, test_dataview, test_date, test_error, test_exception, test_finalizer, test_function, test_general, test_handle_scope, test_instance_data, test_new_target, test_number, test_object, test_promise, test_properties, test_reference, test_reference_double_free, test_sharedarraybuffer, test_string, test_symbol, test_typedarray |
-| node-api | gruppi A e A': 1_hello_world, test_async, test_async_context, test_buffer, test_cleanup_hook, test_env_teardown_gc, test_exception, test_fatal, test_fatal_exception, test_general, test_instance_data, test_make_callback, test_make_callback_recurse, test_reference_by_node_api_version, test_threadsafe_function, test_threadsafe_function_abort, test_threadsafe_function_shutdown, test_uv_threadpool_size, test_worker_buffer_callback, test_worker_terminate, test_worker_terminate_finalization |
+| node-api | 27 su 28 (escluso test_sea_addon, che richiede una Single Executable Application): 1_hello_world, test_async, test_async_cleanup_hook, test_callback_scope, test_init_order, test_module_version_mismatch, test_null_init, test_uv_loop, test_async_context, test_buffer, test_cleanup_hook, test_env_teardown_gc, test_exception, test_fatal, test_fatal_exception, test_general, test_instance_data, test_make_callback, test_make_callback_recurse, test_reference_by_node_api_version, test_threadsafe_function, test_threadsafe_function_abort, test_threadsafe_function_shutdown, test_uv_threadpool_size, test_worker_buffer_callback, test_worker_terminate, test_worker_terminate_finalization |
 
 Gli script vengono da nodejs/node `main`, quindi alcuni usano funzionalità recenti: `status.json`
 li salta sotto la versione di Node.js che le introduce. `minNodeMajor` basta quando la

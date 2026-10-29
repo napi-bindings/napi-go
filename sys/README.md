@@ -37,7 +37,6 @@ Esempio completo: `tests/e2e/addons/sysbasic`.
 | `trampoline.c` | trampolini C (callback, finalizer, TSFN, async work, cleanup hook) |
 | `guard.c` | guardia contro un secondo runtime Go (solo macOS x64) |
 | `sigfix.c` | ripristino di `SA_RESETHAND` su `node::SignalExit` (macOS) |
-| `pin.c` | il `.node` resta in memoria anche dopo il `dlclose` di un worker (macOS) |
 
 Per rigenerare: `go generate ./sys`. La CI verifica con `go run ./internal/gen -check` che i file
 generati siano aggiornati. Le decisioni non deducibili dagli header (eccezioni dei parametri,
@@ -77,9 +76,16 @@ iterazione nella misura dei test, contro 0 con le versioni 8–10).
 | `napi_go_v9` | 9 | 1–9 |
 | `napi_go_v10` | 10 | 1–10 |
 | `napi_go_experimental` | `NAPI_VERSION_EXPERIMENTAL` | 1–10 |
+| `napi_go_test_version_mismatch` | `NAPI_VERSION_EXPERIMENTAL - 1` | solo test: Node.js rifiuta il modulo |
 
 `node-api-headers` non contiene le API sperimentali: `napi_go_experimental` cambia solo la
 versione dichiarata (e con essa il comportamento di Node, ad esempio sui finalizer).
+`napi_go_test_version_mismatch` dichiara una versione che nessun Node.js supporta e serve solo a
+verificare il rifiuto del modulo (`tests/nodesuite`, test_module_version_mismatch).
+
+Un addon che non registra un `ModuleInitHandler` non viene caricato: `require()` fallisce con
+`ERR_NAPI_GO_NO_HANDLER` e il messaggio di Node.js per un modulo senza entry point
+("Module has no declared entry point.").
 
 ## Limiti noti
 

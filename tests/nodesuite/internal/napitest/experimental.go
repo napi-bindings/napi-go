@@ -32,8 +32,9 @@ typedef napi_status (*gn_create_external_sab_fn)(napi_env, void*, size_t, gn_noe
 // noenv.c
 void gn_test_noenv_finalize(void* data, void* hint);
 
-// gn_test_sym cerca una funzione Node-API nel processo host, come sys/loader.c.
-static void* gn_test_sym(const char* name) {
+// gn_test_sym cerca una funzione Node-API (o di libuv) nel processo host, come sys/loader.c. Non
+// è static perché la usa anche uv.go.
+void* gn_test_sym(const char* name) {
 #if defined(_WIN32)
   void* p = (void*)GetProcAddress(GetModuleHandleW(NULL), name);
   if (p == NULL) {

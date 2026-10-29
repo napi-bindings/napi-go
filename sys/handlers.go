@@ -35,7 +35,8 @@ const inlineArgs = C.GN_INLINE_ARGS
 
 type (
 	// ModuleInitHandler inizializza il modulo per un env (main thread o worker) e restituisce
-	// l'oggetto delle export. Senza handler il modulo esporta un oggetto vuoto.
+	// l'oggetto delle export. Senza handler require() fallisce con ERR_NAPI_GO_NO_HANDLER e il
+	// messaggio di Node.js per un modulo senza entry point.
 	ModuleInitHandler func(env Env, exports Value) Value
 	// CallbackHandler gestisce ogni chiamata a una funzione creata con CallbackTrampoline. args
 	// è valido solo durante la chiamata. Restituire nil equivale a undefined.
@@ -145,6 +146,10 @@ func SetAsyncCleanupHookHandler(h AsyncCleanupHookHandler) {
 // node_api_module_get_api_version_v1 (uguale a DeclaredVersion).
 func ModuleAPIVersion() int32 { return int32(C.gn_module_api_version()) }
 
+// noModuleInitMessage è il messaggio di Node.js (ERR_DLOPEN_FAILED) per un modulo senza funzione
+// di init, usato quando non è registrato un ModuleInitHandler.
+const noModuleInitMessage = "Module has no declared entry point."
+
 // Codici degli errori JS lanciati da sys.
 const (
 	CodePanic          = "GO_PANIC"
@@ -196,7 +201,10 @@ func goNapiRegisterModule(env C.napi_env, exports C.napi_value) (ret C.napi_valu
 	}()
 	h := moduleInitHandler.Load()
 	if h == nil {
-		return exports
+		// Come Node.js per un modulo senza funzione di init (napi_module con nm_register_func
+		// NULL): require() fallisce invece di restituire un oggetto vuoto.
+		throwError(e, CodeNoHandler, noModuleInitMessage)
+		return nil
 	}
 	return C.napi_value((*h)(e, Value(exports)))
 }

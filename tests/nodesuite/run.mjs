@@ -37,15 +37,12 @@ const root = join(here, '..', '..')
 const SUITES = ['js-native-api', 'node-api']
 const BUILD_SUBDIR = join('build', 'Release')
 const TEST_TIMEOUT_MS = 120_000
-// Dopo il kill per timeout, attesa massima della chiusura di stdout/stderr: un discendente uscito
-// dal gruppo di processi può tenerle aperte per sempre.
-const CLOSE_GRACE_MS = 5_000
-// Durata di ogni campionamento dello stack con sample (macOS) prima del kill per timeout.
-const SAMPLE_SECONDS = 2
-// Inizio della sezione di sample con l'elenco delle librerie caricate, omessa dal report.
-const SAMPLE_IMAGES_HEADER = '\nBinary Images:'
-// Exit code di taskkill quando il processo non esiste (già terminato).
-const TASKKILL_NOT_FOUND = 128
+// Durata di sample(1) per processo e suo timeout, nella diagnosi di un test bloccato (macOS).
+const SAMPLE_SECONDS = 1
+const SAMPLE_TIMEOUT_MS = 30_000
+const isWindows = process.platform === 'win32'
+// Attesa massima di 'close' dopo aver terminato un test scaduto.
+const KILL_GRACE_MS = 5_000
 const EXIT_FAILURE = 1
 const MIN_JOBS = 1
 const SKIP_MARKER = '1..0 # Skipped'
@@ -53,7 +50,9 @@ const FLAGS_PATTERN = /\/\/\s+Flags:(.*)/
 const ENV_PATTERN = /\/\/\s+Env:(.*)/
 // NAPI_VERSION di default degli header (node-gyp non la definisce) e di sys senza build tag.
 const DEFAULT_NAPI_VERSION = 8
-const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10']])
+// 2147483646 (NAPI_VERSION_EXPERIMENTAL - 1) è la versione mai supportata di
+// node-api/test_module_version_mismatch: sys la dichiara solo con un build tag riservato ai test.
+const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10'], [2147483646, 'napi_go_test_version_mismatch']])
 const EXPERIMENTAL_TAG = 'napi_go_experimental'
 const NODE_MAJOR = Number(process.versions.node.split('.')[0])
 const NODE_VERSION = process.versions.node
@@ -169,79 +168,68 @@ function matches (id, filters) {
   return filters.length === 0 || filters.some((f) => id.includes(f))
 }
 
-// run esegue un comando e ne raccoglie l'esito senza lanciare eccezioni.
-//
-// Con options.timeout il processo parte in un gruppo proprio (Unix) e allo scadere si termina
-// l'intero albero: molti script lanciano processi figli (common/require-as) che ereditano
-// stdout/stderr, e un figlio sopravvissuto terrebbe aperte le pipe bloccando il runner.
-// Prima del kill si raccoglie lo stato dei processi bloccati (describeHang).
+// run esegue un comando e ne raccoglie l'esito senza lanciare eccezioni. Su POSIX il processo
+// guida un proprio gruppo: allo scadere del timeout si raccolgono informazioni sui processi
+// ancora vivi (diagnoseHang) e si termina tutto il gruppo, perché i processi figli lanciati dagli
+// script (spawnSync, worker in un figlio) ereditano le pipe e altrimenti 'close' non arriverebbe
+// mai. Su Windows si termina l'albero con taskkill.
 function run (cmd, args, options) {
-  const { timeout, ...spawnOptions } = options
   return new Promise((resolve) => {
-    const group = Boolean(timeout) && process.platform !== 'win32'
-    const child = spawn(cmd, args, { ...spawnOptions, detached: group, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(cmd, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'], detached: !isWindows })
     let stdout = ''
     let stderr = ''
     let timedOut = false
     let diagnostics = ''
-    let settled = false
-    const finish = (code, signal, extra = '') => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolve({ code, signal, stdout, stderr: stderr + extra, timedOut, diagnostics })
-    }
-    const timer = timeout
-      ? setTimeout(async () => {
+    let exit = { code: null, signal: null }
+    let graceTimer = null
+    const finish = (r) => { clearTimeout(timer); clearTimeout(graceTimer); resolve(r) }
+    const timer = options.timeout
+      ? setTimeout(() => {
         timedOut = true
-        diagnostics = await describeHang(child.pid)
-        diagnostics += killTree(child)
-      }, timeout)
+        diagnostics = diagnoseHang(child.pid)
+        killTree(child)
+        // Se un discendente fuori dal gruppo tiene aperte le pipe, 'close' non arriva: dopo
+        // KILL_GRACE_MS si chiude comunque con l'output raccolto.
+        graceTimer = setTimeout(() => finish({ ...exit, stdout, stderr, timedOut, diagnostics }), KILL_GRACE_MS)
+      }, options.timeout)
       : null
     child.stdout.on('data', (d) => { stdout += d })
     child.stderr.on('data', (d) => { stderr += d })
-    child.on('error', (err) => finish(null, null, err.message))
-    child.on('exit', (code, signal) => {
-      if (timedOut) setTimeout(() => finish(code, signal), CLOSE_GRACE_MS)
-    })
-    child.on('close', (code, signal) => finish(code, signal))
+    child.on('exit', (code, signal) => { exit = { code, signal } })
+    child.on('error', (err) => finish({ code: null, signal: null, stdout, stderr: stderr + err.message, timedOut, diagnostics }))
+    child.on('close', (code, signal) => finish({ code, signal, stdout, stderr, timedOut, diagnostics }))
   })
 }
 
-// killTree termina il processo e tutti i suoi discendenti; restituisce la descrizione dell'errore
-// se non ci riesce, altrimenti una stringa vuota.
+// killTree termina child e tutti i suoi discendenti.
 function killTree (child) {
-  if (process.platform === 'win32') {
+  if (isWindows) {
     const r = spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { encoding: 'utf8' })
-    if (r.error) return `  --- kill failed: ${r.error.message}\n`
-    // 128: processo non trovato, cioè già terminato.
-    if (r.status !== 0 && r.status !== TASKKILL_NOT_FOUND) return `  --- kill failed: taskkill exit ${r.status}: ${r.stderr.trim()}\n`
-    return ''
+    if (r.error || r.status !== 0) child.kill('SIGKILL')
+    return
   }
   try {
     process.kill(-child.pid, 'SIGKILL')
   } catch (err) {
-    // ESRCH: il gruppo non esiste più, tutti i processi sono già terminati.
-    if (err.code !== 'ESRCH') return `  --- kill failed: ${err.message}\n`
+    // Il gruppo può essere già vuoto (ESRCH): resta il kill del solo processo.
+    if (err.code !== 'ESRCH') process.stderr.write(`cannot kill process group ${child.pid}: ${err.message}\n`)
+    child.kill('SIGKILL')
   }
-  return ''
 }
 
-// describeHang descrive i processi del gruppo pgid (Unix): elenco con ps e, su macOS, lo stack di
-// ogni processo con sample. Su Windows restituisce una stringa vuota.
-async function describeHang (pgid) {
-  if (process.platform === 'win32') return ''
-  const ps = await run('ps', ['-A', '-o', 'pid=,pgid=,ppid=,stat=,etime=,command='], {})
-  if (ps.code !== 0) return `  --- ps failed: exit ${ps.code}: ${ps.stderr.trim()}\n`
-  const rows = ps.stdout.split('\n').filter((l) => l.trim().split(/\s+/)[1] === String(pgid))
-  let out = `  --- processes (pid pgid ppid stat etime command)\n${rows.join('\n')}\n`
+// diagnoseHang descrive i processi del gruppo pgid ancora vivi: l'elenco con ps e, su macOS, lo
+// stack nativo di ogni thread con sample(1), per capire dove si è fermato un test. Restituisce un
+// testo vuoto su Windows o se gli strumenti mancano.
+function diagnoseHang (pgid) {
+  if (isWindows) return ''
+  const ps = spawnSync('ps', ['-ax', '-o', 'pid=,pgid=,ppid=,stat=,command='], { encoding: 'utf8' })
+  if (ps.error || ps.status !== 0) return ''
+  const procs = ps.stdout.split('\n').map((l) => l.trim().split(/\s+/)).filter((f) => Number(f[1]) === pgid)
+  let out = `processes in group ${pgid}:\n` + procs.map((f) => '  ' + f.join(' ')).join('\n') + '\n'
   if (process.platform === 'darwin') {
-    for (const row of rows) {
-      const pid = row.trim().split(/\s+/)[0]
-      const s = await run('sample', [pid, String(SAMPLE_SECONDS)], {})
-      // Basta il call graph: l'elenco delle librerie caricate supera da solo le centinaia di righe.
-      const callGraph = s.stdout.split(SAMPLE_IMAGES_HEADER)[0].trimEnd()
-      out += `  --- sample ${pid}\n${callGraph}\n${s.stderr}`
+    for (const f of procs) {
+      const sample = spawnSync('sample', [f[0], String(SAMPLE_SECONDS)], { encoding: 'utf8', timeout: SAMPLE_TIMEOUT_MS })
+      out += `--- sample ${f[0]}\n` + (sample.stdout || sample.stderr || (sample.error ? sample.error.message : '')) + '\n'
     }
   }
   return out
@@ -249,8 +237,7 @@ async function describeHang (pgid) {
 
 async function buildTarget (t) {
   mkdirSync(dirname(t.out), { recursive: true })
-  // Senza -s: la tabella dei simboli resta, così sample (describeHang) dà i nomi delle funzioni Go.
-  const args = ['build', '-buildmode=c-shared', '-buildvcs=false', '-trimpath', '-ldflags=-w']
+  const args = ['build', '-buildmode=c-shared', '-buildvcs=false', '-trimpath', '-ldflags=-s -w']
   if (t.tags.length) args.push(`-tags=${t.tags.join(',')}`)
   args.push('-o', t.out, t.pkg)
   const r = await run('go', args, { cwd: root, env: { ...process.env, CGO_ENABLED: '1' } })
@@ -301,7 +288,7 @@ function report (label, id, r) {
   process.stdout.write(`  ${reason}\n`)
   if (r.stdout.trim()) process.stdout.write(`  --- stdout\n${r.stdout.trimEnd()}\n`)
   if (r.stderr.trim()) process.stdout.write(`  --- stderr\n${r.stderr.trimEnd()}\n`)
-  if (r.diagnostics) process.stdout.write(r.diagnostics)
+  if (r.diagnostics) process.stdout.write(`  --- diagnostics\n${r.diagnostics.trimEnd()}\n`)
 }
 
 // skipReason restituisce il motivo per cui il test id va saltato, oppure null:

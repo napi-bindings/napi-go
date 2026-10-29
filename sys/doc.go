@@ -43,7 +43,11 @@
 // Il modulo dichiara a Node.js la versione DeclaredVersion (node_api_module_get_api_version_v1).
 // Il default è 8; i build tag napi_go_v9, napi_go_v10 e napi_go_experimental la alzano. Le
 // funzioni fino alla versione dichiarata devono essere presenti, altrimenti il caricamento
-// fallisce con ERR_NAPI_GO_MISSING_FUNCTIONS; quelle più recenti sono facoltative.
+// fallisce con ERR_NAPI_GO_MISSING_FUNCTIONS; quelle più recenti sono facoltative. Il build tag
+// napi_go_test_version_mismatch, riservato ai test, dichiara una versione mai supportata.
+//
+// Senza ModuleInitHandler (SetModuleInitHandler) il caricamento fallisce con
+// ERR_NAPI_GO_NO_HANDLER, come Node.js fa per un modulo senza entry point.
 //
 // # Limiti di piattaforma
 //

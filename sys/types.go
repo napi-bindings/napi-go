@@ -45,6 +45,9 @@ const (
 	AutoLength = ^uint(0)
 	// VersionExperimental corrisponde a NAPI_VERSION_EXPERIMENTAL.
 	VersionExperimental = 2147483647
+	// VersionTestMismatch è NAPI_VERSION_EXPERIMENTAL - 1, dichiarata dal build tag
+	// napi_go_test_version_mismatch (solo test): nessun Node.js la supporta.
+	VersionTestMismatch = VersionExperimental - 1
 )
 
 // PropertyDescriptor ha lo stesso layout di napi_property_descriptor.

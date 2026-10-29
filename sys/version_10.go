@@ -1,4 +1,4 @@
-//go:build napi_go_v10 && !napi_go_experimental
+//go:build napi_go_v10 && !napi_go_experimental && !napi_go_test_version_mismatch
 
 package sys
 
