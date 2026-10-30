@@ -12,30 +12,41 @@ import { load, addonPath } from './helpers.mjs'
 const DARWIN_X64 = process.platform === 'darwin' && process.arch === 'x64'
 const SKIP_IF_SHARED_G_SLOT = DARWIN_X64 && 'darwin/amd64: due runtime Go condividono lo slot TLS di g (limite di Go)'
 const CHILD_TIMEOUT_MS = 30_000
+const SYSMON_RETAKE_WAIT_MS = 30 // > ForcePreemptNS (10 ms) di Go: sysmon riprende la P da _Psyscall
 const NULL_POINTER_TEXT = '0x0'
 
 test('darwin/amd64: il secondo runtime Go riusa il g del primo (slot TLS condiviso)', {
   skip: !DARWIN_X64 && 'solo darwin/amd64: altrove ogni runtime ha il proprio slot',
 }, (t) => {
   // In un processo separato: lo stato dei runtime dopo il test non è affidabile.
+  // Scriviamo beforeSecond su fd 1 prima di require('second'): l'ingresso nel secondo runtime
+  // con il g del primo può andare in crash ("fatal error: bad sweepgen in refill") già dentro
+  // goNapiRegisterModule di second se la P di basic è ancora in _Psyscall, non solo all'uscita.
   const src = `
+    const fs = require('node:fs')
     const b = require(${JSON.stringify(addonPath('basic'))})
     const beforeSecond = b.__goTlsSlot()  // init di basic: il suo g resta legato al main thread
+    fs.writeSync(1, beforeSecond + '\\n')
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${SYSMON_RETAKE_WAIT_MS})
     require(${JSON.stringify(addonPath('second'))})  // anche l'init di second entra in Go
     const afterSecond = b.__goTlsSlot()
-    process.stdout.write(JSON.stringify({ beforeSecond, afterSecond }))`
+    fs.writeSync(1, afterSecond + '\\n')`
   const r = spawnSync(process.execPath, ['-e', src], { encoding: 'utf8', timeout: CHILD_TIMEOUT_MS })
   assert.equal(r.error, undefined)
-  const firstLine = (r.stderr || '').split('\n')[0] || '-'
-  const outcome = `code=${r.status} sig=${r.signal} stdout=${r.stdout || '-'} stderr: ${firstLine}`
+  const lines = (r.stdout || '').trim().split('\n').filter(Boolean)
+  const [beforeSecond, afterSecond] = lines
+  const firstErrLine = (r.stderr || '').split('\n')[0] || '-'
+  const outcome = `code=${r.status} sig=${r.signal} stdout=${JSON.stringify(lines)} stderr: ${firstErrLine}`
   t.diagnostic(outcome)
-  // Il figlio può anche andare in crash all'uscita (è il difetto stesso): conta che abbia scritto le
-  // letture dello slot, altrimenti si riporta come è terminato invece di un errore di parsing.
-  assert.ok(r.stdout, `il processo figlio non ha prodotto output: ${outcome}`)
-  const { beforeSecond, afterSecond } = JSON.parse(r.stdout)
+  assert.ok(beforeSecond, `il processo figlio non ha scritto beforeSecond: ${outcome}`)
   assert.notEqual(beforeSecond, NULL_POINTER_TEXT, 'il runtime di basic deve aver legato un g al main thread')
-  // Se second avesse un proprio slot avrebbe legato il suo g e lo slot sarebbe cambiato.
-  assert.equal(afterSecond, beforeSecond)
+  if (afterSecond !== undefined) {
+    // Se second avesse un proprio slot avrebbe legato il suo g e lo slot sarebbe cambiato.
+    assert.equal(afterSecond, beforeSecond)
+  } else {
+    // Crash già durante l'init di second per aver riusato g/mcache di basic (es. bad sweepgen in refill).
+    assert.match(r.stderr || '', /^fatal error:/m, `atteso fatal error del runtime Go: ${outcome}`)
+  }
 })
 
 test('due runtime Go: caricamento e chiamate sincrone', { skip: SKIP_IF_SHARED_G_SLOT }, () => {

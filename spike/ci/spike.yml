@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
-        node: ['22', '24']
+        node: ['22', '24', '26']
         go: ['1.24.x', 'stable']
         include:
           - os: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
           cache-dependency-path: spike/go.mod
       - uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: '26'
       - run: node scripts/build.mjs
         env:
           GOEXPERIMENT: cgocheck2
@@ -90,7 +90,7 @@ jobs:
           cache-dependency-path: spike/go.mod
       - uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: '26'
       - uses: mlugg/setup-zig@v2
       - run: zig version && go version && node --version
       - run: node scripts/build.mjs
@@ -128,10 +128,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22', '24']
+        node: ['22', '24', '26']
         go: ['alpine']   # Go del pacchetto Alpine: riproduce il limite noto
         include:
-          - node: '24'
+          - node: '26'
             go: 'cl696635'
     steps:
       - name: Dipendenze
