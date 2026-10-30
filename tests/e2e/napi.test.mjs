@@ -2,10 +2,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Worker } from 'node:worker_threads'
-import { load, addonPath, nodeEval, lastJSONLine, hostNapiVersion } from './helpers.mjs'
+import { load, addonPath, isDarwinX64, nodeEval, lastJSONLine, hostNapiVersion } from './helpers.mjs'
 
 const A = load('napibasic')
-const B = load('napibasic-v10')
 
 const INLINE_ARGS = 8 // GN_INLINE_ARGS in sys/internal.h: argomenti letti dal trampolino C
 const MANY_ARGS = 20
@@ -18,6 +17,7 @@ const GC_OBJECTS = 2000
 const ALLOC_CALLS = 20_000
 const MAX_ALLOCS_PER_CALL = 0.01
 const V9 = 9
+const V10 = 10
 const INT64_MAX = 2n ** 63n - 1n
 const INT64_MIN = -(2n ** 63n)
 const UINT32_WRAP = 2 ** 32
@@ -43,8 +43,25 @@ test('init: più funzioni di init in ordine, export materializzati per env', () 
   assert.equal(A.secondInitSawExports, true)
   assert.equal(typeof A.Counter, 'function')
   assert.equal(A.hello.name, 'hello')
-  // Due build dello stesso addon sono moduli separati con il proprio stato.
-  assert.notEqual(A.hello, B.hello)
+  if (hostNapiVersion >= V10) {
+    // Due build dello stesso addon sono moduli separati con il proprio stato (in un processo
+    // separato: su macOS x64 il secondo runtime Go nello stesso processo viene rifiutato).
+    const r = nodeEval(`const a = require(${JSON.stringify(addonPath('napibasic'))});
+      let second;
+      try {
+        const b = require(${JSON.stringify(addonPath('napibasic-v10'))});
+        second = { hello: b.hello(), distinct: a.hello !== b.hello };
+      } catch (e) {
+        second = { code: e.code };
+      }
+      process.stdout.write(JSON.stringify(second))`)
+    assert.equal(r.status, 0, r.stderr)
+    if (isDarwinX64) {
+      assert.deepEqual(lastJSONLine(r), { code: 'ERR_NAPI_GO_FOREIGN_RUNTIME' })
+    } else {
+      assert.deepEqual(lastJSONLine(r), { hello: 'world', distinct: true })
+    }
+  }
 })
 
 test('argomenti: nessuno, oltre il buffer inline, this, mancanti', () => {
@@ -436,11 +453,18 @@ test('Ref: forte, conteggio, primitivi per versione', () => {
   assert.equal(A.refs('get', id), o)
   A.refs('delete', id)
   expectError(() => A.refs('get', id), 'RangeError', undefined, 'unknown ref')
-  // Node-API 8: solo oggetti e simili; Node-API 10: qualsiasi valore.
+  // Node-API 8: solo oggetti e simili; Node-API 10: qualsiasi valore (in un processo separato:
+  // due addon Go nello stesso processo non sono ammessi su macOS x64).
   expectError(() => A.refs('new', 5, 1), 'Error', 'ERR_NAPI_INVALID_ARG')
-  const pid = B.refs('new', 5, 1)
-  assert.equal(B.refs('get', pid), 5)
-  B.refs('delete', pid)
+  if (hostNapiVersion >= V10) {
+    const r = nodeEval(`const b = require(${JSON.stringify(addonPath('napibasic-v10'))});
+      const pid = b.refs('new', 5, 1);
+      const got = b.refs('get', pid);
+      b.refs('delete', pid);
+      process.stdout.write(JSON.stringify({ got }))`)
+    assert.equal(r.status, 0, r.stderr)
+    assert.deepEqual(lastJSONLine(r), { got: 5 })
+  }
 })
 
 test('Ref debole: il valore raccolto dal GC risulta vuoto', () => {
