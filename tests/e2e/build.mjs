@@ -18,6 +18,8 @@ const variants = [
   { name: 'sysbasic', pkg: './tests/e2e/addons/sysbasic', tags: [] },
   { name: 'sysbasic-v10', pkg: './tests/e2e/addons/sysbasic', tags: ['napi_go_v10'], ldflagsX: 'main.addonName=sysbasic-v10' },
   { name: 'sysbasic-copy', pkg: './tests/e2e/addons/sysbasic', tags: [], ldflagsX: 'main.addonName=sysbasic-copy' },
+  { name: 'napibasic', pkg: './tests/e2e/addons/napibasic', tags: [] },
+  { name: 'napibasic-v10', pkg: './tests/e2e/addons/napibasic', tags: ['napi_go_v10'] },
 ]
 
 mkdirSync(out, { recursive: true })

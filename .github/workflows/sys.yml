@@ -1,6 +1,8 @@
-# Layer 0 (pacchetto sys): generatore, test unitari Go e test end-to-end con Node.js.
+# Layer 0 (pacchetto sys) e Layer 1 (pacchetto napi): generatore, test unitari Go e test
+# end-to-end con Node.js.
 #
-#   generate    file generati aggiornati, gofmt, go vet e go test con ogni build tag di versione
+#   generate    file generati aggiornati, gofmt, go vet e go test con ogni build tag di versione,
+#               go test -race del pacchetto napi
 #   e2e         addon di test + node:test su Linux x64/arm64, macOS arm64/x64, Windows (gcc),
 #               poi i test della suite di Node.js portati su sys (tests/nodesuite)
 #   cgocheck2   e2e e nodesuite con GOEXPERIMENT=cgocheck2 (regole sui puntatori di cgo)
@@ -9,9 +11,9 @@ name: sys
 
 on:
   push:
-    paths: ['go.mod', 'sys/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
   pull_request:
-    paths: ['go.mod', 'sys/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
   workflow_dispatch:
 
 permissions:
@@ -40,18 +42,20 @@ jobs:
         working-directory: sys
         run: go run ./internal/gen -check
       - name: gofmt
-        run: test -z "$(gofmt -l sys tests)" || (gofmt -l sys tests && exit 1)
+        run: test -z "$(gofmt -l sys napi tests)" || (gofmt -l sys napi tests && exit 1)
       - name: go vet (tutti i build tag di versione)
         run: |
           for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             echo "== tags: ${tags:-default}"
-            go vet -tags "$tags" ./sys/... ./tests/...
+            go vet -tags "$tags" ./sys/... ./napi/... ./tests/...
           done
       - name: go test (tutti i build tag di versione)
         run: |
           for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
-            go test -count=1 -tags "$tags" ./sys/...
+            go test -count=1 -tags "$tags" ./sys/... ./napi/...
           done
+      - name: go test -race (napi)
+        run: go test -count=1 -race ./napi/...
 
   e2e:
     name: ${{ matrix.os }} · node ${{ matrix.node }} · go ${{ matrix.go }}
@@ -77,8 +81,8 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Toolchain
         run: go version && node --version && node -p "'Node-API ' + process.versions.napi"
-      - name: go test ./sys
-        run: go test -count=1 ./sys/...
+      - name: go test ./sys ./napi
+        run: go test -count=1 ./sys/... ./napi/...
       - name: Build addon e2e
         env:
           CGO_ENABLED: '1'
@@ -102,7 +106,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '26'
-      - run: go test -count=1 ./sys/...
+      - run: go test -count=1 ./sys/... ./napi/...
         env:
           GOEXPERIMENT: cgocheck2
       - run: node tests/e2e/build.mjs
@@ -127,7 +131,7 @@ jobs:
           node-version: '26'
       - uses: mlugg/setup-zig@v2
       - run: zig version && go version && node --version
-      - run: go test -count=1 ./sys/...
+      - run: go test -count=1 ./sys/... ./napi/...
         env:
           CC: zig cc
       - run: node tests/e2e/build.mjs
