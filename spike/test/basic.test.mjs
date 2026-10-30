@@ -17,7 +17,9 @@ test('Q2: tutti i simboli obbligatori risolti a runtime, opzionali rilevati', ()
   assert.ok(i.napiVersion >= 8)
   const major = Number(process.versions.node.split('.')[0])
   if (major >= 18) assert.equal(i.hasSymbolFor, true) // node_api_symbol_for: Node-API 9
-  assert.equal(i.nodeVersion, process.versions.node)
+  // napi_node_version espone solo major.minor.patch: su una prerelease (es. "27.0.0-alpha.0.0.0")
+  // il suffisso non compare.
+  assert.equal(i.nodeVersion, process.versions.node.replace(/-.*$/, ''))
 })
 
 test('Q3: dispatch corretto su molte funzioni (bug "static dataCopy" dei tentativi precedenti)', () => {
