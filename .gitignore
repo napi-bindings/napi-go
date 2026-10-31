@@ -23,3 +23,5 @@ tests/nodesuite/**/build/
 tests/nodesuite/.tmp.*/
 
 .cto-toolkit/
+.agents
+.claude
