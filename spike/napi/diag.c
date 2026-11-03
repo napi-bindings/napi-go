@@ -1,21 +1,21 @@
 /*
- * diag.c — diagnostica dei segnali in C puro (non entra mai in Go).
+ * diag.c — pure C signal diagnostics (never enters Go).
  *
- * Esporta sull'oggetto exports la funzione __sigInfo(signo) che restituisce, per il thread
- * chiamante (il thread JS):
- *   - blocked:     il segnale è nella maschera del thread?
- *   - pending:     il segnale è pendente per il processo/thread?
+ * Exports __sigInfo(signo) on the exports object, returning for the calling thread
+ * (the JS thread):
+ *   - blocked:     is the signal in the thread mask?
+ *   - pending:     is the signal pending for the process/thread?
  *   - disposition: "SIG_DFL" | "SIG_IGN" | "handler"
- *   - owner/symbol: libreria e simbolo dell'handler installato (dladdr), es. node o basic.node
+ *   - owner/symbol: library and symbol of the installed handler (dladdr), e.g., node or basic.node
  *   - flags:       SA_ONSTACK, SA_RESETHAND, SA_SIGINFO, SA_RESTART
- * Serve a capire se il runtime Go cambia la gestione dei segnali del processo Node (macOS:
- * SIGTERM con azione di default non termina il processo quando l'addon è caricato).
- * Nota: su macOS il campo resethand è sempre false, perché sigaction() non riporta mai
- * SA_RESETHAND in lettura (vedi experiments/sigflags).
+ * Used to inspect whether the Go runtime alters signal handling in the Node process (macOS:
+ * SIGTERM with default action fails to terminate the process when the addon is loaded).
+ * Note: on macOS the resethand field is always false because sigaction() never reports
+ * SA_RESETHAND when queried (see experiments/sigflags).
  *
- * Solo darwin/amd64: __goTlsSlot() restituisce il contenuto dello slot TLS 0x30(GS), dove
- * OGNI runtime Go del processo tiene il puntatore a g (slot fisso riservato da Apple a Go,
- * golang/go#23617). Serve a verificare che due addon Go se lo contendono.
+ * darwin/amd64 only: __goTlsSlot() returns the contents of TLS slot 0x30(GS), where
+ * EVERY Go runtime in the process stores its g pointer (fixed slot reserved by Apple for Go,
+ * golang/go#23617). Used to verify that two Go addons contend over it.
  */
 #if !defined(_WIN32)
 #ifndef _GNU_SOURCE
@@ -48,7 +48,7 @@ static napi_value gn_diag_siginfo(napi_env env, napi_callback_info info) {
   if (gn_napi.napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok ||
       argc < 1 || gn_napi.napi_get_value_int32(env, argv[0], &signo) != napi_ok ||
       signo <= 0 || signo >= NSIG) {
-    gn_napi.napi_throw_type_error(env, NULL, "__sigInfo(signo): numero di segnale non valido");
+    gn_napi.napi_throw_type_error(env, NULL, "__sigInfo(signo): invalid signal number");
     return NULL;
   }
 
@@ -98,8 +98,8 @@ static napi_value gn_diag_siginfo(napi_env env, napi_callback_info info) {
   return obj;
 }
 
-/* Solo per i test: toglie SA_RESETHAND dall'handler di signo, riproducendo ciò che setsigstack
-   del runtime Go fa su macOS. Permette di verificare bug e correzione anche su Linux. */
+/* Test-only: strips SA_RESETHAND from signo's handler, reproducing what setsigstack
+   in the Go runtime does on macOS. Allows verifying the bug and fix on Linux too. */
 static napi_value gn_diag_emulate_darwin_loss(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value argv[1];
@@ -107,7 +107,7 @@ static napi_value gn_diag_emulate_darwin_loss(napi_env env, napi_callback_info i
   if (gn_napi.napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok ||
       argc < 1 || gn_napi.napi_get_value_int32(env, argv[0], &signo) != napi_ok ||
       signo <= 0 || signo >= NSIG) {
-    gn_napi.napi_throw_type_error(env, NULL, "__sigEmulateDarwinLoss(signo): numero di segnale non valido");
+    gn_napi.napi_throw_type_error(env, NULL, "__sigEmulateDarwinLoss(signo): invalid signal number");
     return NULL;
   }
   struct sigaction sa;
@@ -123,7 +123,7 @@ static napi_value gn_diag_emulate_darwin_loss(napi_env env, napi_callback_info i
   return r;
 }
 
-/* Solo per i test: riesegue la correzione di sigfix.c. */
+/* Test-only: re-runs the sigfix.c repair. */
 static napi_value gn_diag_repair(napi_env env, napi_callback_info info) {
   (void)info;
   gn_repair_node_signal_handlers();
@@ -138,13 +138,13 @@ static napi_value gn_diag_repair(napi_env env, napi_callback_info info) {
 static napi_value gn_diag_go_tls_slot(napi_env env, napi_callback_info info) {
   (void)info;
   void* g;
-  /* Stesso offset di runtime/sys_darwin_amd64.s e cmd/link computeTLSOffset. */
+  /* Same offset as runtime/sys_darwin_amd64.s and cmd/link computeTLSOffset. */
   __asm__ volatile("movq %%gs:0x30, %0" : "=r"(g));
   char text[GN_PTR_TEXT_MAX];
   snprintf(text, sizeof text, "%p", g);
   napi_value r;
   if (gn_napi.napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &r) != napi_ok) {
-    static const char msg[] = "__goTlsSlot(): creazione della stringa fallita";
+    static const char msg[] = "__goTlsSlot(): string creation failed";
     static const char code[] = "GO_DIAG";
     gn_throw_error(env, msg, sizeof msg - 1, code, sizeof code - 1);
     return NULL;
@@ -172,7 +172,7 @@ napi_status gn_register_diag(napi_env env, napi_value exports) {
   return export_fn(env, exports, "__sigRepair", gn_diag_repair);
 }
 
-#else /* _WIN32: niente segnali POSIX */
+#else /* _WIN32: no POSIX signals */
 #include "gonapi.h"
 napi_status gn_register_diag(napi_env env, napi_value exports) {
   (void)env; (void)exports;

@@ -1,4 +1,4 @@
-/* Trampolini C → Go per le callback di libuv usate dai test del gruppo B (vedi uv.go). */
+/* C → Go trampolines for libuv callbacks used by group B tests (see uv.go). */
 #include <stdint.h>
 #include "_cgo_export.h"
 

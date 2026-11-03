@@ -1,7 +1,6 @@
-// Porting di test/node-api/test_uv_threadpool_size/test_uv_threadpool_size.c. Il C fa
-// #undef NDEBUG, quindi le assert() sono attive anche qui (nt.CAssert). uv_mutex_* diventa
-// sync.Mutex e uv_sleep nt.Sleep; le struct del C sono struct Go passate come data
-// dell'async work.
+// Port of test/node-api/test_uv_threadpool_size/test_uv_threadpool_size.c. C uses #undef NDEBUG,
+// so assert() calls remain active here as well (nt.CAssert). uv_mutex_* becomes sync.Mutex and
+// uv_sleep becomes nt.Sleep; C structs become Go structs passed as async work data.
 package main
 
 import (
@@ -19,7 +18,7 @@ func main() {}
 func init() { nt.ModuleInit(initModule) }
 
 const (
-	// waitingSleepMs e exitSleepMs sono i due uv_sleep di Execute.
+	// waitingSleepMs and exitSleepMs are the two uv_sleep durations in Execute.
 	waitingSleepMs = 100
 	exitSleepMs    = 1000
 )
@@ -73,14 +72,14 @@ func boolToInt(b bool) int {
 	return 0
 }
 
-// printInfo scrive su stdout come il printf del C: node-options.js verifica che stderr resti vuoto.
+// printInfo writes to stdout like C's printf: node-options.js verifies that stderr stays empty.
 func printInfo(label string, c *asyncCarrier) {
 	d := c.sharedData
 	if _, err := fmt.Fprintf(os.Stdout, "%s task_id=%d n_tasks_started=%d n_tasks_exited=%d "+
 		"n_tasks_finalized=%d observed_saturation=%d\n",
 		label, c.taskID, d.nTasksStarted, d.nTasksExited, d.nTasksFinalized,
 		boolToInt(d.observedSaturation)); err != nil {
-		// Non c'è un altro canale: stderr deve restare vuoto.
+		// There is no fallback channel: stderr must remain empty.
 		return
 	}
 }
@@ -89,8 +88,8 @@ func execute(_ sys.Env, data any) {
 	c := data.(*asyncCarrier)
 	d := c.sharedData
 
-	// Finché sono partiti meno di threadpool_size lavori ne devono partire altri (prima o poi);
-	// solo dopo i lavori in coda devono restare in attesa.
+	// As long as fewer than threadpool_size tasks have started, more must start (sooner or later);
+	// only after that must queued tasks wait.
 	d.mutex.Lock()
 	shouldBeConcurrent := stillSaturating(d)
 	d.nTasksStarted++
@@ -99,7 +98,7 @@ func execute(_ sys.Env, data any) {
 	printInfo("start", c)
 
 	if shouldBeConcurrent {
-		// Attende che il pool sia saturo: poco elegante, ma qui non conta.
+		// Wait until the pool is saturated: not elegant, but good enough here.
 		for stillSaturating(d) {
 			printInfo("waiting", c)
 			d.mutex.Unlock()
@@ -107,8 +106,8 @@ func execute(_ sys.Env, data any) {
 			d.mutex.Lock()
 		}
 
-		// Un lavoro vedrà il pool saturo (threadpool_size lavori partiti, nessuno uscito) e sarà
-		// il primo a uscire.
+		// One task will observe the saturated pool (threadpool_size tasks started, none exited) and
+		// be the first to exit.
 		if !d.observedSaturation {
 			nt.CAssert(threadpoolSaturated(d), "threadpool_saturated(d)")
 			d.observedSaturation = true
@@ -117,15 +116,15 @@ func execute(_ sys.Env, data any) {
 				"threadpool_saturated(d) || threadpool_desaturating(d)")
 		}
 	} else {
-		// Se il lavoro non è tra i primi threadpool_size, può essere partito solo dopo l'uscita di
-		// un altro.
+		// If the task is not among the first threadpool_size, it can only have started after another
+		// task exited.
 		nt.CAssert(threadpoolDesaturating(d), "threadpool_desaturating(d)")
 	}
 
 	printInfo("exit", c)
 
-	// Lascia accedere gli altri lavori ai dati condivisi. Se il pool fosse più grande di
-	// threadpool_size partirebbe un lavoro di troppo, e un'asserzione fallirebbe.
+	// Let other tasks access shared data. If the pool were larger than threadpool_size, an extra
+	// task would start and an assertion would fail.
 	d.mutex.Unlock()
 	nt.Sleep(exitSleepMs)
 	d.mutex.Lock()
@@ -147,7 +146,7 @@ func complete(env sys.Env, status sys.Status, data any) {
 	d.nTasksFinalized++
 	printInfo("finalize", c)
 	if allTasksFinalized(d) {
-		// uv_mutex_destroy e free(d): la memoria è del GC di Go.
+		// uv_mutex_destroy and free(d): memory is managed by the Go GC.
 		d.mutex.Unlock()
 	} else {
 		d.mutex.Unlock()
@@ -170,7 +169,7 @@ func test(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// calloc + uv_mutex_init: una struct Go azzerata con il mutex già pronto.
+	// calloc + uv_mutex_init: a zero-initialized Go struct with its mutex ready to use.
 	sharedData := &asyncSharedData{}
 
 	var t sys.ValueType

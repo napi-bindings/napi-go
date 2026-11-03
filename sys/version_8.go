@@ -5,6 +5,6 @@ package sys
 // #cgo CFLAGS: -DNAPI_VERSION=8
 import "C"
 
-// DeclaredVersion è la versione Node-API che il modulo dichiara a Node.js.
-// Default: Node-API 8, supportata da tutte le versioni di Node.js mantenute.
+// DeclaredVersion is the Node-API version that the module reports to Node.js.
+// Default: Node-API 8, supported by all maintained Node.js releases.
 const DeclaredVersion = 8

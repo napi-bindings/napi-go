@@ -6,24 +6,24 @@ import (
 	"unicode"
 )
 
-// baseKind classifica i tipi C di base (senza puntatori).
+// baseKind classifies base C types (after stripping pointer indirections).
 type baseKind int
 
 const (
-	kindHandle   baseKind = iota // puntatore opaco Node-API (napi_value, napi_ref, ...)
-	kindCallback                 // puntatore a funzione C
-	kindEnum                     // enum Node-API
-	kindPrim                     // tipo numerico o bool
-	kindMirror                   // struct con tipo Go specchio
-	kindChar                     // char / char16_t: solo dietro puntatore
-	kindVoid                     // void: solo dietro puntatore
-	kindOpaque                   // struct opaca esterna (uv_loop_s): solo dietro puntatore
+	kindHandle   baseKind = iota // opaque Node-API handle (napi_value, napi_ref, ...)
+	kindCallback                 // C function pointer
+	kindEnum                     // Node-API enum
+	kindPrim                     // numeric primitive or bool
+	kindMirror                   // struct with a hand-written mirror Go type
+	kindChar                     // char / char16_t: only valid behind a pointer
+	kindVoid                     // void: only valid behind a pointer
+	kindOpaque                   // external opaque struct (uv_loop_s): only valid behind a pointer
 )
 
 type baseType struct {
 	kind   baseKind
-	goType string // tipo Go
-	cType  string // tipo C normalizzato da usare nel wrapper C (es. napi_env per node_api_basic_env)
+	goType string // Go type name
+	cType  string // normalized C type used in the C wrapper (e.g. napi_env for node_api_basic_env)
 }
 
 var baseTypes = map[string]baseType{
@@ -77,35 +77,35 @@ func init() {
 	}
 }
 
-// Ruolo di un parametro nel wrapper.
+// Parameter role in the generated wrapper.
 type role int
 
 const (
-	roleIn   role = iota // valore in ingresso
-	roleWord             // void* opaco conservato da Node-API: uintptr in Go, cast in C
-	rolePtr              // puntatore passato così com'è (buffer, array, inout)
-	roleOut              // uscita restituita per valore nella struct del wrapper C
+	roleIn   role = iota // scalar/handle input value
+	roleWord             // opaque void* retained by Node-API: uintptr in Go, cast in C
+	rolePtr              // pointer passed directly to C (buffer, array, or inout parameter)
+	roleOut              // output returned by value in the C wrapper's result struct
 )
 
-// Binding descrive come un parametro C viene esposto in Go e passato al wrapper C.
+// Binding describes how a C parameter is exposed in Go and passed to the C wrapper.
 type Binding struct {
 	Param
 	Role    role
-	GoName  string // nome del parametro Go
-	GoType  string // tipo del parametro Go
-	CParam  string // dichiarazione nel prototipo del wrapper C (vuota per le uscite)
-	CArg    string // espressione C passata alla funzione Node-API
-	ToC     string // espressione Go passata al wrapper C
-	OutType string // tipo C del campo di uscita
-	FromC   string // formato per convertire il campo di uscita in Go (%s = campo)
+	GoName  string // Go parameter name
+	GoType  string // Go parameter type
+	CParam  string // declaration in the C wrapper prototype (empty for outputs)
+	CArg    string // C expression passed to the underlying Node-API function
+	ToC     string // Go expression passed to the C wrapper
+	OutType string // C type of the output struct field
+	FromC   string // format string converting the C output field to Go (%s = field)
 }
 
-// FuncBinding è una funzione pronta per l'emissione.
+// FuncBinding is a fully bound function ready for code emission.
 type FuncBinding struct {
 	Func
 	GoName     string
 	Params     []Binding
-	Outs       []Binding // sottoinsieme di Params con Role == roleOut, in ordine
+	Outs       []Binding // subset of Params with Role == roleOut, in order
 	NoCallback bool
 	NoAlloc    bool
 	NoEscape   bool
@@ -130,12 +130,12 @@ func bindParam(fn string, p Param) (Binding, error) {
 	base, isConst, depth := splitPointer(p.CType)
 	bt, ok := baseTypes[base]
 	if !ok {
-		return b, fmt.Errorf("%s: tipo C senza mappatura Go: %q", fn, p.CType)
+		return b, fmt.Errorf("%s: unmapped C type: %q", fn, p.CType)
 	}
 	override := paramOverrides[fn][p.Name]
 	cName := "C." + strings.ReplaceAll(bt.cType, "struct ", "struct_")
 	unknown := func() (Binding, error) {
-		return b, fmt.Errorf("%s: combinazione di tipo non prevista: %q", fn, p.CType)
+		return b, fmt.Errorf("%s: unsupported type combination: %q", fn, p.CType)
 	}
 
 	switch depth {
@@ -153,7 +153,7 @@ func bindParam(fn string, p Param) (Binding, error) {
 	case 1:
 		switch {
 		case bt.kind == kindVoid && !isConst:
-			// Dato opaco conservato da Node-API (data, hint, context, ...): mai un puntatore Go.
+			// Opaque pointer retained by Node-API (data, hint, context, ...): never a Go pointer.
 			b.Role, b.GoType = roleWord, "uintptr"
 			b.CParam = "uintptr_t " + p.Name
 			b.CArg = "(void*)" + p.Name
@@ -174,7 +174,7 @@ func bindParam(fn string, p Param) (Binding, error) {
 			b.CArg = p.Name
 			b.ToC = fmt.Sprintf("(*%s)(unsafe.Pointer(%s))", cName, b.GoName)
 		case (bt.kind == kindHandle || bt.kind == kindEnum || bt.kind == kindPrim) && (isConst || override != ""):
-			// Array in ingresso (const) oppure eccezione dichiarata in paramOverrides.
+			// Input array (const) or explicit exception declared in paramOverrides.
 			b.Role, b.GoType = rolePtr, "*"+bt.goType
 			b.CParam = normType(strings.Replace(p.CType, base, bt.cType, 1)) + " " + p.Name
 			b.CArg = p.Name
@@ -211,7 +211,7 @@ func bindParam(fn string, p Param) (Binding, error) {
 		return unknown()
 	}
 	if override != "" && b.Role != rolePtr {
-		return b, fmt.Errorf("%s: override %q non applicabile a %q", fn, override, p.Name)
+		return b, fmt.Errorf("%s: override %q not applicable to %q", fn, override, p.Name)
 	}
 	if b.Role == roleOut && bt.kind == kindPrim && bt.goType == "bool" {
 		b.FromC = "bool(%s)"
@@ -228,7 +228,7 @@ func bindFunc(f Func) (FuncBinding, error) {
 		NoEscape:   !escapes[f.Name],
 	}
 	if f.Ret == "void" && f.Name != "napi_fatal_error" {
-		return fb, fmt.Errorf("%s: funzione void non prevista", f.Name)
+		return fb, fmt.Errorf("%s: unexpected void function", f.Name)
 	}
 	seen := map[string]bool{}
 	for _, p := range f.Params {
@@ -237,7 +237,7 @@ func bindFunc(f Func) (FuncBinding, error) {
 			return fb, err
 		}
 		if seen[b.GoName] {
-			return fb, fmt.Errorf("%s: nome di parametro Go duplicato %q", f.Name, b.GoName)
+			return fb, fmt.Errorf("%s: duplicate Go parameter name %q", f.Name, b.GoName)
 		}
 		seen[b.GoName] = true
 		fb.Params = append(fb.Params, b)
@@ -251,13 +251,13 @@ func bindFunc(f Func) (FuncBinding, error) {
 			found = found || p.Name == name
 		}
 		if !found {
-			return fb, fmt.Errorf("%s: override per il parametro inesistente %q", f.Name, name)
+			return fb, fmt.Errorf("%s: override for nonexistent parameter %q", f.Name, name)
 		}
 	}
 	return fb, nil
 }
 
-// validatePolicy controlla che ogni nome citato in policy.go esista.
+// validatePolicy verifies that every identifier referenced in policy.go exists in the headers.
 func validatePolicy(funcs []Func, enums []Enum) error {
 	known := map[string]bool{}
 	for _, f := range funcs {
@@ -267,7 +267,7 @@ func validatePolicy(funcs []Func, enums []Enum) error {
 	check := func(set map[string]bool, what string) {
 		for n := range set {
 			if !known[n] {
-				problems = append(problems, fmt.Sprintf("%s: %q non è una funzione degli header", what, n))
+				problems = append(problems, fmt.Sprintf("%s: %q is not a function in the headers", what, n))
 			}
 		}
 	}
@@ -276,38 +276,38 @@ func validatePolicy(funcs []Func, enums []Enum) error {
 	check(escapes, "escapes")
 	for n := range excluded {
 		if !known[n] {
-			problems = append(problems, fmt.Sprintf("excluded: %q non è una funzione degli header", n))
+			problems = append(problems, fmt.Sprintf("excluded: %q is not a function in the headers", n))
 		}
 	}
 	for n := range paramOverrides {
 		if !known[n] {
-			problems = append(problems, fmt.Sprintf("paramOverrides: %q non è una funzione degli header", n))
+			problems = append(problems, fmt.Sprintf("paramOverrides: %q is not a function in the headers", n))
 		}
 	}
 	for n := range noAlloc {
 		if !noCallback[n] {
-			problems = append(problems, fmt.Sprintf("noAlloc: %q deve essere anche in noCallback", n))
+			problems = append(problems, fmt.Sprintf("noAlloc: %q must also be in noCallback", n))
 		}
 	}
 	for n := range noCallback {
 		if escapes[n] {
-			problems = append(problems, fmt.Sprintf("%q è sia in noCallback sia in escapes", n))
+			problems = append(problems, fmt.Sprintf("%q is in both noCallback and escapes", n))
 		}
 	}
 	knownEnums := map[string]bool{}
 	for _, e := range enums {
 		knownEnums[e.CName] = true
 		if _, ok := enumConfig[e.CName]; !ok {
-			problems = append(problems, fmt.Sprintf("enum %q senza voce in enumConfig", e.CName))
+			problems = append(problems, fmt.Sprintf("enum %q has no entry in enumConfig", e.CName))
 		}
 	}
 	for n := range enumConfig {
 		if !knownEnums[n] {
-			problems = append(problems, fmt.Sprintf("enumConfig: %q non è un enum degli header", n))
+			problems = append(problems, fmt.Sprintf("enumConfig: %q is not an enum in the headers", n))
 		}
 	}
 	if len(problems) > 0 {
-		return fmt.Errorf("policy non valida:\n  %s", strings.Join(problems, "\n  "))
+		return fmt.Errorf("invalid policy:\n  %s", strings.Join(problems, "\n  "))
 	}
 	return nil
 }
@@ -319,7 +319,7 @@ func goFuncName(c string) string {
 	return camel(c, true)
 }
 
-// goEnumName: napi_ok con strip "napi_" e prefix "Status" → StatusOK.
+// goEnumName: napi_ok with strip "napi_" and prefix "Status" → StatusOK.
 func goEnumName(cname string, n enumNaming) string {
 	return n.prefix + camel(strings.TrimPrefix(cname, n.strip), true)
 }
@@ -328,7 +328,7 @@ var goKeywords = setOf("break", "case", "chan", "const", "continue", "default", 
 	"fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package",
 	"range", "return", "select", "struct", "switch", "type", "var")
 
-// goParamName: finalize_cb → finalizeCb; parole chiave Go: func → fn.
+// goParamName: finalize_cb → finalizeCb; Go keywords: func → fn.
 func goParamName(c string) string {
 	n := camel(c, false)
 	if goKeywords[n] {
@@ -341,7 +341,7 @@ func goParamName(c string) string {
 			return n + "_"
 		}
 	}
-	// I nomi usati internamente dai wrapper non devono essere oscurati.
+	// Avoid shadowing internal variables used by generated wrappers.
 	if n == "gnWant" || n == "gnR" {
 		return n + "_"
 	}

@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_error/test_error.c (#define NAPI_VERSION 9 → napi-go.json).
+// Port of test/js-native-api/test_error/test_error.c (#define NAPI_VERSION 9 -> napi-go.json).
 package main
 
 import (
@@ -44,10 +44,10 @@ func throwExistingError(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// throwFn equivale a napi_throw_error, napi_throw_range_error, … (code, msg C).
+// throwFn corresponds to napi_throw_error, napi_throw_range_error, ... (C code, msg).
 type throwFn func(env sys.Env, code, msg *byte) sys.Status
 
-// thrower restituisce la funzione JS che chiama throw con code (nil = NULL) e msg.
+// thrower returns a JS function that calls throw with code (nil = NULL) and msg.
 func thrower(throw throwFn, code *byte, msg string) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		nt.Call(env, throw(env, code, nt.CStr(msg)))
@@ -55,11 +55,11 @@ func thrower(throw throwFn, code *byte, msg string) nt.Func {
 	}
 }
 
-// createFn equivale a napi_create_error, napi_create_range_error, … (code, msg napi_value).
+// createFn corresponds to napi_create_error, napi_create_range_error, ... (napi_value code, msg).
 type createFn func(env sys.Env, code, msg sys.Value, result *sys.Value) sys.Status
 
-// creator restituisce la funzione JS che crea l'errore con il messaggio msg e, se withCode, il
-// codice ERR_TEST_CODE.
+// creator returns a JS function that creates an error with message msg and, if withCode is true,
+// the code ERR_TEST_CODE.
 func creator(create createFn, msg string, withCode bool) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var result, message, code sys.Value

@@ -1,8 +1,8 @@
-// Package refbyversion è il porting di
+// Package refbyversion is the port of
 // test/node-api/test_reference_by_node_api_version/test_reference_by_node_api_version.c,
-// condiviso dai target test_reference_all_types (NAPI_VERSION=10) e test_reference_obj_only
-// (NAPI_VERSION=9) del binding.gyp: lo stesso codice, con la versione dichiarata che cambia i
-// tipi ammessi da napi_create_reference.
+// shared by the test_reference_all_types (NAPI_VERSION=10) and test_reference_obj_only
+// (NAPI_VERSION=9) targets in binding.gyp: the same code, where the declared version changes the
+// types accepted by napi_create_reference.
 package refbyversion
 
 import (
@@ -12,13 +12,13 @@ import (
 	nt "github.com/napi-bindings/napi-go/tests/nodesuite/internal/napitest"
 )
 
-// valueRefsLength è (int)napi_bigint + 1: un riferimento per ogni napi_valuetype.
+// valueRefsLength is (int)napi_bigint + 1: one reference for each napi_valuetype.
 const valueRefsLength = int(sys.TypeBigInt) + 1
 
 const (
 	refSize = uint(unsafe.Sizeof(sys.Ref(nil)))
 	intSize = uint(unsafe.Sizeof(int32(0)))
-	// externalValue è il 42 scritto nel data dell'external.
+	// externalValue is the 42 written into the external's data.
 	externalValue = 42
 )
 
@@ -59,8 +59,8 @@ func getArgValueAsIndex(env sys.Env, info sys.CallbackInfo, index *uint32) sys.S
 	return sys.GetValueUint32(env, argValue, index)
 }
 
-// valueRefs equivale a napi_get_instance_data(env, (void**)&refValues): l'array di napi_ref in
-// memoria C.
+// valueRefs corresponds to napi_get_instance_data(env, (void**)&refValues): the napi_ref array in
+// C memory.
 func valueRefs(env sys.Env, result *[]sys.Ref) sys.Status {
 	var data unsafe.Pointer
 	if st := sys.GetInstanceData(env, &data); st != sys.StatusOK {
@@ -99,7 +99,7 @@ func toUInt32Value(env sys.Env, value uint32) sys.Value {
 }
 
 func initRefArray(env sys.Env) sys.Status {
-	// Un elemento di valueRefs per ogni napi_valuetype.
+	// One element in valueRefs for each napi_valuetype.
 	refs := nt.Malloc(refSize * uint(valueRefsLength))
 	cb, hint := nt.Finalizer(freeData, 0)
 	st := sys.SetInstanceData(env, uintptr(refs), cb, hint)
@@ -217,7 +217,7 @@ func initFinalizeCount(sys.Env, sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// Init equivale al corpo di NAPI_MODULE_INIT().
+// Init corresponds to the body of NAPI_MODULE_INIT().
 func Init(env sys.Env, exports sys.Value) sys.Value {
 	finalizeCount = 0
 	if !nt.Call(env, initRefArray(env)) {

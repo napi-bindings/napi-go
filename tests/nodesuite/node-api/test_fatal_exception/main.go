@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_fatal_exception/test_fatal_exception.c.
+// Port of test/node-api/test_fatal_exception/test_fatal_exception.c.
 package main
 
 import (

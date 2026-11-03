@@ -1,6 +1,6 @@
-// Porting di test/js-native-api/6_object_wrap/nested_wrap.cc e nested_wrap.h (target nested_wrap,
-// NAPI_VERSION=10): un napi_ref annidato in un ObjectWrap, cancellato dal finalizer mentre il suo
-// finalizer è già in programma.
+// Port of test/js-native-api/6_object_wrap/nested_wrap.cc and nested_wrap.h (target nested_wrap,
+// NAPI_VERSION=10): a napi_ref nested inside an ObjectWrap, deleted by the finalizer while its
+// own finalizer is already scheduled to run.
 package main
 
 import (
@@ -14,7 +14,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// nestedWrap è la classe C++ NestedWrap; il puntatore passato a Node-API è un cgo.Handle.
+// nestedWrap is the C++ NestedWrap class; the pointer passed to Node-API is a cgo.Handle.
 type nestedWrap struct {
 	env     sys.Env
 	wrapper sys.Ref
@@ -22,23 +22,23 @@ type nestedWrap struct {
 }
 
 var (
-	// constructor è NestedWrap::constructor.
+	// constructor is NestedWrap::constructor.
 	constructor       sys.Ref
 	finalizationCount int32
-	// newData è il data del costruttore: si registra una volta sola.
+	// newData is the constructor data: registered only once.
 	newData = nt.Register(newNestedWrap)
 )
 
-// release equivale a ~NestedWrap: cancella anche il riferimento annidato. Gli status non sono
-// controllati, come nel C.
+// release is equivalent to ~NestedWrap: it also deletes the nested reference. Statuses are not
+// checked, matching C.
 func (o *nestedWrap) release() {
 	sys.DeleteReference(o.env, o.wrapper)
 	sys.DeleteReference(o.env, o.nested)
 }
 
-// destructor è NestedWrap::Destructor. Una volta chiamato annulla, cancellando i riferimenti,
-// tutti i finalizer dell'oggetto ancora in programma: il loro nt.Finalizer non viene più
-// chiamato e resta allocato, come accetta il test C.
+// destructor is NestedWrap::Destructor. Once called, deleting the references cancels all
+// pending finalizers on the object: their nt.Finalizer will never be called and remains
+// allocated, just as the C test accepts.
 func destructor(_ sys.Env, nativeObject, _ uintptr) {
 	h := cgo.Handle(nativeObject)
 	obj := h.Value().(*nestedWrap)
@@ -63,7 +63,7 @@ func initClass(env sys.Env, exports sys.Value) {
 	}
 }
 
-// newNestedWrap è NestedWrap::New.
+// newNestedWrap is NestedWrap::New.
 func newNestedWrap(env sys.Env, info sys.CallbackInfo) sys.Value {
 	var newTarget sys.Value
 	if !nt.Call(env, sys.GetNewTarget(env, info, &newTarget)) {
@@ -88,7 +88,7 @@ func newNestedWrap(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Un secondo napi_ref, da cancellare nel distruttore.
+	// A second napi_ref to be deleted in the destructor.
 	cb, hint = nt.Finalizer(destructor, 0)
 	if !nt.Call(env, sys.AddFinalizer(env, this, uintptr(h), cb, hint, &obj.nested)) {
 		nt.DiscardFinalizer(hint)

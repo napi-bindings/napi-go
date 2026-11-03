@@ -1,6 +1,6 @@
-// Porting del target test_buffer di test/node-api/test_buffer/binding.gyp (test_buffer.c,
-// NAPI_EXPERIMENTAL: i deleter "basic" girano durante il GC). Il define
-// NODE_API_EXPERIMENTAL_NO_WARNING riguarda solo gli header.
+// Port of the test_buffer target from test/node-api/test_buffer/binding.gyp (test_buffer.c,
+// NAPI_EXPERIMENTAL: "basic" deleters run during GC). The
+// NODE_API_EXPERIMENTAL_NO_WARNING define only affects headers.
 package main
 
 import (
@@ -16,23 +16,23 @@ func init() { nt.ModuleInit(initModule) }
 
 const (
 	theText = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-	// theTextSize è sizeof(theText): include il NUL finale.
+	// theTextSize is sizeof(theText): includes the trailing NUL.
 	theTextSize = uint(len(theText) + 1)
-	// arrayBufferLength è byte_length di bufferFromArrayBuffer.
+	// arrayBufferLength is the byte_length of bufferFromArrayBuffer.
 	arrayBufferLength = 1024
 )
 
 var (
 	deleterCallCount int32
-	// externalSharedArrayBufferData è static char externalSharedArrayBufferData[1]: una variabile
-	// globale, che il GC di Go non sposta.
+	// externalSharedArrayBufferData corresponds to static char externalSharedArrayBufferData[1]: a
+	// global variable that the Go GC does not move.
 	externalSharedArrayBufferData [1]byte
 )
 
-// theTextC è il const char theText[] del C: memoria C condivisa e mai liberata.
+// theTextC is C's const char theText[]: shared C memory that is never freed.
 func theTextC() *byte { return nt.CStr(theText) }
 
-// isTheText equivale a data != NULL && strcmp(data, theText) == 0.
+// isTheText corresponds to data != NULL && strcmp(data, theText) == 0.
 func isTheText(data uintptr) bool {
 	return data != 0 && nt.GoString((*byte)(nt.Pointer(data))) == theText
 }
@@ -82,7 +82,7 @@ func newExternalBuffer(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return theBuffer
 }
 
-// freeExternalSharedArrayBuffer è un node_api_noenv_finalize: niente env.
+// freeExternalSharedArrayBuffer is a node_api_noenv_finalize: no env.
 func freeExternalSharedArrayBuffer(data, _ uintptr) {
 	if !nt.BasicAssert(data == uintptr(unsafe.Pointer(&externalSharedArrayBufferData[0])),
 		"data == (void*)externalSharedArrayBufferData", "SharedArrayBuffer points to wrong data") {

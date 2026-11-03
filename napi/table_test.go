@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Più di un segmento, per provare la crescita della directory.
+// Span multiple segments to exercise directory growth.
 const manyEntries = segmentSize*3 + 7
 
 func TestTableAddGetRemove(t *testing.T) {
@@ -34,7 +34,7 @@ func TestTableAddGetRemove(t *testing.T) {
 			t.Fatalf("get(%d) = %v, want %d", id, p, i)
 		}
 	}
-	// Id fuori dalla directory.
+	// ID beyond the allocated directory.
 	if tb.get(ids[len(ids)-1]+segmentSize*2) != nil {
 		t.Fatal("get beyond the directory must return nil")
 	}
@@ -48,7 +48,7 @@ func TestTableAddGetRemove(t *testing.T) {
 	if tb.len() != manyEntries-1 {
 		t.Fatalf("len after remove = %d", tb.len())
 	}
-	// L'id liberato viene riusato.
+	// The freed ID is reused.
 	v := -1
 	if id := tb.add(&v); id != removed {
 		t.Fatalf("freed id not reused: got %d, want %d", id, removed)

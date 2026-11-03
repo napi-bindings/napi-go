@@ -1,5 +1,5 @@
-// Addon di test end-to-end del Layer 1 (pacchetto napi): ogni export esercita una parte dell'API
-// e i casi limite sono verificati da tests/e2e/napi.test.mjs.
+// Layer 1 end-to-end test addon (napi package): each export exercises a portion of the API,
+// and edge cases are verified by tests/e2e/napi.test.mjs.
 package main
 
 import (
@@ -13,7 +13,7 @@ import (
 
 func main() {}
 
-// Contatori condivisi da tutti gli env del processo.
+// Counters shared across all envs in the process.
 var (
 	wrapFinalized     atomic.Int64
 	externalFinalized atomic.Int64
@@ -23,25 +23,25 @@ var (
 	inits             atomic.Int64
 )
 
-// envData è lo stato per env dell'addon, salvato come instance data.
+// envData is the per-env state of the addon, stored as instance data.
 type envData struct {
 	refs   map[uint32]napi.Ref
 	nextID uint32
 	value  float64
 }
 
-// counterTag riconosce gli oggetti Counter creati da questo addon.
+// counterTag identifies Counter objects created by this addon.
 var counterTag = napi.TypeTag{Lower: 0x6e6170692d676f31, Upper: 0x636f756e74657221}
 
 type counter struct{ n float64 }
 
 const (
-	// byteModulus: i buffer di prova contengono i % byteModulus.
+	// byteModulus: test buffers contain i % byteModulus.
 	byteModulus = 251
-	// answerValue è il valore delle proprietà answer e [symbol] di defineProps.
+	// answerValue is the value of the answer and [symbol] properties in defineProps.
 	answerValue = 42
-	// removedHookMarker è ciò che aggiungerebbe a cleanupHooksRun l'hook rimosso: un valore
-	// diverso da 1 rende visibile nel test un'esecuzione indebita.
+	// removedHookMarker is what the removed hook would add to cleanupHooksRun: a value
+	// other than 1 makes any unintended execution visible in the test.
 	removedHookMarker = 1000
 )
 
@@ -67,7 +67,7 @@ func init() {
 		}
 		return napi.Value{}, exports.Set("Counter", cls.Value)
 	})
-	// Una seconda funzione di init riceve le export della prima.
+	// A second init function receives the exports registered by the first.
 	napi.Init(func(env napi.Env, exports napi.Object) (napi.Value, error) {
 		has, err := exports.Has("hello")
 		if err != nil {
@@ -231,7 +231,7 @@ var functions = []export{
 		if err != nil {
 			return napi.Value{}, err
 		}
-		// Un secondo hook, rimosso subito, non deve girare.
+		// A second hook, removed immediately, must not run.
 		removed, err := c.Env().AddCleanupHook(func() { cleanupHooksRun.Add(removedHookMarker) })
 		if err != nil {
 			return napi.Value{}, err
@@ -239,7 +239,7 @@ var functions = []export{
 		if err := removed.Remove(); err != nil {
 			return napi.Value{}, err
 		}
-		// Rimuovere due volte non è un errore.
+		// Removing a hook twice is not an error.
 		if err := removed.Remove(); err != nil {
 			return napi.Value{}, err
 		}
@@ -263,7 +263,7 @@ var functions = []export{
 	}},
 	{"noop", func(c napi.CallContext) (napi.Value, error) { return napi.Value{}, nil }},
 	{"hotPath", hotPath},
-	// callBack(fn, withArg) chiama fn senza argomenti o con un argomento (misura delle allocazioni).
+	// callBack(fn, withArg) calls fn with zero or one argument (for allocation measurements).
 	{"callBack", func(c napi.CallContext) (napi.Value, error) {
 		fn, err := c.Arg(0).AsFunction()
 		if err != nil {
@@ -293,7 +293,7 @@ func argInfo(c napi.CallContext) (napi.Value, error) {
 	if err := o.Set("this", c.This().Value); err != nil {
 		return napi.Value{}, err
 	}
-	// Argomento oltre quelli passati: undefined.
+	// Argument beyond those passed: undefined.
 	if err := o.Set("missing", c.Arg(c.Len()+1)); err != nil {
 		return napi.Value{}, err
 	}
@@ -360,7 +360,7 @@ func typeOf(c napi.CallContext) (napi.Value, error) {
 	return o.Value, nil
 }
 
-// numbers(v) legge v con ogni getter numerico e restituisce le letture ricreate come number.
+// numbers(v) reads v with every numeric getter and returns the readings recreated as JS numbers.
 func numbers(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	v := c.Arg(0)
@@ -392,7 +392,7 @@ func numbers(c napi.CallContext) (napi.Value, error) {
 		{"int32", func() (napi.Value, error) { return env.NewInt32(i32) }},
 		{"uint32", func() (napi.Value, error) { return env.NewUint32(u32) }},
 		{"int64", func() (napi.Value, error) { return env.NewInt64(i64) }},
-		// int64 come bigint: senza perdita di precisione oltre 2^53.
+		// int64 as bigint: no precision loss beyond 2^53.
 		{"int64big", func() (napi.Value, error) { b, err := env.NewBigIntInt64(i64); return b.Value, err }},
 	}
 	for _, x := range vals {
@@ -407,8 +407,8 @@ func numbers(c napi.CallContext) (napi.Value, error) {
 	return o.Value, nil
 }
 
-// bigint(v, mode): "i64" e "u64" restituiscono [valore, lossless]; "big" rilegge con le parole
-// e ricrea il bigint; "words" restituisce [negativo, numero di parole].
+// bigint(v, mode): "i64" and "u64" return [value, lossless]; "big" re-reads via words and
+// recreates the bigint; "words" returns [negative, word count].
 func bigint(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	b, err := c.Arg(0).AsBigInt()
@@ -475,7 +475,7 @@ func bigint(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown mode "+mode)
 }
 
-// date(v): rilegge la Date come time.Time e la ricrea; date(ms, true) crea una Date da ms.
+// date(v): reads the Date as time.Time and recreates it; date(ms, true) creates a Date from ms.
 func date(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	if fromMillis, _ := c.Arg(1).Bool(); fromMillis {
@@ -498,9 +498,9 @@ func date(c napi.CallContext) (napi.Value, error) {
 	return r.Value, err
 }
 
-// objectOps(o, op, key, value) applica un'operazione sulle proprietà con chiave stringa
-// ("get", "set", "has", "hasOwn", "delete"), chiave valore ("getV", "setV", "hasV", "hasOwnV",
-// "deleteV") o indice ("getI", "setI", "hasI", "deleteI").
+// objectOps(o, op, key, value) applies a property operation using a string key
+// ("get", "set", "has", "hasOwn", "delete"), a Value key ("getV", "setV", "hasV", "hasOwnV",
+// "deleteV"), or an index ("getI", "setI", "hasI", "deleteI").
 func objectOps(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	o, err := c.Arg(0).AsObject()
@@ -566,8 +566,8 @@ func objectOps(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown op "+op)
 }
 
-// keys(o, mode): "names" = for...in, "own" = Object.keys, "all" = chiavi proprie con symbol,
-// "proto" = prototipo.
+// keys(o, mode): "names" = for...in, "own" = Object.keys, "all" = own keys including symbols,
+// "proto" = prototype.
 func keys(c napi.CallContext) (napi.Value, error) {
 	o, err := c.Arg(0).AsObject()
 	if err != nil {
@@ -593,16 +593,16 @@ func keys(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown mode "+mode)
 }
 
-// catchJS(fn, ...args) chiama fn: se lancia restituisce {caught: eccezione}, altrimenti
-// {value: risultato}. catchJS(fn, ...args) con this === "propagate" lascia propagare l'eccezione.
+// catchJS(fn, ...args) calls fn: if it throws, returns {caught: exception}; otherwise
+// {value: result}. catchJS(fn, ...args) with this === "propagate" lets the exception propagate.
 func catchJS(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	fn, err := c.Arg(0).AsFunction()
 	if err != nil {
 		return napi.Value{}, err
 	}
-	// Un this primitivo arriva come oggetto String (le funzioni native non sono strict). Va letto
-	// prima della chiamata: con un'eccezione pendente ToString fallirebbe.
+	// A primitive `this` arrives boxed as a String object (native functions are non-strict). It
+	// must be read before the call: with a pending exception, ToString would fail.
 	thisStr, err := c.This().ToString()
 	if err != nil {
 		return napi.Value{}, err
@@ -637,8 +637,7 @@ func catchJS(c napi.CallContext) (napi.Value, error) {
 	return o.Value, o.Set("value", v)
 }
 
-// makeFunction(name) crea una funzione che restituisce [numero di argomenti, this, new.target
-// presente].
+// makeFunction(name) creates a function that returns [argument count, this, new.target present].
 func makeFunction(c napi.CallContext) (napi.Value, error) {
 	name, err := c.Arg(0).GoString()
 	if err != nil {
@@ -673,7 +672,7 @@ type codedError struct{ code, msg string }
 func (e codedError) Error() string  { return e.msg }
 func (e codedError) JSCode() string { return e.code }
 
-// throwError(kind, code, message) restituisce un errore del tipo richiesto.
+// throwError(kind, code, message) returns an error of the requested kind.
 func throwError(c napi.CallContext) (napi.Value, error) {
 	kind, err := c.Arg(0).GoString()
 	if err != nil {
@@ -695,19 +694,19 @@ func throwError(c napi.CallContext) (napi.Value, error) {
 	case "coder":
 		return napi.Value{}, codedError{code: code, msg: msg}
 	case "wrapped":
-		// Un *Error avvolto in un altro errore conserva tipo e code.
+		// An *Error wrapped in another error preserves its kind and code.
 		return napi.Value{}, errors.Join(napi.RangeError(code, msg))
 	case "value":
 		return napi.Value{}, napi.Throw(c.Arg(1))
 	case "pending":
-		// L'eccezione pendente resta quella lanciata qui, non il secondo errore.
+		// The pending exception remains the one thrown here, not the second error.
 		c.Env().Throw(napi.TypeError("FIRST", "first"))
 		return napi.Value{}, napi.RangeError("SECOND", "second")
 	case "newError":
 		e, err := c.Env().NewError(napi.RangeError(code, msg))
 		return e.Value, err
 	case "napi":
-		// Un fallimento di Node-API: GetValueDouble su una stringa.
+		// A Node-API failure: GetValueDouble on a string.
 		s, err := c.Env().NewString("x")
 		if err != nil {
 			return napi.Value{}, err
@@ -718,7 +717,7 @@ func throwError(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown kind "+kind)
 }
 
-// coerce(v, to) applica la coercizione JS richiesta.
+// coerce(v, to) applies the requested JS coercion.
 func coerce(c napi.CallContext) (napi.Value, error) {
 	to, err := c.Arg(1).GoString()
 	if err != nil {
@@ -740,7 +739,7 @@ func coerce(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown coercion "+to)
 }
 
-// compare(a, b, ctor?) restituisce [a === b, a instanceof ctor].
+// compare(a, b, ctor?) returns [a === b, a instanceof ctor].
 func compare(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	eq, err := c.Arg(0).StrictEquals(c.Arg(1))
@@ -773,8 +772,8 @@ func compare(c napi.CallContext) (napi.Value, error) {
 	return a.Value, nil
 }
 
-// defineProps(o, symbol) definisce su o un metodo, un accessor, un getter senza setter, un
-// setter senza getter, un valore con attributi e una proprietà con chiave symbol.
+// defineProps(o, symbol) defines a method, an accessor, a getter-only property, a setter-only
+// property, a value property with attributes, and a symbol-keyed property on o.
 func defineProps(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	o, err := c.Arg(0).AsObject()
@@ -816,8 +815,8 @@ func defineProps(c napi.CallContext) (napi.Value, error) {
 	return o.Value, o.DefineProperties(props...)
 }
 
-// defineCounter definisce la classe Counter(start): metodo inc(step), accessor value, metodo
-// statico isCounter(o) basato sul type tag, proprietà statica kind.
+// defineCounter defines the Counter(start) class: method inc(step), accessor value, static
+// method isCounter(o) based on the type tag, and static property kind.
 func defineCounter(env napi.Env) (napi.Function, error) {
 	kind, err := env.NewString("counter")
 	if err != nil {
@@ -892,8 +891,8 @@ func defineCounter(env napi.Env) (napi.Function, error) {
 	)
 }
 
-// wrap(o, op, n): "wrap" associa n, "unwrap" lo legge, "remove" lo rimuove, "many" crea n
-// oggetti con un valore associato (per il test del GC).
+// wrap(o, op, n): "wrap" associates n with o, "unwrap" reads it, "remove" removes it, and "many"
+// creates n objects with an associated value (for GC testing).
 func wrap(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	op, err := c.Arg(1).GoString()
@@ -948,8 +947,8 @@ func wrap(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown op "+op)
 }
 
-// external(op, arg): "new" crea un external con arg, "get" lo legge, "many" ne crea arg (per il
-// test del GC).
+// external(op, arg): "new" creates an external holding arg, "get" reads it, and "many" creates
+// arg externals (for GC testing).
 func external(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	op, err := c.Arg(0).GoString()
@@ -1004,8 +1003,8 @@ func dataOf(env napi.Env) (*envData, error) {
 	return d, nil
 }
 
-// refs(op, arg, count): "new" crea una Ref a arg con conteggio count e restituisce il suo id;
-// "get", "ref", "unref", "delete" agiscono sulla Ref con id arg.
+// refs(op, arg, count): "new" creates a Ref to arg with initial reference count `count` and
+// returns its ID; "get", "ref", "unref", and "delete" operate on the Ref with ID `arg`.
 func refs(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	d, err := dataOf(env)
@@ -1067,10 +1066,11 @@ func refs(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown op "+op)
 }
 
-// buffers(op, arg): crea e legge Buffer e ArrayBuffer. "new", "copy", "external", "externalEmpty",
-// "arrayBuffer", "externalArrayBuffer" creano n byte di valore i % byteModulus; "sum" somma i
-// byte di un Buffer, "abSum" di un ArrayBuffer; "detach" e "isDetached" agiscono su un ArrayBuffer;
-// "alias" scrive 255 nel primo byte attraverso la memoria restituita e restituisce il Buffer.
+// buffers(op, arg): creates and reads Buffers and ArrayBuffers. "new", "copy", "external",
+// "externalEmpty", "arrayBuffer", and "externalArrayBuffer" create n bytes with value
+// i % byteModulus; "sum" sums the bytes of a Buffer, "abSum" sums an ArrayBuffer; "detach" and
+// "isDetached" operate on an ArrayBuffer; "alias" writes 255 to the first byte through the
+// returned slice and returns the Buffer.
 func buffers(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	op, err := c.Arg(0).GoString()
@@ -1173,9 +1173,9 @@ func buffers(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown op "+op)
 }
 
-// typed(op, ...): "typed"(type, ab, offset, length) crea un TypedArray, "info"(ta) ne descrive
-// tipo/lunghezza/offset/byte, "dataView"(ab, offset, length) crea un DataView, "dvInfo"(dv) lo
-// descrive. "fillTyped"(ta) scrive l'indice in ogni byte attraverso Info().Data.
+// typed(op, ...): "typed"(type, ab, offset, length) creates a TypedArray, "info"(ta) describes
+// its type/length/offset/bytes, "dataView"(ab, offset, length) creates a DataView, "dvInfo"(dv)
+// describes it, and "fillTyped"(ta) writes the byte index into each byte via Info().Data.
 func typed(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	op, err := c.Arg(0).GoString()
@@ -1255,8 +1255,8 @@ func typed(c napi.CallContext) (napi.Value, error) {
 	return napi.Value{}, napi.RangeError("", "unknown op "+op)
 }
 
-// promise(op, value): "resolve" e "reject" concludono subito la Promise con value, "error" la
-// rifiuta con un RangeError, "thrown" la rifiuta con value attraverso napi.Throw.
+// promise(op, value): "resolve" and "reject" immediately settle the Promise with value, "error"
+// rejects it with a RangeError, and "thrown" rejects it with value via napi.Throw.
 func promise(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	op, err := c.Arg(0).GoString()
@@ -1282,8 +1282,8 @@ func promise(c napi.CallContext) (napi.Value, error) {
 	return p.Value, err
 }
 
-// instanceData(v?): con un argomento lo salva nello stato dell'env, poi restituisce il valore
-// salvato (0 in un env appena inizializzato).
+// instanceData(v?): when called with an argument, saves it in the env state, then returns the
+// saved value (0 in a freshly initialized env).
 func instanceData(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	d, err := dataOf(env)
@@ -1298,8 +1298,8 @@ func instanceData(c napi.CallContext) (napi.Value, error) {
 	return env.NewFloat64(d.value)
 }
 
-// scopes(n): crea n oggetti in uno scope per iterazione e restituisce un oggetto sopravvissuto a
-// uno scope escapable.
+// scopes(n): creates n objects in a per-iteration scope and returns an object that escaped an
+// escapable scope.
 func scopes(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	n, err := c.Arg(0).Int32()
@@ -1314,7 +1314,7 @@ func scopes(c napi.CallContext) (napi.Value, error) {
 			return napi.Value{}, err
 		}
 	}
-	// Un errore dentro lo scope arriva al chiamante e lo scope viene chiuso comunque.
+	// An error returned inside the scope reaches the caller while the scope is still closed.
 	scopeErr := env.WithScope(func() error { return napi.RangeError("E_SCOPE", "inside scope") })
 	if scopeErr == nil {
 		return napi.Value{}, errors.New("WithScope lost the error")
@@ -1393,7 +1393,7 @@ func itoa(u uint32) string {
 	return string(b[i:])
 }
 
-// counters restituisce i contatori dei finalizer e di napi.ReadStats.
+// counters returns the finalizer counters and napi.ReadStats counters.
 func counters(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	st := napi.ReadStats()
@@ -1421,9 +1421,9 @@ func counters(c napi.CallContext) (napi.Value, error) {
 	return o.Value, nil
 }
 
-// hotPath(obj, str) esegue le operazioni che non devono allocare: numeri, typeof, lettura di una
-// proprietà con chiave stringa e lettura di una stringa corta in un buffer sullo stack (la stringa
-// risultante è l'unica allocazione ammessa, ed è assente se vuota).
+// hotPath(obj, str) executes operations that must not allocate: numbers, typeof, reading a
+// string-keyed property, and reading a short string into a stack buffer (the resulting Go string
+// is the only allowed allocation, and is absent when empty).
 func hotPath(c napi.CallContext) (napi.Value, error) {
 	o, err := c.Arg(0).AsObject()
 	if err != nil {

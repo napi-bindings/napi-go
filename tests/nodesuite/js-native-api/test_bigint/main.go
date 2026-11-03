@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_bigint/test_bigint.c.
+// Port of test/js-native-api/test_bigint/test_bigint.c.
 package main
 
 import (
@@ -12,7 +12,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// maxWords è la capacità del buffer uint64_t words[10] del test C.
+// maxWords is the capacity of the uint64_t words[10] buffer in the C test.
 const maxWords = 10
 
 func isLossless(env sys.Env, info sys.CallbackInfo) sys.Value {
@@ -49,7 +49,7 @@ func isLossless(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return output
 }
 
-// bigintArg legge il primo argomento con le verifiche comuni a TestInt64, TestUint64 e TestWords.
+// bigintArg reads the first argument with the checks shared by TestInt64, TestUint64, and TestWords.
 func bigintArg(env sys.Env, info sys.CallbackInfo) (sys.Value, bool) {
 	argc := uint(1)
 	var args [1]sys.Value
@@ -145,7 +145,7 @@ func testWords(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return output
 }
 
-// createTooBigBigInt lancia un RangeError: word_count = SIZE_MAX.
+// createTooBigBigInt throws a RangeError: word_count = SIZE_MAX.
 func createTooBigBigInt(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	signBit := int32(0)
 	wordCount := uint(math.MaxUint)
@@ -159,7 +159,7 @@ func createTooBigBigInt(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return output
 }
 
-// makeBigIntWordsThrow verifica che le eccezioni del motore arrivino come napi_pending_exception.
+// makeBigIntWordsThrow verifies that engine exceptions are returned as napi_pending_exception.
 func makeBigIntWordsThrow(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	var words [maxWords]uint64
 	var output sys.Value

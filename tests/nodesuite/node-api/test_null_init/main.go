@@ -1,11 +1,11 @@
-// Porting di test/node-api/test_null_init/test_null_init.c. Il C registra il modulo alla vecchia
-// maniera (napi_module_register da un costruttore) con nm_register_func NULL. In napi-go
-// l'equivalente è un addon che non registra nessuna funzione di init (né nt.ModuleInit né
-// sys.SetModuleInitHandler): sys lancia allora lo stesso errore di Node.js.
+// Port of test/node-api/test_null_init/test_null_init.c. C registers the module using the legacy
+// style (napi_module_register from a constructor) with nm_register_func set to NULL. In napi-go
+// the equivalent is an addon that registers no init function (neither nt.ModuleInit nor
+// sys.SetModuleInitHandler): sys then throws the same error as Node.js.
 package main
 
 import (
-	// Collega sys all'addon come negli altri test, senza registrare l'init.
+	// Link sys into the addon as in other tests, without registering an init handler.
 	_ "github.com/napi-bindings/napi-go/sys"
 )
 

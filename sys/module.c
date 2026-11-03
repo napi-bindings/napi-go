@@ -1,14 +1,14 @@
 /*
- * module.c — entry point del modulo Node-API.
+ * module.c — Node-API module entry point.
  *
- * NAPI_MODULE_INIT() definisce ed esporta:
- *   - node_api_module_get_api_version_v1() → NAPI_VERSION, impostata dal build tag di versione
+ * NAPI_MODULE_INIT() defines and exports:
+ *   - node_api_module_get_api_version_v1() → NAPI_VERSION, set by the active version build tag
  *     (version_*.go);
- *   - napi_register_module_v1(env, exports) → chiamata da Node una volta per env (main thread e
- *     ogni worker_thread).
+ *   - napi_register_module_v1(env, exports) → called by Node once per env (main thread and each
+ *     worker_thread).
  *
- * Il runtime Go di un c-shared si avvia al dlopen; goNapiRegisterModule attende da sola la fine
- * della sua inizializzazione.
+ * The Go runtime of a c-shared library starts on dlopen; goNapiRegisterModule automatically waits
+ * for runtime initialization to complete.
  */
 #include <stdio.h>
 #include "internal.h"
@@ -17,7 +17,7 @@
 #define GN_MESSAGE_MAX 256
 
 NAPI_MODULE_INIT() {
-  /* Prima di tutto: il runtime Go è già partito e non deve essere scaricato (pin.c). */
+  /* First of all: the Go runtime has already started and must never be unloaded (pin.c). */
   gn_pin_module();
   const char* first_missing = NULL;
   int missing = gn_api_load_once(&first_missing);
@@ -28,7 +28,7 @@ NAPI_MODULE_INIT() {
              "process (first: %s)",
              missing, (int)NAPI_VERSION, first_missing ? first_missing : "?");
     fprintf(stderr, "%s\n", msg);
-    /* Se manca anche napi_throw_error resta solo il messaggio su stderr. */
+    /* If napi_throw_error itself is missing, at least the stderr message above remains. */
     gn_napi_throw_error(env, "ERR_NAPI_GO_MISSING_FUNCTIONS", msg);
     return NULL;
   }
@@ -39,9 +39,9 @@ NAPI_MODULE_INIT() {
   } else {
     gn_throw_foreign_runtime(env);
   }
-  /* L'initsig del runtime Go è concluso: se setsigstack ha perso SA_RESETHAND sugli handler di
-     Node (macOS) lo ripristiniamo. Anche quando il modulo viene rifiutato, perché il suo runtime
-     è comunque partito. */
+  /* The Go runtime's initsig has completed: if setsigstack stripped SA_RESETHAND from Node's
+     signal handlers (macOS), restore it. Run this even when the module is rejected, because its
+     Go runtime has started regardless. */
   gn_repair_node_signal_handlers();
   return result;
 }

@@ -17,8 +17,8 @@ package napitest
 #include <dlfcn.h>
 #endif
 
-// Le API sperimentali non sono negli header di sys (node-api-headers 1.9.0): i prototipi sono
-// quelli di js_native_api.h di nodejs/node main.
+// Experimental APIs are not in sys's headers (node-api-headers 1.9.0): prototypes match
+// js_native_api.h from nodejs/node main.
 typedef napi_status (*gn_post_finalizer_fn)(napi_env, napi_finalize, void*, void*);
 typedef napi_status (*gn_is_sab_fn)(napi_env, napi_value, bool*);
 typedef napi_status (*gn_set_prototype_fn)(napi_env, napi_value, napi_value);
@@ -32,8 +32,8 @@ typedef napi_status (*gn_create_external_sab_fn)(napi_env, void*, size_t, gn_noe
 // noenv.c
 void gn_test_noenv_finalize(void* data, void* hint);
 
-// gn_test_sym cerca una funzione Node-API (o di libuv) nel processo host, come sys/loader.c. Non
-// è static perché la usa anche uv.go.
+// gn_test_sym looks up a Node-API (or libuv) function in the host process, like sys/loader.c. It
+// is not static because uv.go also calls it.
 void* gn_test_sym(const char* name) {
 #if defined(_WIN32)
   void* p = (void*)GetProcAddress(GetModuleHandleW(NULL), name);
@@ -50,7 +50,7 @@ void* gn_test_sym(const char* name) {
 
 static void* gn_test_ptr(uintptr_t addr) { return (void*)addr; }
 
-// Valore volutamente non valido restituito da TestBadReturnExceptionPending.
+// Deliberately invalid value returned by TestBadReturnExceptionPending.
 static napi_value gn_test_invalid_value(void) { return (napi_value)(uintptr_t)0xFFFFFFFFFull; }
 
 static napi_status gn_test_post_finalizer(void* fn, napi_env env, napi_finalize cb, uintptr_t data,
@@ -96,15 +96,15 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// Pointer equivale al cast C (void*)addr: converte il data di un finalizer o di un wrap, che sys
-// passa come uintptr, senza una conversione uintptr → unsafe.Pointer lato Go. addr deve venire
-// da memoria C o da una variabile globale Go (che il GC non sposta).
+// Pointer corresponds to the C cast (void*)addr: converts the data of a finalizer or wrap, which
+// sys passes as uintptr, without a Go-side uintptr → unsafe.Pointer conversion. addr must come
+// from C memory or a global Go variable (which the GC does not move).
 func Pointer(addr uintptr) unsafe.Pointer {
 	return C.gn_test_ptr(C.uintptr_t(addr))
 }
 
-// InvalidValue restituisce un napi_value volutamente non valido (0xFFFFFFFFF), come
-// TestBadReturnExceptionPending di test_function.c.
+// InvalidValue returns a deliberately invalid napi_value (0xFFFFFFFFF), matching
+// TestBadReturnExceptionPending in test_function.c.
 func InvalidValue() sys.Value {
 	return sys.Value(unsafe.Pointer(C.gn_test_invalid_value()))
 }
@@ -133,11 +133,11 @@ var (
 	createExternalSABSym          = &symbol{name: "node_api_create_external_sharedarraybuffer"}
 )
 
-// Le funzioni seguenti chiamano API sperimentali di Node-API che sys non espone ancora
-// (assenti da node-api-headers 1.9.0), risolte dal processo node come fa sys/loader.c. Se il Node
-// in esecuzione non le esporta restituiscono sys.StatusUnavailable, salvo dove indicato.
+// The following functions call experimental Node-API functions not yet exposed by sys (absent
+// from node-api-headers 1.9.0), resolved from the node process just like sys/loader.c. If the
+// running Node does not export them they return sys.StatusUnavailable, unless noted otherwise.
 
-// PostFinalizer chiama node_api_post_finalizer.
+// PostFinalizer calls node_api_post_finalizer.
 func PostFinalizer(env sys.Env, cb sys.Finalize, data, hint uintptr) sys.Status {
 	fn := postFinalizerSym.lookup()
 	if fn == nil {
@@ -147,7 +147,7 @@ func PostFinalizer(env sys.Env, cb sys.Finalize, data, hint uintptr) sys.Status 
 		C.uintptr_t(data), C.uintptr_t(hint)))
 }
 
-// IsSharedArrayBuffer chiama node_api_is_sharedarraybuffer.
+// IsSharedArrayBuffer calls node_api_is_sharedarraybuffer.
 func IsSharedArrayBuffer(env sys.Env, value sys.Value, result *bool) sys.Status {
 	fn := isSharedArrayBufferSym.lookup()
 	if fn == nil {
@@ -161,8 +161,8 @@ func IsSharedArrayBuffer(env sys.Env, value sys.Value, result *bool) sys.Status 
 	return st
 }
 
-// CreateSharedArrayBuffer chiama node_api_create_sharedarraybuffer. data e result sono scritti
-// da Node-API, come nell'API C.
+// CreateSharedArrayBuffer calls node_api_create_sharedarraybuffer. data and result are written
+// by Node-API, as in the C API.
 func CreateSharedArrayBuffer(env sys.Env, byteLength uint, data *unsafe.Pointer, result *sys.Value) sys.Status {
 	fn := createSharedArrayBufferSym.lookup()
 	if fn == nil {
@@ -172,9 +172,9 @@ func CreateSharedArrayBuffer(env sys.Env, byteLength uint, data *unsafe.Pointer,
 		(*C.napi_value)(unsafe.Pointer(result))))
 }
 
-// CreateExternalSharedArrayBuffer chiama node_api_create_external_sharedarraybuffer. finalize
-// può essere nil (finalize_cb NULL); altrimenti riceve data e hint invariati, anche da un thread
-// che non è quello di JS.
+// CreateExternalSharedArrayBuffer calls node_api_create_external_sharedarraybuffer. finalize may
+// be nil (NULL finalize_cb); otherwise it receives data and hint unchanged, possibly on a non-JS
+// thread.
 func CreateExternalSharedArrayBuffer(env sys.Env, data uintptr, byteLength uint, finalize NoEnvFinalizeFunc,
 	hint uintptr, result *sys.Value) sys.Status {
 	fn := createExternalSABSym.lookup()
@@ -195,8 +195,8 @@ func CreateExternalSharedArrayBuffer(env sys.Env, data uintptr, byteLength uint,
 	return st
 }
 
-// SetPrototype chiama node_api_set_prototype. Se il Node in esecuzione non la esporta usa
-// Object.setPrototypeOf(object, prototype), che ha lo stesso effetto osservabile negli script.
+// SetPrototype calls node_api_set_prototype. If the running Node does not export it, falls back
+// to Object.setPrototypeOf(object, prototype), which has the same observable effect in the scripts.
 func SetPrototype(env sys.Env, object, prototype sys.Value) sys.Status {
 	if fn := setPrototypeSym.lookup(); fn != nil {
 		return sys.Status(C.gn_test_set_prototype(fn, C.napi_env(unsafe.Pointer(env)),
@@ -207,10 +207,10 @@ func SetPrototype(env sys.Env, object, prototype sys.Value) sys.Status {
 	return callObjectMethod(env, "setPrototypeOf", args[:], &result)
 }
 
-// CreateObjectWithProperties chiama node_api_create_object_with_properties. Se il Node in
-// esecuzione non la esporta usa Object.create(prototype) e napi_set_property per ogni coppia:
-// stesse proprietà proprie (dati, enumerabili, scrivibili, configurabili) e stesso prototipo.
-// prototype nil equivale a null, come nell'API.
+// CreateObjectWithProperties calls node_api_create_object_with_properties. If the running Node
+// does not export it, falls back to Object.create(prototype) and napi_set_property for each pair:
+// same own properties (data, enumerable, writable, configurable) and same prototype. A nil
+// prototype is treated as null, matching the API.
 func CreateObjectWithProperties(env sys.Env, prototype sys.Value, names, values []sys.Value,
 	result *sys.Value) sys.Status {
 	if len(names) != len(values) {
@@ -245,7 +245,7 @@ func CreateObjectWithProperties(env sys.Env, prototype sys.Value, names, values 
 	return sys.StatusOK
 }
 
-// callObjectMethod chiama Object[method](...args).
+// callObjectMethod calls Object[method](...args).
 func callObjectMethod(env sys.Env, method string, args []sys.Value, result *sys.Value) sys.Status {
 	var global, object, fn sys.Value
 	if st := sys.GetGlobal(env, &global); st != sys.StatusOK {

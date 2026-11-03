@@ -1,6 +1,5 @@
-// Sostituto di test/common/gc.js della suite di Node.js con le sole funzioni usate dai test
-// portati (onGC, gcUntil). Semantica ripresa da Node.js: vedi LICENSE.node. Richiede
-// --expose-gc.
+// Replacement for Node.js's test/common/gc.js containing only the functions used by the ported
+// tests (onGC, gcUntil). Semantics match Node.js: see LICENSE.node. Requires --expose-gc.
 'use strict';
 
 const assert = require('assert');
@@ -9,11 +8,11 @@ const common = require('./');
 
 const gcTrackerMap = new WeakMap();
 const gcTrackerTag = 'NODE_TEST_COMMON_GC_TRACKER';
-// Numero di raccolte tentate da gcUntil prima di arrendersi, come in Node.js.
+// Number of GC cycles attempted by gcUntil before giving up, matching Node.js.
 const DEFAULT_MAX_GC_COUNT = 10;
 
-// onGC chiama gcListener.ongc() quando obj viene raccolto (tramite il destroy di un
-// AsyncResource legato a obj).
+// onGC invokes gcListener.ongc() when obj is garbage-collected (via the destroy hook of an
+// AsyncResource tied to obj).
 function onGC(obj, gcListener) {
   const asyncHooks = require('async_hooks');
 
@@ -38,14 +37,14 @@ function onGC(obj, gcListener) {
   obj = null;
 }
 
-// gcUntil esegue global.gc() finché condition() diventa vera, al massimo maxCount volte.
+// gcUntil runs global.gc() until condition() returns true, up to maxCount times.
 async function gcUntil(name, condition, maxCount = DEFAULT_MAX_GC_COUNT, gcOptions) {
   for (let count = 0; count < maxCount; ++count) {
     await setImmediatePromisified();
     if (gcOptions) {
       await global.gc(gcOptions);
     } else {
-      await global.gc();  // undefined non equivale a nessun argomento.
+      await global.gc();  // Passing undefined is not equivalent to passing no arguments.
     }
     if (condition()) {
       return;

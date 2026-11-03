@@ -5,18 +5,18 @@ import (
 	"testing"
 )
 
-// Senza un processo Node la tabella è vuota: i wrapper devono restituire StatusUnavailable
-// senza toccare le uscite né andare in crash.
+// Without a host Node process the function table is empty: wrappers must return StatusUnavailable
+// without touching outputs or crashing.
 func TestWrappersWithoutHost(t *testing.T) {
 	sentinel := Value(nil)
 	if st := CreateInt32(nil, 1, &sentinel); st != StatusUnavailable {
-		t.Fatalf("CreateInt32 = %v, atteso StatusUnavailable", st)
+		t.Fatalf("CreateInt32 = %v, want StatusUnavailable", st)
 	}
 	if sentinel != nil {
-		t.Fatal("l'uscita non deve essere scritta quando lo status non è StatusOK")
+		t.Fatal("output must not be written when status is not StatusOK")
 	}
 	if st := CreateInt32(nil, 1, nil); st != StatusUnavailable {
-		t.Fatalf("CreateInt32 con uscita nil = %v", st)
+		t.Fatalf("CreateInt32 with nil output = %v", st)
 	}
 	if st := Throw(nil, nil); st != StatusUnavailable {
 		t.Fatalf("Throw = %v", st)
@@ -30,12 +30,12 @@ func TestWrappersWithoutHost(t *testing.T) {
 func TestAvailableBeforeLoad(t *testing.T) {
 	for f := Fn(0); f < fnCount; f++ {
 		if Available(f) {
-			t.Fatalf("%s risulta disponibile senza processo host", f)
+			t.Fatalf("%s reported as available without host process", f)
 		}
 	}
 	for _, bad := range []Fn{-1, fnCount, fnCount + 1} {
 		if Available(bad) {
-			t.Errorf("Available(%d) deve essere false", bad)
+			t.Errorf("Available(%d) must be false", bad)
 		}
 	}
 }
@@ -46,25 +46,25 @@ func TestFnMetadata(t *testing.T) {
 		t.Fatalf("napi_create_int32: %v %v %d", f, ok, f.MinVersion())
 	}
 	if FnSymbolFor.MinVersion() != 9 || FnCreatePropertyKeyUTF8.MinVersion() != 10 {
-		t.Error("versioni minime errate per le funzioni Node-API 9/10")
+		t.Error("wrong minimum versions for Node-API 9/10 functions")
 	}
-	if _, ok := FnByName("napi_inesistente"); ok {
-		t.Error("FnByName deve fallire per un nome sconosciuto")
+	if _, ok := FnByName("napi_nonexistent"); ok {
+		t.Error("FnByName must fail for an unknown name")
 	}
 	if _, ok := FnByName(""); ok {
-		t.Error("FnByName deve fallire per un nome vuoto")
+		t.Error("FnByName must fail for an empty name")
 	}
 	if got := Fn(-1).Name(); !strings.HasPrefix(got, "Fn(") || Fn(-1).MinVersion() != 0 {
-		t.Errorf("Fn non valida: %q", got)
+		t.Errorf("invalid Fn: %q", got)
 	}
 	seen := map[string]bool{}
 	for f := Fn(0); f < fnCount; f++ {
 		if seen[f.Name()] {
-			t.Errorf("nome duplicato %s", f.Name())
+			t.Errorf("duplicate name %s", f.Name())
 		}
 		seen[f.Name()] = true
 		if v := f.MinVersion(); v < 1 || v > MaxVersion {
-			t.Errorf("%s: versione %d fuori da 1..%d", f, v, MaxVersion)
+			t.Errorf("%s: version %d out of range 1..%d", f, v, MaxVersion)
 		}
 	}
 }
@@ -82,7 +82,7 @@ func TestStatusString(t *testing.T) {
 	}
 	for s, want := range cases {
 		if got := s.String(); got != want {
-			t.Errorf("Status(%d).String() = %q, atteso %q", int32(s), got, want)
+			t.Errorf("Status(%d).String() = %q, want %q", int32(s), got, want)
 		}
 	}
 	if TypeBigInt.String() != "napi_bigint" {
@@ -95,6 +95,6 @@ func TestDeclaredVersion(t *testing.T) {
 		t.Fatalf("node_api_module_get_api_version_v1 = %d, DeclaredVersion = %d", got, DeclaredVersion)
 	}
 	if DeclaredVersion < 8 {
-		t.Fatalf("DeclaredVersion = %d, minimo supportato 8", DeclaredVersion)
+		t.Fatalf("DeclaredVersion = %d, minimum supported is 8", DeclaredVersion)
 	}
 }

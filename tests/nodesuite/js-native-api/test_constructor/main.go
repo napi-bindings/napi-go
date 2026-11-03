@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_constructor/test_constructor.c.
+// Port of test/js-native-api/test_constructor/test_constructor.c.
 package main
 
 import (
@@ -11,7 +11,7 @@ func main() {}
 var (
 	value       = 1.0
 	staticValue = 10.0
-	// testDefineClassData si registra una volta sola (vedi init).
+	// testDefineClassData is registered only once (see init).
 	testDefineClassData uintptr
 )
 
@@ -36,8 +36,8 @@ func testDefineClass(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Lo status delle chiamate senza controllo è letto subito dopo da AddLastStatus, come nel C.
-	// Il data del costruttore è NULL come nel C: queste classi non vengono mai istanziate.
+	// The status of unchecked calls is read immediately after via AddLastStatus, matching C.
+	// The constructor data is NULL as in C: these classes are never instantiated.
 	status := sys.DefineClass(nil, nt.CStr(trackedFunction), sys.AutoLength, sys.CallbackTrampoline,
 		0, 1, &propertyDescriptor, &result)
 
@@ -151,7 +151,7 @@ func initModule(env sys.Env, _ sys.Value) sys.Value {
 		return nil
 	}
 
-	// Lunghezza 8: il nome della classe diventa "MyObject".
+	// Length 8: the class name becomes "MyObject".
 	if !nt.Call(env, sys.DefineClass(env, nt.CStr("MyObject_Extra"), 8, sys.CallbackTrampoline,
 		nt.Register(newExtra), 0, nil, &cons)) {
 		return nil

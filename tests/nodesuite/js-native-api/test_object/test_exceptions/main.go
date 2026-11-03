@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_object/test_exceptions.c.
+// Port of test/js-native-api/test_object/test_exceptions.c.
 package main
 
 import (
@@ -29,8 +29,8 @@ func testExceptions(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// procedure equivale alla macro PROCEDURE: la chiamata deve fallire con un'eccezione
-	// pendente, che poi viene rimossa.
+	// procedure is equivalent to the PROCEDURE macro: the call must fail with a pending
+	// exception, which is then cleared.
 	procedure := func(status sys.Status) bool {
 		if !nt.Assert(env, status == sys.StatusPendingException, "status == napi_pending_exception", expectPending) {
 			return false
@@ -48,7 +48,7 @@ func testExceptions(env sys.Env, info sys.CallbackInfo) sys.Value {
 	keyName := nt.CStr("key")
 
 	calls := []func() sys.Status{
-		// Proprietà.
+		// Properties.
 		func() sys.Status { return sys.SetProperty(env, target, key, value) },
 		func() sys.Status { return sys.SetNamedProperty(env, target, keyName, value) },
 		func() sys.Status { return sys.HasProperty(env, target, key, &boolResult) },
@@ -57,7 +57,7 @@ func testExceptions(env sys.Env, info sys.CallbackInfo) sys.Value {
 		func() sys.Status { return sys.GetProperty(env, target, key, &value) },
 		func() sys.Status { return sys.GetNamedProperty(env, target, keyName, &value) },
 		func() sys.Status { return sys.DeleteProperty(env, target, key, &boolResult) },
-		// Elementi.
+		// Elements.
 		func() sys.Status { return sys.SetElement(env, target, 0, value) },
 		func() sys.Status { return sys.HasElement(env, target, 0, &boolResult) },
 		func() sys.Status { return sys.GetElement(env, target, 0, &value) },

@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_conversions/test_conversions.c.
+// Port of test/js-native-api/test_conversions/test_conversions.c.
 package main
 
 import (
@@ -10,10 +10,10 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// stringBufferSize è la dimensione di char value[100] in AsString.
+// stringBufferSize is the size of char value[100] in AsString.
 const stringBufferSize = 100
 
-// firstArg legge il primo argomento, come napi_get_cb_info con argc = 1 nel test C.
+// firstArg reads the first argument, matching napi_get_cb_info with argc = 1 in the C test.
 func firstArg(env sys.Env, info sys.CallbackInfo) (sys.Value, bool) {
 	argc := uint(1)
 	var args [1]sys.Value
@@ -81,7 +81,7 @@ func asInt64(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 	var output sys.Value
-	// Come nel C: napi_create_int64(env, (double)value, …) passa per un double.
+	// As in C: napi_create_int64(env, (double)value, ...) goes through a double.
 	if !nt.Call(env, sys.CreateInt64(env, int64(float64(value)), &output)) {
 		return nil
 	}
@@ -120,10 +120,10 @@ func asString(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return output
 }
 
-// coerceFn equivale a napi_coerce_to_bool, napi_coerce_to_number, …
+// coerceFn corresponds to napi_coerce_to_bool, napi_coerce_to_number, ...
 type coerceFn func(env sys.Env, value sys.Value, result *sys.Value) sys.Status
 
-// coercer restituisce la funzione JS che applica coerce al primo argomento.
+// coercer returns a JS function that applies coerce to the first argument.
 func coercer(coerce coerceFn) nt.Func {
 	return func(env sys.Env, info sys.CallbackInfo) sys.Value {
 		arg, ok := firstArg(env, info)

@@ -1,10 +1,10 @@
-// Package myobject è il porting di test/js-native-api/6_object_wrap/myobject.cc e myobject.h,
-// condiviso dai target myobject e myobject_basic_finalizer del binding.gyp: nel C sono lo stesso
-// sorgente compilato due volte, il secondo con NAPI_EXPERIMENTAL (Destructor diventa un
-// finalizer "basic" che gira durante il GC).
+// Package myobject is the port of test/js-native-api/6_object_wrap/myobject.cc and myobject.h,
+// shared by the myobject and myobject_basic_finalizer targets in binding.gyp: in C they are the
+// same source compiled twice, the second time with NAPI_EXPERIMENTAL (Destructor becomes a
+// "basic" finalizer that runs during GC).
 //
-// La classe C++ MyObject diventa la struct myObject; il puntatore passato a napi_wrap è un
-// cgo.Handle, cancellato dal Destructor come la delete del C.
+// The C++ MyObject class becomes the myObject struct; the pointer passed to napi_wrap is a
+// cgo.Handle, deleted by the Destructor like C++ delete.
 package myobject
 
 import (
@@ -15,7 +15,7 @@ import (
 	nt "github.com/napi-bindings/napi-go/tests/nodesuite/internal/napitest"
 )
 
-// finalizerData è FinalizerData (int32_t) del C: il contatore dei Destructor, nell'instance data.
+// finalizerData is FinalizerData (int32_t) from C: the Destructor counter stored in instance data.
 type finalizerData = int32
 
 const finalizerDataSize = uint(unsafe.Sizeof(finalizerData(0)))
@@ -26,18 +26,18 @@ type myObject struct {
 	wrapper sys.Ref
 }
 
-// constructor è MyObject::constructor; danglingRef è dangling_ref.
+// constructor is MyObject::constructor; danglingRef is dangling_ref.
 var (
 	constructor sys.Ref
 	danglingRef sys.Ref
 )
 
-// release equivale a ~MyObject: lo status non è controllato, come nel C.
+// release is equivalent to ~MyObject: status is not checked, matching C.
 func (o *myObject) release() {
 	sys.DeleteReference(o.env, o.wrapper)
 }
 
-// unwrap equivale a napi_unwrap(env, this, (void**)&obj).
+// unwrap is equivalent to napi_unwrap(env, this, (void**)&obj).
 func unwrap(env sys.Env, this sys.Value) (*myObject, bool) {
 	var data unsafe.Pointer
 	if !nt.Call(env, sys.Unwrap(env, this, &data)) {
@@ -46,7 +46,7 @@ func unwrap(env sys.Env, this sys.Value) (*myObject, bool) {
 	return cgo.Handle(uintptr(data)).Value().(*myObject), true
 }
 
-// destructor è MyObject::Destructor.
+// destructor is MyObject::Destructor.
 func destructor(env sys.Env, nativeObject, _ uintptr) {
 	h := cgo.Handle(nativeObject)
 	obj := h.Value().(*myObject)
@@ -83,10 +83,10 @@ func initClass(env sys.Env, exports sys.Value) {
 	}
 }
 
-// newData è il data del costruttore: si registra una volta sola.
+// newData is the constructor data: registered only once.
 var newData = nt.Register(newMyObject)
 
-// newMyObject è MyObject::New.
+// newMyObject is MyObject::New.
 func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 	var newTarget sys.Value
 	if !nt.Call(env, sys.GetNewTarget(env, info, &newTarget)) {
@@ -102,7 +102,7 @@ func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 	}
 
 	if isConstructor {
-		// Invocato come costruttore: `new MyObject(...)`.
+		// Invoked as constructor: `new MyObject(...)`.
 		value := 0.0
 		var valuetype sys.ValueType
 		if !nt.Call(env, sys.Typeof(env, args[0], &valuetype)) {
@@ -127,7 +127,7 @@ func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return this
 	}
 
-	// Invocato come funzione `MyObject(...)`: lo si trasforma in una chiamata al costruttore.
+	// Invoked as plain function `MyObject(...)`: turn into a constructor call.
 	argc = 1
 	argv := [1]sys.Value{args[0]}
 
@@ -243,7 +243,7 @@ func multiply(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return instance
 }
 
-// objectWrapDanglingReferenceFinalizer non deve mai essere chiamato.
+// objectWrapDanglingReferenceFinalizer must never be called.
 func objectWrapDanglingReferenceFinalizer(sys.Env, uintptr, uintptr) {
 	nt.CAssert(false, `0 && "unreachable"`)
 }
@@ -255,8 +255,8 @@ func objectWrapDanglingReference(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Crea un napi_wrap e lo rimuove subito, lasciando pendente (non cancellato) il ref
-	// restituito.
+	// Create a napi_wrap and remove it immediately, leaving the returned ref
+	// dangling (not deleted).
 	cb, hint := nt.Finalizer(objectWrapDanglingReferenceFinalizer, 0)
 	if !nt.Call(env, sys.Wrap(env, args[0], 0, cb, hint, &danglingRef)) {
 		nt.DiscardFinalizer(hint)
@@ -265,7 +265,7 @@ func objectWrapDanglingReference(env sys.Env, info sys.CallbackInfo) sys.Value {
 	if !nt.Call(env, sys.RemoveWrap(env, args[0], nil)) {
 		return nil
 	}
-	// Dopo napi_remove_wrap Node-API non chiama più il finalizer.
+	// After napi_remove_wrap Node-API will no longer invoke the finalizer.
 	nt.DiscardFinalizer(hint)
 
 	return args[0]
@@ -278,7 +278,7 @@ func objectWrapDanglingReferenceTest(env sys.Env, _ sys.CallbackInfo) sys.Value 
 	}
 
 	if out == nil {
-		// Il napi_ref è stato invalidato: lo si cancella.
+		// If the napi_ref has been invalidated, delete it.
 		if !nt.Call(env, sys.DeleteReference(env, danglingRef)) {
 			return nil
 		}
@@ -286,7 +286,7 @@ func objectWrapDanglingReferenceTest(env sys.Env, _ sys.CallbackInfo) sys.Value 
 			return nil
 		}
 	} else {
-		// Il napi_ref pendente è ancora valido.
+		// The dangling reference is still valid.
 		if !nt.Call(env, sys.GetBoolean(env, false, &ret)) {
 			return nil
 		}
@@ -319,10 +319,10 @@ func finalizeData(_ sys.Env, data, _ uintptr) {
 	nt.FreeAddr(data)
 }
 
-// Init è Init del C (EXTERN_C_START … EXTERN_C_END).
+// Init is C's Init (EXTERN_C_START ... EXTERN_C_END).
 func Init(env sys.Env, exports sys.Value) sys.Value {
-	// Il C non controlla il risultato di new; qui un'allocazione fallita lancia un errore invece
-	// di scrivere su NULL.
+	// C does not check the result of new; here a failed allocation throws an error instead
+	// of writing to NULL.
 	data := (*finalizerData)(nt.Malloc(finalizerDataSize))
 	if !nt.Assert(env, data != nil, "data != NULL", "Failed to allocate memory") {
 		return nil

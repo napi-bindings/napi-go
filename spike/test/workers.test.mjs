@@ -1,5 +1,5 @@
-// Q4: worker_threads — l'init del modulo gira per ogni env, stato per env, cleanup alla
-// terminazione del worker, nessuna interferenza col main thread.
+// Q4: worker_threads — module init runs once per env, per-env state, cleanup on
+// worker termination, no interference with the main thread.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Worker } from 'node:worker_threads'
@@ -10,7 +10,7 @@ const b = load('basic')
 const workerSrc = (path, extra = '') => `
 const { parentPort } = require('node:worker_threads')
 const b = require(${JSON.stringify(path)})
-parentPort.on('message', () => {}) // tiene vivo il worker finché il main non lo termina
+parentPort.on('message', () => {}) // keeps the worker alive until the main thread terminates it
 ;(async () => {
   const sync = b.add(20, 22)
   const t = b.threadInfo()
@@ -31,32 +31,32 @@ function runWorker(src) {
   })
 }
 
-test('worker: env separato con proprio thread JS e dispatcher', async () => {
+test('worker: separate env with its own JS thread and dispatcher', async () => {
   const mainThread = b.threadInfo().jsThread
   const { w, m } = await runWorker(workerSrc(addonPath('basic')))
   assert.equal(m.sync, 42)
   assert.equal(m.n, 500)
   assert.equal(m.panicked, true)
-  assert.notEqual(m.t.jsThread, mainThread)       // un altro thread JS
-  assert.equal(m.r.resolveThread, m.t.jsThread)   // risolta sul thread del worker
-  assert.equal(m.info.goAddr, b.info().goAddr)    // stesso runtime Go del main
+  assert.notEqual(m.t.jsThread, mainThread)       // a different JS thread
+  assert.equal(m.r.resolveThread, m.t.jsThread)   // resolved on the worker's thread
+  assert.equal(m.info.goAddr, b.info().goAddr)    // same Go runtime as the main thread
   await w.terminate()
 })
 
-test('worker: 8 worker concorrenti, terminazione e cleanup degli env', async () => {
+test('worker: 8 concurrent workers, termination and env cleanup', async () => {
   const before = b.info()
   const ws = await Promise.all(Array.from({ length: 8 }, () => runWorker(workerSrc(addonPath('basic')))))
   assert.equal(b.info().liveEnvs, before.liveEnvs + 8)
   await Promise.all(ws.map(({ w }) => w.terminate()))
-  // il cleanup hook gira alla distruzione dell'env del worker
+  // cleanup hook runs when the worker's env is destroyed
   await new Promise((r) => setTimeout(r, 50))
   const after = b.info()
   assert.equal(after.liveEnvs, before.liveEnvs)
   assert.equal(after.totalEnvs, before.totalEnvs + 8)
-  assert.equal(b.add(1, 1), 2) // il main continua a funzionare
+  assert.equal(b.add(1, 1), 2) // main thread continues to work
 })
 
-test('worker: terminazione con Promise ancora pendenti (ctx cancellato, nessun crash)', async () => {
+test('worker: termination while Promises are still pending (ctx canceled, no crash)', async () => {
   const src = `
     const { parentPort } = require('node:worker_threads')
     const b = require(${JSON.stringify(addonPath('basic'))})

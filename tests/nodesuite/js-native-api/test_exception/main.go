@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_exception/test_exception.c.
+// Port of test/js-native-api/test_exception/test_exception.c.
 package main
 
 import (
@@ -14,8 +14,8 @@ func init() { nt.ModuleInit(initModule) }
 
 var exceptionWasPending bool
 
-// num è il dato dell'External; come nel C se ne passa solo l'indirizzo (una variabile globale
-// non viene mai spostata dal GC).
+// num is the data for the External; as in C, only its address is passed (a global variable
+// is never moved by the GC).
 var num int32 = 0x23432
 
 func returnException(env sys.Env, info sys.CallbackInfo) sys.Value {
@@ -76,7 +76,7 @@ func allowException(env sys.Env, info sys.CallbackInfo) sys.Value {
 	}
 
 	var result sys.Value
-	// Lo status viene ignorato di proposito: il test controlla napi_is_exception_pending().
+	// Status is intentionally ignored: the test checks napi_is_exception_pending().
 	_ = sys.CallFunction(env, global, args[0], 0, nil, &result)
 	nt.Call(env, sys.IsExceptionPending(env, &exceptionWasPending))
 	return nil
@@ -90,7 +90,7 @@ func constructAllowException(env sys.Env, info sys.CallbackInfo) sys.Value {
 	}
 
 	var result sys.Value
-	// Lo status viene ignorato di proposito: il test controlla napi_is_exception_pending().
+	// Status is intentionally ignored: the test checks napi_is_exception_pending().
 	_ = sys.NewInstance(env, args[0], 0, nil, &result)
 	nt.Call(env, sys.IsExceptionPending(env, &exceptionWasPending))
 	return nil
@@ -131,7 +131,7 @@ func initModule(env sys.Env, exports sys.Value) sys.Value {
 		return nil
 	}
 
-	// Init lancia un errore che porta con sé le export nella proprietà "binding".
+	// Init throws an error that carries exports on its "binding" property.
 	var err, code, message sys.Value
 	if !nt.Call(env, sys.CreateStringUTF8(env, nt.CStr("Error during Init"), sys.AutoLength, &message)) {
 		return nil

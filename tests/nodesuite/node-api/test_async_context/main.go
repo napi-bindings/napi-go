@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_async_context/binding.c.
+// Port of test/node-api/test_async_context/binding.c.
 package main
 
 import (
@@ -74,7 +74,7 @@ func makeCallback(env sys.Env, info sys.CallbackInfo) sys.Value {
 
 func asyncDestroyCb(env sys.Env, data, _ uintptr) {
 	status := sys.AsyncDestroy(env, sys.AsyncContext(nt.Pointer(data)))
-	// Non si può usare NODE_API_ASSERT_RETURN_VOID: le eccezioni richiedono uno stack JS sotto.
+	// NODE_API_ASSERT_RETURN_VOID cannot be used: exceptions require a JS stack below.
 	nt.CAssert(status == sys.StatusOK, "status == napi_ok")
 }
 

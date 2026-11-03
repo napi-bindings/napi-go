@@ -6,13 +6,13 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// Callback è una funzione Go chiamabile da JS. Un errore restituito viene lanciato in JS (vedi
-// Error); un Value vuoto equivale a undefined.
+// Callback is a Go function callable from JS. Any returned error is thrown in JS (see Error);
+// returning an empty Value is equivalent to returning undefined.
 type Callback func(c CallContext) (Value, error)
 
-// CallContext descrive una chiamata da JS (napi_callback_info, Napi::CallbackInfo). Gli argomenti
-// sono validi solo durante la callback. Si passa per valore: è piccolo e così non finisce sullo
-// heap.
+// CallContext describes a call from JS (napi_callback_info, Napi::CallbackInfo). Arguments are
+// valid only for the duration of the callback. It is passed by value: it is small and thus avoids
+// escaping to the heap.
 type CallContext struct {
 	env  sys.Env
 	info sys.CallbackInfo
@@ -20,16 +20,16 @@ type CallContext struct {
 	args []sys.Value
 }
 
-// Env restituisce l'env della chiamata.
+// Env returns the environment of the call.
 func (c CallContext) Env() Env { return Env{raw: c.env} }
 
-// This restituisce il this della chiamata (per un costruttore, l'oggetto in costruzione).
+// This returns the this receiver of the call (or the instance being constructed for a constructor call).
 func (c CallContext) This() Object { return Object{Value{env: c.env, raw: c.this}} }
 
-// Len restituisce il numero di argomenti passati.
+// Len returns the number of arguments passed to the call.
 func (c CallContext) Len() int { return len(c.args) }
 
-// Arg restituisce l'argomento i-esimo, undefined se non è stato passato.
+// Arg returns the i-th argument, or undefined if fewer than i+1 arguments were passed.
 func (c CallContext) Arg(i int) Value {
 	if i >= 0 && i < len(c.args) {
 		return Value{env: c.env, raw: c.args[i]}
@@ -37,7 +37,7 @@ func (c CallContext) Arg(i int) Value {
 	return Env{raw: c.env}.Undefined()
 }
 
-// Args aggiunge gli argomenti a dst e restituisce lo slice risultante.
+// Args appends all call arguments to dst and returns the resulting slice.
 func (c CallContext) Args(dst []Value) []Value {
 	for _, a := range c.args {
 		dst = append(dst, Value{env: c.env, raw: a})
@@ -45,7 +45,7 @@ func (c CallContext) Args(dst []Value) []Value {
 	return dst
 }
 
-// NewTarget restituisce new.target: vuoto se la funzione non è chiamata con new.
+// NewTarget returns new.target, or an empty Value if the function was not invoked with new.
 func (c CallContext) NewTarget() (Value, error) {
 	var r sys.Value
 	if err := check(c.env, sys.GetNewTarget(c.env, c.info, &r)); err != nil {
@@ -54,14 +54,14 @@ func (c CallContext) NewTarget() (Value, error) {
 	return Value{env: c.env, raw: r}, nil
 }
 
-// IsConstructCall dice se la funzione è chiamata con new.
+// IsConstructCall reports whether the function was invoked with new.
 func (c CallContext) IsConstructCall() bool {
 	t, err := c.NewTarget()
 	return err == nil && t.raw != nil
 }
 
-// callbacks contiene le Callback raggiungibili da JS: il data di ogni funzione creata da napi è
-// un id di questa tabella.
+// callbacks holds the Callbacks reachable from JS: the data pointer of every function created by
+// napi is an ID in this table.
 var callbacks table[Callback]
 
 func registerCallback(fn Callback) uintptr { return callbacks.add(&fn) }
@@ -72,9 +72,9 @@ func releaseCallbacks(ids []uintptr) {
 	}
 }
 
-// releaseCallbacksWith rilascia ids quando o viene raccolto dal GC (o l'env distrutto). Se
-// l'aggancio del finalizer fallisce, gli id vengono rilasciati subito: o resta senza callback
-// valide, ma la memoria non si perde.
+// releaseCallbacksWith releases ids when o is garbage-collected (or when the env is destroyed).
+// If attaching the finalizer fails, the IDs are released immediately: o is left without valid
+// callbacks, avoiding a memory leak.
 func (e Env) releaseCallbacksWith(o Object, ids []uintptr) error {
 	if len(ids) == 0 {
 		return nil
@@ -86,7 +86,7 @@ func (e Env) releaseCallbacksWith(o Object, ids []uintptr) error {
 	return err
 }
 
-// dispatchCallback è il CallbackHandler di sys per tutte le funzioni create da napi.
+// dispatchCallback is the sys CallbackHandler for all functions created by napi.
 func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, this sys.Value, args []sys.Value) sys.Value {
 	fn := callbacks.get(data)
 	if fn == nil {
@@ -101,8 +101,8 @@ func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, this sys
 	return v.raw
 }
 
-// accessor unisce getter e setter in una callback: Node-API chiama il getter senza argomenti e il
-// setter con il valore assegnato.
+// accessor combines a getter and a setter into a single callback: Node-API invokes the getter
+// with 0 arguments and the setter with the assigned value.
 func accessor(get, set Callback) Callback {
 	return func(c CallContext) (Value, error) {
 		if c.Len() == 0 {
@@ -115,11 +115,11 @@ func accessor(get, set Callback) Callback {
 	}
 }
 
-// Function è una funzione JS.
+// Function represents a JS function.
 type Function struct{ Object }
 
-// NewFunction crea una funzione JS con il nome dato che chiama fn. fn resta registrata finché la
-// funzione vive.
+// NewFunction creates a JS function with the given name that invokes fn. fn remains registered
+// for as long as the function is alive.
 func (e Env) NewFunction(name string, fn Callback) (Function, error) {
 	if fn == nil {
 		return Function{}, TypeError("", "NewFunction: nil callback")
@@ -139,9 +139,9 @@ func (e Env) NewFunction(name string, fn Callback) (Function, error) {
 	return f, nil
 }
 
-// rawArgs converte args nei napi_value da passare a Node-API. Il buffer finisce sullo heap (lo
-// usano funzioni che eseguono JS, quindi senza nocallback): Call e New lo creano solo se ci sono
-// argomenti, e della dimensione esatta.
+// rawArgs converts args into the napi_value slice passed to Node-API. The slice escapes to the
+// heap (it is passed to functions that execute JS, which cannot use nocallback), so Call and New
+// allocate it only when arguments are present, and with the exact length required.
 func rawArgs(args []Value) []sys.Value {
 	raw := make([]sys.Value, len(args))
 	for i, a := range args {
@@ -150,9 +150,9 @@ func rawArgs(args []Value) []sys.Value {
 	return raw
 }
 
-// Call chiama la funzione con this e gli argomenti dati; un this vuoto vale undefined. Senza
-// argomenti non alloca; con argomenti alloca il loro buffer. Un'eccezione JS dà
-// ErrPendingException.
+// Call invokes the function with the given this receiver and arguments; an empty this defaults to
+// undefined. Calling with no arguments does not allocate; calling with arguments allocates the
+// argument buffer. A JS exception returns ErrPendingException.
 func (f Function) Call(this Value, args ...Value) (Value, error) {
 	recv := this.raw
 	if recv == nil {
@@ -169,7 +169,7 @@ func (f Function) Call(this Value, args ...Value) (Value, error) {
 	return Env{raw: f.env}.value(r, st)
 }
 
-// New chiama la funzione come costruttore (new f(...args)), con lo stesso costo di Call.
+// New invokes the function as a constructor (new f(...args)), with the same allocation behavior as Call.
 func (f Function) New(args ...Value) (Object, error) {
 	var r sys.Value
 	var st sys.Status

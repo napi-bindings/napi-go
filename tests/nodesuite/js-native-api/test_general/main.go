@@ -1,7 +1,7 @@
-// Porting di test/js-native-api/test_general/test_general.c (NAPI_EXPERIMENTAL dal binding.gyp).
+// Port of test/js-native-api/test_general/test_general.c (NAPI_EXPERIMENTAL from binding.gyp).
 //
-// node_api_set_prototype e node_api_post_finalizer sono sperimentali e mancano dagli header di
-// sys: si chiamano tramite napitest.SetPrototype e napitest.PostFinalizer.
+// node_api_set_prototype and node_api_post_finalizer are experimental and omitted from sys
+// headers: they are called via napitest.SetPrototype and napitest.PostFinalizer.
 package main
 
 import (
@@ -151,7 +151,7 @@ func testNapiErrorCleanup(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return result
 }
 
-// typeNames sono i nomi restituiti da testNapiTypeof; per gli altri tipi restituisce NULL.
+// typeNames maps types to the names returned by testNapiTypeof; for other types it returns NULL.
 var typeNames = map[sys.ValueType]string{
 	sys.TypeNumber:    "number",
 	sys.TypeString:    "string",
@@ -186,7 +186,7 @@ func testNapiTypeof(env sys.Env, info sys.CallbackInfo) sys.Value {
 
 var derefItemCalled bool
 
-// derefItemAddr è &deref_item_called, il data atteso dal finalizer.
+// derefItemAddr is &deref_item_called, the data expected by the finalizer.
 func derefItemAddr() uintptr { return uintptr(unsafe.Pointer(&derefItemCalled)) }
 
 func derefItem(env sys.Env, data, _ uintptr) {
@@ -205,7 +205,7 @@ func derefItemWasCalled(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return itWasCalled
 }
 
-// wrapFirstArg equivale a wrap_first_arg: fa napi_wrap del primo argomento con finalizer e data.
+// wrapFirstArg corresponds to wrap_first_arg: wraps the first argument with finalizer and data.
 func wrapFirstArg(env sys.Env, info sys.CallbackInfo, finalizer nt.FinalizeFunc, data uintptr) sys.Value {
 	argc := uint(1)
 	var toWrap sys.Value
@@ -299,8 +299,8 @@ func testNapiRun(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return result
 }
 
-// finalizerOnlyCallback gira dopo il GC (node_api_post_finalizer) e può chiamare JS. data è il
-// napi_ref del callback JS.
+// finalizerOnlyCallback runs after GC (node_api_post_finalizer) and can call JS. data is the
+// napi_ref of the JS callback.
 func finalizerOnlyCallback(env sys.Env, data, _ uintptr) {
 	jsCbRef := sys.Ref(nt.Pointer(data))
 	var jsCb, undefined sys.Value
@@ -319,7 +319,7 @@ func finalizerOnlyCallback(env sys.Env, data, _ uintptr) {
 	}
 }
 
-// scheduleFinalizerOnlyCallback gira durante il GC e rimanda finalizerOnlyCallback.
+// scheduleFinalizerOnlyCallback runs during GC and defers finalizerOnlyCallback.
 func scheduleFinalizerOnlyCallback(env sys.Env, data, _ uintptr) {
 	cb, hint := nt.Finalizer(finalizerOnlyCallback, 0)
 	if !nt.Call(env, nt.PostFinalizer(env, cb, data, hint)) {
@@ -347,7 +347,7 @@ func addFinalizerOnly(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// envCleanupFinalizerMessages è env_cleanup_finalizer_messages del C.
+// envCleanupFinalizerMessages is C's env_cleanup_finalizer_messages.
 var envCleanupFinalizerMessages = [...]string{
 	"simple wrap",
 	"wrap, removeWrap",
@@ -355,7 +355,7 @@ var envCleanupFinalizerMessages = [...]string{
 	"second wrap",
 }
 
-// cleanupEnvFinalizer scrive su stdout, come il printf del C: lo script controlla le righe.
+// cleanupEnvFinalizer writes to stdout, matching C's printf: the test script checks the output lines.
 func cleanupEnvFinalizer(_ sys.Env, data, _ uintptr) {
 	if data >= uintptr(len(envCleanupFinalizerMessages)) {
 		fmt.Fprintf(os.Stderr, "napitest: invalid finalizer message index %d\n", data)

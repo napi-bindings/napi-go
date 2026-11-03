@@ -1,6 +1,6 @@
-// Porting di test/node-api/test_worker_terminate/test_worker_terminate.c. Il C usa NAPI_MODULE()
-// per verificare i worker con la registrazione classica: in napi-go il modulo si registra
-// sempre con napi_register_module_v1, chiamata per ogni env.
+// Port of test/node-api/test_worker_terminate/test_worker_terminate.c. C uses NAPI_MODULE()
+// to test workers with legacy module registration: in napi-go the module is always registered
+// with napi_register_module_v1, which is called for every env.
 package main
 
 import (

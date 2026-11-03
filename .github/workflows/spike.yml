@@ -1,6 +1,6 @@
-# Fase 0 — spike di fattibilità napi-go.
-# Copre le piattaforme che non è stato possibile provare in locale (macOS, Linux arm64,
-# Alpine/musl, Windows con mingw-gcc) e ripete Linux/Windows su più versioni di Node e Go.
+# Phase 0 — napi-go feasibility spike.
+# Covers platforms that could not be tested locally (macOS, Linux arm64,
+# Alpine/musl, Windows with mingw-gcc) and runs Linux/Windows across multiple Node and Go versions.
 name: spike
 
 on:
@@ -19,7 +19,7 @@ jobs:
   test:
     name: ${{ matrix.os }} · node ${{ matrix.node }} · go ${{ matrix.go }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
+    timeout-minutes: 25   # a hung test must not block the runner for hours
     strategy:
       fail-fast: false
       matrix:
@@ -47,23 +47,23 @@ jobs:
         run: node scripts/build.mjs
       - name: Test
         run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
-      - name: Diagnostica trap WebAssembly
+      - name: WebAssembly trap diagnostics
         if: ${{ !cancelled() }}
         run: node experiments/wasmtrap/trap.mjs
-      - name: Diagnostica SA_RESETHAND (rilettura + reinstallazione, come setsigstack di Go)
+      - name: SA_RESETHAND diagnostics (read-back + reinstall, like Go setsigstack)
         if: ${{ !cancelled() && runner.os != 'Windows' }}
-        continue-on-error: true   # descrive il comportamento del sistema operativo, non di napi-go
+        continue-on-error: true   # describes OS behavior, not napi-go
         run: cc -O2 -o "$RUNNER_TEMP/sigflags" experiments/sigflags/sigflags.c && "$RUNNER_TEMP/sigflags"
       - name: Benchmark
         run: node test/bench.mjs
-      - name: Costo callback C→Go
+      - name: C→Go callback cost
         working-directory: spike/experiments/cbcost
         run: go run .
 
   cgocheck2:
     name: ubuntu · GOEXPERIMENT=cgocheck2
     runs-on: ubuntu-latest
-    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
+    timeout-minutes: 25   # a hung test must not block the runner for hours
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -81,7 +81,7 @@ jobs:
   windows-zig:
     name: windows · zig cc
     runs-on: windows-latest
-    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
+    timeout-minutes: 25   # a hung test must not block the runner for hours
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -97,10 +97,10 @@ jobs:
         env:
           CC: zig cc
       - run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
-      - name: Diagnostica trap WebAssembly
+      - name: WebAssembly trap diagnostics
         if: ${{ !cancelled() }}
         run: node experiments/wasmtrap/trap.mjs
-      - name: Costo callback C→Go
+      - name: C→Go callback cost
         if: ${{ !cancelled() }}
         working-directory: spike/experiments/cbcost
         run: go run .
@@ -108,41 +108,42 @@ jobs:
           CC: zig cc
 
   alpine:
-    # Q7 — limite noto (Go ≤ 1.27): il runtime Go nei c-shared usa TLS initial-exec e si aspetta
-    # argc/argv nelle funzioni di init; musl rifiuta il dlopen ("initial-exec TLS resolves to dynamic
-    # definition"). Correzione upstream: golang/go#71953, CL 696635.
-    # Sentinella: la sonda dlopen distingue tre esiti. Errore noto con il Go di Alpine → warning e job
-    # verde (test saltati); caricamento riuscito → tutti i test; qualunque altro errore → job rosso.
-    # La variante go=cl696635 compila Go dall'ultimo patchset della CL (ancora aperta) e verifica in
-    # anticipo che la correzione basti a napi-go: lì anche l'errore noto è un fallimento. Per i c-shared
-    # la CL sceglie già il modello general dynamic (-tls=auto), quindi la build dell'addon resta identica.
+    # Q7 — known limitation (Go ≤ 1.27): the Go runtime in c-shared uses initial-exec TLS and expects
+    # argc/argv in init functions; musl rejects dlopen ("initial-exec TLS resolves to dynamic
+    # definition"). Upstream fix: golang/go#71953, CL 696635.
+    # Sentinel: the dlopen probe distinguishes three outcomes. Known error with Alpine's Go → warning
+    # and green job (tests skipped); successful load → run all tests; any other error → red job.
+    # The go=cl696635 variant builds Go from the latest patchset of the CL (still open) and verifies
+    # ahead of time that the fix is sufficient for napi-go: there, even the known error is a failure.
+    # For c-shared, the CL already selects the general-dynamic model (-tls=auto), so the addon build
+    # remains identical.
     name: alpine (musl) · node ${{ matrix.node }} · go ${{ matrix.go }}
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.go == 'cl696635' }}   # una CL non integrata può rompersi: non blocca la pipeline
-    timeout-minutes: 25   # un test appeso non deve bloccare il runner per ore
+    continue-on-error: ${{ matrix.go == 'cl696635' }}   # an unmerged CL may break: do not block the pipeline
+    timeout-minutes: 25   # a hung test must not block the runner for hours
     container: node:${{ matrix.node }}-alpine
     defaults:
       run:
-        shell: sh   # l'immagine alpine non ha bash: il default del workflow fallirebbe prima di installarlo
+        shell: sh   # the alpine image has no bash: the workflow default would fail before installing it
         working-directory: spike
     strategy:
       fail-fast: false
       matrix:
         node: ['22', '24', '26']
-        go: ['alpine']   # Go del pacchetto Alpine: riproduce il limite noto
+        go: ['alpine']   # Alpine package Go: reproduces the known limitation
         include:
           - node: '26'
             go: 'cl696635'
     steps:
-      - name: Dipendenze
+      - name: Dependencies
         working-directory: /
         run: apk add --no-cache go gcc musl-dev git
       - uses: actions/checkout@v5
-      - name: Go dalla CL 696635 (ultimo patchset, bootstrap con il Go di Alpine)
+      - name: Go from CL 696635 (latest patchset, bootstrapped with Alpine Go)
         if: matrix.go == 'cl696635'
         working-directory: /
         run: |
-          apk add --no-cache bash   # richiesto da make.bash
+          apk add --no-cache bash   # required by make.bash
           ref=$(git ls-remote https://go.googlesource.com/go 'refs/changes/35/696635/*' | awk '{print $2}' | grep -E '/[0-9]+$' | sort -t/ -k5,5n | tail -1)
           test -n "$ref"
           echo "CL 696635: $ref"
@@ -158,25 +159,25 @@ jobs:
         env:
           CGO_ENABLED: '1'
         run: node scripts/build.mjs
-      - name: Modello TLS del .node (TPOFF64 = initial-exec, TLSGD/TLSDESC = general dynamic)
+      - name: TLS model of .node (TPOFF64 = initial-exec, TLSGD/TLSDESC = general dynamic)
         run: readelf -d build/basic.node | grep -i flags; readelf -r build/basic.node | grep -E 'TPOFF|TLSGD|TLSDESC|DTPMOD' || true
-      - name: Sonda dlopen (limite noto Q7 → warning, altri errori → job rosso)
-        id: sonda
+      - name: dlopen probe (known limitation Q7 → warning, other errors → red job)
+        id: probe
         run: |
           if out=$(timeout 60 node -e "require('./build/basic.node'); require('./build/second.node')" 2>&1); then
-            echo "caricato=true" >> "$GITHUB_OUTPUT"
-            echo "::notice title=musl::dlopen riuscito con $(go version): eseguo tutti i test"
+            echo "loaded=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=musl::dlopen succeeded with $(go version): running all tests"
           elif [ '${{ matrix.go }}' = alpine ] && printf '%s' "$out" | grep -q 'initial-exec TLS resolves to dynamic definition'; then
-            echo "caricato=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=musl: limite noto Q7::$(go version): musl rifiuta il TLS initial-exec del runtime Go, test saltati (golang/go#71953, CL 696635)"
+            echo "loaded=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=musl: known limitation Q7::$(go version): musl rejects Go runtime initial-exec TLS, tests skipped (golang/go#71953, CL 696635)"
           else
             printf '%s\n' "$out"
-            echo "::error title=musl::dlopen fallito (o bloccato) con un esito diverso dal limite noto Q7"
+            echo "::error title=musl::dlopen failed (or hung) with an outcome other than known limitation Q7"
             exit 1
           fi
       - name: Test
-        if: steps.sonda.outputs.caricato == 'true'
+        if: steps.probe.outputs.loaded == 'true'
         run: node --test --test-timeout=180000 --test-reporter=spec test/*.test.mjs
       - name: Benchmark
-        if: steps.sonda.outputs.caricato == 'true'
+        if: steps.probe.outputs.loaded == 'true'
         run: node test/bench.mjs

@@ -11,7 +11,7 @@ import (
 	"unsafe"
 )
 
-// Prim è l'insieme dei tipi convertiti interamente in C dal trampolino tipizzato.
+// Prim is the set of types converted entirely in C by the typed trampoline.
 type Prim interface {
 	~float64 | ~int32 | ~bool | ~string
 }
@@ -28,7 +28,7 @@ func kindOf[T Prim]() C.int32_t {
 	case string:
 		return C.GN_K_STR
 	}
-	// tipi definiti (~float64 ecc.): ricadono sul tipo sottostante
+	// defined types (~float64 etc.): fall back to the underlying type size
 	switch unsafe.Sizeof(z) {
 	case 1:
 		return C.GN_K_BOOL
@@ -42,13 +42,13 @@ func kindOf[T Prim]() C.int32_t {
 
 type typedFn func(env C.napi_env, args []C.gn_arg, out *C.gn_arg) error
 
-// Stesso schema del registro delle callback: lettura lock-free, scrittura rara.
+// Same scheme as the callback registry: lock-free reads, rare writes.
 var typedRegistry struct {
 	mu  sync.Mutex
 	fns atomic.Pointer[[]typedFn]
 }
 
-// TypedDef descrive una funzione con firma primitiva nota.
+// TypedDef describes a function with a known primitive signature.
 type TypedDef struct {
 	kinds []C.int32_t
 	ret   C.int32_t
@@ -60,12 +60,12 @@ func argOf[T Prim](env C.napi_env, a *C.gn_arg) (T, error) {
 	p := unsafe.Pointer(&a.u)
 	switch a.kind {
 	case C.GN_K_F64, C.GN_K_I32, C.GN_K_BOOL:
-		out = *(*T)(p) // stessa rappresentazione: nessuna conversione, nessuna allocazione
+		out = *(*T)(p) // identical representation: no conversion, no allocation
 	case C.GN_K_STR:
 		s := (*C.gn_str)(p)
-		str := C.GoStringN(s.p, C.int(s.n)) // copia: la memoria C vale solo durante la chiamata
+		str := C.GoStringN(s.p, C.int(s.n)) // copy: C memory is valid only during the call
 		out = *(*T)(unsafe.Pointer(&str))
-	case C.GN_K_VALUE: // stringa troppo lunga per il buffer C: percorso lento
+	case C.GN_K_VALUE: // string too long for the C buffer: slow path
 		v := Value{env, *(*C.napi_value)(p)}
 		str, err := v.GoString()
 		if err != nil {
@@ -88,12 +88,12 @@ func setRet[T Prim](env C.napi_env, out *C.gn_arg, r T) error {
 	case C.GN_K_STR:
 		str := *(*string)(unsafe.Pointer(&r))
 		buf := (*C.gn_str)(p)
-		if len(str) <= int(buf.n) { // entra nel buffer C: copia senza attraversare cgo
+		if len(str) <= int(buf.n) { // fits in the C buffer: copy without crossing cgo
 			copy(unsafe.Slice((*byte)(unsafe.Pointer(buf.p)), len(str)), str)
 			buf.n = C.size_t(len(str))
 			return nil
 		}
-		v, err := Env{env}.String(str) // percorso lento: crea la stringa da Go
+		v, err := Env{env}.String(str) // slow path: create the string from Go
 		if err != nil {
 			return err
 		}
@@ -103,7 +103,7 @@ func setRet[T Prim](env C.napi_env, out *C.gn_arg, r T) error {
 	return nil
 }
 
-// Fn1 e Fn2 costruiscono funzioni a firma tipizzata (anteprima del Layer 2).
+// Fn1 and Fn2 construct functions with typed signatures (preview of Layer 2).
 func Fn1[A, R Prim](f func(A) (R, error)) TypedDef {
 	return TypedDef{
 		kinds: []C.int32_t{kindOf[A]()},
@@ -146,12 +146,12 @@ func Fn2[A, B, R Prim](f func(A, B) (R, error)) TypedDef {
 
 type typedExport struct {
 	name string
-	sig  *C.gn_sig // memoria C: il puntatore resta valido per tutta la vita del processo
+	sig  *C.gn_sig // C memory: pointer remains valid for the lifetime of the process
 }
 
 var typedExports []typedExport
 
-// ExportTyped registra una funzione a firma tipizzata sull'oggetto exports.
+// ExportTyped registers a typed-signature function on the exports object.
 func ExportTyped(name string, d TypedDef) {
 	typedRegistry.mu.Lock()
 	var cur []typedFn

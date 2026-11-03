@@ -1,5 +1,5 @@
-// Porting del target test_uncaught_exception_v9 di test/node-api/test_threadsafe_function/binding.gyp
-// (test_uncaught_exception.c con NAPI_VERSION=9).
+// Port of the test_uncaught_exception_v9 target from test/node-api/test_threadsafe_function/binding.gyp
+// (test_uncaught_exception.c with NAPI_VERSION=9).
 package main
 
 import (

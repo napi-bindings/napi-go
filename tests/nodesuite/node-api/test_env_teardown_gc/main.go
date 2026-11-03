@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_env_teardown_gc/binding.c.
+// Port of test/node-api/test_env_teardown_gc/binding.c.
 package main
 
 import (
@@ -26,7 +26,7 @@ func myObjectFini(env sys.Env, data, _ uintptr) {
 		return
 	}
 	status := sys.CallFunction(env, global, cleanup, 0, nil, nil)
-	// Potrebbe non essere permesso chiamare JS: allora lo status è napi_pending_exception.
+	// Calling into JS may not be allowed: in that case the status is napi_pending_exception.
 	if !nt.Assert(env, status == sys.StatusOK || status == sys.StatusPendingException,
 		"status == napi_ok || status == napi_pending_exception", "Unexpected status for napi_call_function") {
 		return
@@ -51,7 +51,7 @@ func myObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// initModule equivale al corpo di NAPI_MODULE_INIT().
+// initModule corresponds to the body of NAPI_MODULE_INIT().
 func initModule(env sys.Env, exports sys.Value) sys.Value {
 	var ctor sys.Value
 	if !nt.Call(env, sys.DefineClass(env, nt.CStr("MyObject"), sys.AutoLength, sys.CallbackTrampoline,

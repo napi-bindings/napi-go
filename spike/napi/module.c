@@ -1,13 +1,13 @@
 /*
- * module.c — entry point del modulo Node-API.
+ * module.c — Node-API module entry point.
  *
- * NAPI_MODULE_INIT() definisce ed esporta:
+ * NAPI_MODULE_INIT() defines and exports:
  *   - node_api_module_get_api_version_v1()  → NAPI_VERSION (8)
- *   - napi_register_module_v1(env, exports) → chiamata da Node una volta per env
- *     (main thread e ogni worker_thread).
+ *   - napi_register_module_v1(env, exports) → called by Node once per env
+ *     (main thread and each worker_thread).
  *
- * Il Go runtime di un c-shared si inizializza al dlopen; goNapiRegisterModule
- * (esportata da Go) attende automaticamente la fine dell'inizializzazione.
+ * The Go runtime of a c-shared library initializes on dlopen; goNapiRegisterModule
+ * (exported by Go) automatically waits for initialization to finish.
  */
 #include <stdio.h>
 #include "gonapi.h"
@@ -17,17 +17,17 @@ NAPI_MODULE_INIT() {
   const char* first_missing = NULL;
   int missing = gn_load_symbols_once(&first_missing);
   if (missing != 0) {
-    /* Senza i simboli non possiamo nemmeno lanciare un'eccezione JS. */
-    fprintf(stderr, "napi-go: %d simboli Node-API mancanti nel processo host (primo: %s)\n",
+    /* Without symbols we cannot even throw a JS exception. */
+    fprintf(stderr, "napi-go: %d missing Node-API symbols in host process (first: %s)\n",
             missing, first_missing ? first_missing : "?");
     return NULL;
   }
   napi_value result = goNapiRegisterModule(env, exports);
-  /* A questo punto l'initsig del runtime Go è concluso (goNapiRegisterModule ne attende la fine):
-     ripristiniamo SA_RESETHAND su node::SignalExit se setsigstack lo ha perso (macOS). */
+  /* At this point Go runtime initsig has completed (goNapiRegisterModule waits for it):
+     restore SA_RESETHAND on node::SignalExit if setsigstack dropped it (macOS). */
   gn_repair_node_signal_handlers();
   if (result != NULL && gn_register_diag(env, result) != napi_ok) {
-    fprintf(stderr, "napi-go: registrazione di __sigInfo fallita\n");
+    fprintf(stderr, "napi-go: failed to register __sigInfo\n");
   }
   return result;
 }

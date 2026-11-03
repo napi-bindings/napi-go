@@ -1,18 +1,18 @@
 /*
- * guard.c — guardia contro un secondo runtime Go sullo stesso thread (solo macOS x64).
+ * guard.c — guard against a second Go runtime on the same thread (macOS x64 only).
  *
- * Su darwin/amd64 il runtime Go tiene g nello slot TLS fisso 0x30(GS), riservato da Apple a Go
- * (golang/go#23617; cmd/link computeTLSOffset, runtime/sys_darwin_amd64.s). Lo slot è unico per
- * processo, quindi due addon Go se lo contendono: dopo una chiamata nel primo, il suo g resta
- * legato al thread (x_cgo_bindm) e il cgocallback del secondo lo userebbe come proprio
+ * On darwin/amd64 the Go runtime stores g in the fixed TLS slot 0x30(GS), reserved by Apple for Go
+ * (golang/go#23617; cmd/link computeTLSOffset, runtime/sys_darwin_amd64.s). The slot is process-wide,
+ * so two Go addons contend for it: after a call into the first addon, its g remains bound to the
+ * thread (x_cgo_bindm) and the second addon's cgocallback would treat that foreign g as its own
  * (in CI: "fatal error: bad sweepgen in refill").
  *
- * Per ogni thread ricordiamo quale g ha lasciato il nostro runtime all'ultima uscita. Prima di
- * entrare in Go a profondità zero, uno slot non vuoto e diverso significa che un altro runtime
- * possiede il thread: si rifiuta l'ingresso. Le rientranze (Go → JS → Go) passano dal contatore.
+ * For each thread we record which g our runtime left in TLS on the outermost exit. Before entering
+ * Go at depth zero, a non-NULL slot that differs from gn_own_g means another Go runtime owns the
+ * thread, so entry is refused. Re-entrant calls (Go → JS → Go) are tracked via gn_depth.
  *
- * Limite noto: il runtime rifiutato è comunque avviato e i suoi handler di segnale restano
- * installati. Vedi il README di sys.
+ * Known limitation: the rejected runtime has already started and its signal handlers remain
+ * installed. See the sys README.
  */
 #include "internal.h"
 
@@ -23,7 +23,7 @@ static __thread int gn_depth = 0;
 
 static inline void* gn_tls_g(void) {
   void* g;
-  /* Stesso offset di runtime/sys_darwin_amd64.s. */
+  /* Same offset as runtime/sys_darwin_amd64.s. */
   __asm__ volatile("movq %%gs:0x30, %0" : "=r"(g));
   return g;
 }

@@ -1,4 +1,4 @@
-// Command basic è l'addon di test principale dello spike napi-go.
+// Command basic is the main test addon for the napi-go spike.
 // Build: go build -buildmode=c-shared -o basic.node .
 package main
 
@@ -20,7 +20,7 @@ func (e codedErr) Error() string  { return e.msg }
 func (e codedErr) JSCode() string { return e.code }
 
 func init() {
-	// --- Q1/Q3: funzioni sincrone base ---
+	// --- Q1/Q3: basic synchronous functions ---
 	napi.Export("hello", func(c napi.CallContext) (napi.Value, error) {
 		return c.Env().String("hello from Go")
 	})
@@ -56,7 +56,7 @@ func init() {
 		}
 		return c.Env().String(a + b)
 	})
-	// --- Q3: dispatch corretto su molte funzioni (il bug dei tentativi precedenti) ---
+	// --- Q3: proper dispatch across many functions (the bug from earlier attempts) ---
 	for i := 0; i < 12; i++ {
 		i := i
 		napi.Export("f"+strconv.Itoa(i), func(c napi.CallContext) (napi.Value, error) {
@@ -77,7 +77,7 @@ func init() {
 		}
 		return c.Env().Float64(sum)
 	})
-	// --- Q3: panic ed errori ---
+	// --- Q3: panics and errors ---
 	napi.Export("panicNow", func(c napi.CallContext) (napi.Value, error) {
 		msg, _ := c.Arg(0).GoString()
 		panic("boom: " + msg)
@@ -95,7 +95,7 @@ func init() {
 		_, err := c.Arg(0).Float64() // napi_number_expected
 		return napi.Value{}, err
 	})
-	// Rientranza: Go → JS → Go
+	// Reentrancy: Go → JS → Go
 	napi.Export("callMe", func(c napi.CallContext) (napi.Value, error) {
 		return c.Arg(0).Call(c.Env().Undefined(), c.Arg(1))
 	})
@@ -129,7 +129,7 @@ func init() {
 		return obj, nil
 	})
 
-	// --- Q4: Promise da goroutine ---
+	// --- Q4: Promise from goroutines ---
 	napi.Export("sleep", func(c napi.CallContext) (napi.Value, error) {
 		ms, err := c.Arg(0).Int32()
 		if err != nil {
@@ -154,8 +154,8 @@ func init() {
 				}
 				set("ms", float64(ms))
 				set("jsThread", float64(jsThread))
-				set("resolveThread", float64(napi.ThreadID())) // deve essere == jsThread
-				set("workThread", float64(workThread))         // thread di una goroutine
+				set("resolveThread", float64(napi.ThreadID())) // must equal jsThread
+				set("workThread", float64(workThread))         // goroutine OS thread
 				return o, nil
 			}, nil
 		})
@@ -192,7 +192,7 @@ func init() {
 			panic("async boom")
 		})
 	})
-	// Brucia CPU su tutte le P per ms millisecondi: provoca segnali di preemption (SIGURG).
+	// Burns CPU on all Ps for ms milliseconds: triggers preemption signals (SIGURG).
 	napi.Export("burnCPU", func(c napi.CallContext) (napi.Value, error) {
 		ms, _ := c.Arg(0).Int32()
 		return c.Promise(func(ctx context.Context) (napi.Resolver, error) {
@@ -205,7 +205,7 @@ func init() {
 						for j := 0; j < 1e5; j++ {
 							x = x*6364136223846793005 + 1442695040888963407
 						}
-						_ = make([]byte, 4096) // pressione sul GC Go
+						_ = make([]byte, 4096) // Go GC pressure
 					}
 					done <- x
 				}()
@@ -216,12 +216,13 @@ func init() {
 			return func(e napi.Env) (napi.Value, error) { return e.Bool(true) }, nil
 		})
 	})
-	// Chiama ripetutamente una funzione JS da goroutine tramite il dispatcher.
+	// Repeatedly calls a JS function from a goroutine via the dispatcher.
 	napi.Export("tick", func(c napi.CallContext) (napi.Value, error) {
 		n, _ := c.Arg(0).Int32()
 		post := c.Poster()
-		// La funzione JS va usata solo sul thread JS: qui la catturiamo come napi_value
-		// valida solo nello scope corrente, quindi la rileggiamo da un oggetto globale.
+		// A JS function must only be used on the JS thread: capturing it here as a
+		// napi_value would only be valid in the current handle scope, so we read it
+		// from a global property instead.
 		return c.Promise(func(ctx context.Context) (napi.Resolver, error) {
 			errs := 0
 			for i := int32(0); i < n; i++ {
@@ -242,7 +243,7 @@ func init() {
 		})
 	})
 
-	// --- diagnostica ---
+	// --- diagnostics ---
 	napi.Export("threadInfo", func(c napi.CallContext) (napi.Value, error) {
 		e := c.Env()
 		o, err := e.Object()
@@ -318,7 +319,7 @@ func infoFn(name string) napi.Callback {
 			boolean("hasSymbolFor", napi.HasSymbol("node_api_symbol_for")),
 			num("liveEnvs", float64(live)),
 			num("totalEnvs", float64(total)),
-			str("goAddr", fmt.Sprintf("%p", &exportMarker)), // distingue i runtime Go
+			str("goAddr", fmt.Sprintf("%p", &exportMarker)), // distinguishes Go runtimes
 		}
 		if err := errors.Join(errs...); err != nil {
 			return napi.Value{}, err
@@ -331,7 +332,7 @@ var exportMarker int
 
 func main() {}
 
-// Percorso tipizzato (conversioni in C, un solo attraversamento cgo).
+// Typed path (conversions in C, single cgo crossing).
 func init() {
 	napi.ExportTyped("addTyped", napi.Fn2(func(a, b float64) (float64, error) { return a + b, nil }))
 	napi.ExportTyped("echoTyped", napi.Fn1(func(s string) (string, error) { return s, nil }))

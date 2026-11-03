@@ -8,8 +8,8 @@ import (
 
 // ---- finalizer ----
 
-// AddFinalizer fa chiamare fn quando o viene raccolto dal GC di V8 o l'env viene distrutto
-// (napi_add_finalizer). Vedi FinalizeFunc per i vincoli su ciò che fn può fare.
+// AddFinalizer registers fn to be called when o is garbage-collected by V8 or when the env is
+// destroyed (napi_add_finalizer). See FinalizeFunc for restrictions on what fn may do.
 func (o Object) AddFinalizer(fn func(env Env)) error {
 	if fn == nil {
 		return TypeError("", "AddFinalizer: nil function")
@@ -24,12 +24,12 @@ func (o Object) AddFinalizer(fn func(env Env)) error {
 
 // ---- wrap ----
 
-// ErrNotWrapped è restituito da Unwrap e RemoveWrap per un oggetto senza valore Go associato.
+// ErrNotWrapped is returned by Unwrap and RemoveWrap when an object does not wrap a Go value.
 var ErrNotWrapped = &Error{Status: StatusInvalidArg, Kind: KindTypeError, Message: "object does not wrap a Go value"}
 
-// Wrap associa il valore Go v all'oggetto JS o (napi_wrap): Unwrap lo restituisce finché o vive.
-// fin, se non nil, viene chiamata quando o viene raccolto. Un oggetto può avere un solo valore
-// associato.
+// Wrap associates the Go value v with the JS object o (napi_wrap): Unwrap retrieves it for as
+// long as o lives. fin, if non-nil, is called when o is garbage-collected. An object may wrap at
+// most one value.
 func (o Object) Wrap(v any, fin FinalizeFunc) error {
 	id := handles.add(&handle{value: v, onFinalize: fin})
 	if err := check(o.env, sys.Wrap(o.env, o.raw, id, sys.FinalizeTrampoline, id, nil)); err != nil {
@@ -39,7 +39,7 @@ func (o Object) Wrap(v any, fin FinalizeFunc) error {
 	return nil
 }
 
-// Unwrap restituisce il valore associato con Wrap.
+// Unwrap returns the Go value associated with o via Wrap.
 func (o Object) Unwrap() (any, error) {
 	var p unsafe.Pointer
 	if err := check(o.env, sys.Unwrap(o.env, o.raw, &p)); err != nil {
@@ -55,8 +55,8 @@ func (o Object) Unwrap() (any, error) {
 	return h.value, nil
 }
 
-// RemoveWrap rimuove l'associazione e restituisce il valore. Il finalizer di Wrap non verrà più
-// chiamato.
+// RemoveWrap removes the association on o and returns the wrapped value. The finalizer registered
+// with Wrap will not be called.
 func (o Object) RemoveWrap() (any, error) {
 	var p unsafe.Pointer
 	if err := check(o.env, sys.RemoveWrap(o.env, o.raw, &p)); err != nil {
@@ -72,8 +72,8 @@ func (o Object) RemoveWrap() (any, error) {
 	return h.value, nil
 }
 
-// UnwrapAs restituisce il valore associato a o con Wrap convertito a T; un tipo diverso dà un
-// TypeError.
+// UnwrapAs returns the value associated with o via Wrap asserted to type T; a type mismatch
+// returns a TypeError.
 func UnwrapAs[T any](o Object) (T, error) {
 	var zero T
 	v, err := o.Unwrap()
@@ -87,16 +87,16 @@ func UnwrapAs[T any](o Object) (T, error) {
 	return t, nil
 }
 
-// TypeTag è un'etichetta di 128 bit da associare a un oggetto (napi_type_tag), per riconoscere in
-// modo sicuro gli oggetti creati dal proprio addon prima di Unwrap.
+// TypeTag is a 128-bit tag that can be attached to an object (napi_type_tag) to safely verify
+// that it was created by this addon before calling Unwrap.
 type TypeTag = sys.TypeTag
 
-// SetTypeTag associa tag a o; un oggetto può riceverne uno solo (Node-API 8).
+// SetTypeTag attaches tag to o; an object can be tagged at most once (Node-API 8).
 func (o Object) SetTypeTag(tag TypeTag) error {
 	return check(o.env, sys.TypeTagObject(o.env, o.raw, &tag))
 }
 
-// HasTypeTag dice se o ha l'etichetta tag.
+// HasTypeTag reports whether o carries the given tag.
 func (o Object) HasTypeTag(tag TypeTag) (bool, error) {
 	var b bool
 	st := sys.CheckObjectTypeTag(o.env, o.raw, &tag, &b)
@@ -105,11 +105,11 @@ func (o Object) HasTypeTag(tag TypeTag) (bool, error) {
 
 // ---- external ----
 
-// External è un valore JS opaco che porta con sé un valore Go (napi_create_external).
+// External represents an opaque JS value carrying an arbitrary Go value (napi_create_external).
 type External struct{ Value }
 
-// NewExternal crea un external che contiene v. fin, se non nil, viene chiamata quando l'external
-// viene raccolto.
+// NewExternal creates an external value holding v. fin, if non-nil, is called when the external
+// is garbage-collected.
 func (e Env) NewExternal(v any, fin FinalizeFunc) (External, error) {
 	id := handles.add(&handle{value: v, onFinalize: fin})
 	var r sys.Value
@@ -122,7 +122,7 @@ func (e Env) NewExternal(v any, fin FinalizeFunc) (External, error) {
 	return External{val}, nil
 }
 
-// Get restituisce il valore Go dell'external.
+// Get returns the Go value held by the external.
 func (x External) Get() (any, error) {
 	var p unsafe.Pointer
 	if err := check(x.env, sys.GetValueExternal(x.env, x.raw, &p)); err != nil {
@@ -137,16 +137,18 @@ func (x External) Get() (any, error) {
 
 // ---- reference ----
 
-// Ref tiene un riferimento a un valore JS oltre lo handle scope corrente (napi_ref). Con conteggio
-// > 0 il valore non viene raccolto; con conteggio 0 il riferimento è debole e Value può restituire
-// un Value vuoto. Una Ref si usa solo sul thread JS del suo env e va rilasciata con Delete.
+// Ref holds a reference to a JS value across handle scopes (napi_ref). With a reference count > 0,
+// the value is prevented from being garbage-collected; with a count of 0, the reference is weak
+// and Value may return an empty Value. A Ref may only be used on its env's JS thread and must be
+// released with Delete.
 type Ref struct {
 	env sys.Env
 	raw sys.Ref
 }
 
-// NewRef crea un riferimento a v con il conteggio iniziale dato. Con Node-API ≤ 9 sono ammessi
-// solo oggetti, funzioni, external e symbol; dalla 10 qualsiasi valore.
+// NewRef creates a reference to v with the given initial reference count. In Node-API ≤ 9, only
+// objects, functions, externals, and symbols may be referenced; starting in Node-API 10, any
+// value is allowed.
 func (v Value) NewRef(count uint32) (Ref, error) {
 	var r sys.Ref
 	if err := check(v.env, sys.CreateReference(v.env, v.raw, count, &r)); err != nil {
@@ -155,10 +157,10 @@ func (v Value) NewRef(count uint32) (Ref, error) {
 	return Ref{env: v.env, raw: r}, nil
 }
 
-// IsEmpty dice se r è la Ref zero.
+// IsEmpty reports whether r is the zero Ref.
 func (r Ref) IsEmpty() bool { return r.raw == nil }
 
-// Value restituisce il valore riferito; vuoto se un riferimento debole è stato raccolto.
+// Value returns the referenced JS value, or an empty Value if a weak reference has been collected.
 func (r Ref) Value() (Value, error) {
 	var v sys.Value
 	if err := check(r.env, sys.GetReferenceValue(r.env, r.raw, &v)); err != nil {
@@ -167,28 +169,28 @@ func (r Ref) Value() (Value, error) {
 	return Value{env: r.env, raw: v}, nil
 }
 
-// Ref incrementa il conteggio e lo restituisce.
+// Ref increments the reference count and returns the new count.
 func (r Ref) Ref() (uint32, error) {
 	var n uint32
 	st := sys.ReferenceRef(r.env, r.raw, &n)
 	return n, check(r.env, st)
 }
 
-// Unref decrementa il conteggio e lo restituisce; a 0 il riferimento diventa debole.
+// Unref decrements the reference count and returns the new count; at 0 the reference becomes weak.
 func (r Ref) Unref() (uint32, error) {
 	var n uint32
 	st := sys.ReferenceUnref(r.env, r.raw, &n)
 	return n, check(r.env, st)
 }
 
-// Delete rilascia il riferimento. Dopo Delete la Ref non va più usata.
+// Delete releases the reference. The Ref must not be used after calling Delete.
 func (r Ref) Delete() error { return check(r.env, sys.DeleteReference(r.env, r.raw)) }
 
 // ---- handle scope ----
 
-// WithScope esegue fn in un nuovo handle scope (napi_open_handle_scope / napi_close_handle_scope):
-// i Value creati dentro fn vengono rilasciati alla fine. Serve nei cicli che creano molti valori.
-// I Value creati in fn non vanno usati dopo.
+// WithScope executes fn inside a new handle scope (napi_open_handle_scope / napi_close_handle_scope):
+// any Values created within fn are released when fn returns. Use it in loops that create many
+// values. Values created inside fn must not be used after WithScope returns.
 func (e Env) WithScope(fn func() error) error {
 	var s sys.HandleScope
 	if err := check(e.raw, sys.OpenHandleScope(e.raw, &s)); err != nil {
@@ -201,8 +203,8 @@ func (e Env) WithScope(fn func() error) error {
 	return ferr
 }
 
-// WithEscapableScope esegue fn in un handle scope da cui il Value restituito da fn sopravvive
-// (napi_escape_handle).
+// WithEscapableScope executes fn inside an escapable handle scope from which the single Value
+// returned by fn is promoted to the outer scope (napi_escape_handle).
 func (e Env) WithEscapableScope(fn func() (Value, error)) (Value, error) {
 	var s sys.EscapableHandleScope
 	if err := check(e.raw, sys.OpenEscapableHandleScope(e.raw, &s)); err != nil {
@@ -224,15 +226,15 @@ func (e Env) WithEscapableScope(fn func() (Value, error)) (Value, error) {
 
 // ---- cleanup hook ----
 
-// CleanupHook è un hook registrato con AddCleanupHook.
+// CleanupHook represents a hook registered with AddCleanupHook.
 type CleanupHook struct {
 	env sys.Env
 	id  uintptr
-	h   *handle // per riconoscere l'id dopo che è stato liberato e riassegnato
+	h   *handle // used to detect if the ID was already freed and reassigned
 }
 
-// AddCleanupHook fa chiamare fn quando l'env viene distrutto (uscita del processo o fine del
-// worker), prima dei finalizer. Gli hook girano in ordine inverso di registrazione.
+// AddCleanupHook registers fn to be called when the env is destroyed (on process exit or worker
+// termination), before finalizers run. Hooks run in reverse registration order (LIFO).
 func (e Env) AddCleanupHook(fn func()) (CleanupHook, error) {
 	if fn == nil {
 		return CleanupHook{}, TypeError("", "AddCleanupHook: nil function")
@@ -246,10 +248,10 @@ func (e Env) AddCleanupHook(fn func()) (CleanupHook, error) {
 	return CleanupHook{env: e.raw, id: id, h: h}, nil
 }
 
-// Remove annulla l'hook se non è ancora stato eseguito.
+// Remove unregisters the hook if it has not yet run.
 func (h CleanupHook) Remove() error {
 	if h.h == nil || handles.get(h.id) != h.h {
-		return nil // già eseguito o già rimosso
+		return nil // already executed or already removed
 	}
 	if err := check(h.env, sys.RemoveEnvCleanupHook(h.env, sys.CleanupHookTrampoline, h.id)); err != nil {
 		return err

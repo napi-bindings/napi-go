@@ -1,18 +1,18 @@
 /*
- * loader.c — risoluzione dinamica dei simboli Node-API dal processo host.
+ * loader.c — dynamic resolution of Node-API symbols from the host process.
  *
- *  - Unix:    dlsym(RTLD_DEFAULT, ...)  (i simboli sono esportati dall'eseguibile node)
+ *  - Unix:    dlsym(RTLD_DEFAULT, ...)  (symbols are exported by the node executable)
  *  - Windows: GetProcAddress(GetModuleHandle(NULL), ...)  (node.exe / electron.exe)
  *
- * Nessuna import library e nessuno stub a link-time: il .node non ha dipendenze
- * dichiarate verso node.exe e funziona con qualsiasi host che esporti Node-API.
+ * No import library and no link-time stubs: the .node addon has no declared
+ * dependencies on node.exe and works with any host exporting Node-API.
  */
 #if defined(_WIN32)
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 #else
 #  ifndef _GNU_SOURCE
-#    define _GNU_SOURCE /* RTLD_DEFAULT su glibc */
+#    define _GNU_SOURCE /* RTLD_DEFAULT on glibc */
 #  endif
 #  include <dlfcn.h>
 #  include <pthread.h>
@@ -24,13 +24,13 @@
 #include <string.h>
 #include "gonapi.h"
 
-gn_napi_table gn_napi; /* zero-inizializzata */
+gn_napi_table gn_napi; /* zero-initialized */
 
 static void* gn_sym(const char* name) {
 #if defined(_WIN32)
   void* p = (void*)GetProcAddress(GetModuleHandleW(NULL), name);
   if (p == NULL) {
-    /* Host che incorporano Node come DLL (libnode.dll / node.dll). */
+    /* Hosts that embed Node as a DLL (libnode.dll / node.dll). */
     HMODULE m = GetModuleHandleW(L"libnode.dll");
     if (m == NULL) m = GetModuleHandleW(L"node.dll");
     if (m != NULL) p = (void*)GetProcAddress(m, name);

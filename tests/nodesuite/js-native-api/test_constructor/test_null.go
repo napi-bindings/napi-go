@@ -1,7 +1,7 @@
-// Porting di test/js-native-api/test_constructor/test_null.c.
+// Port of test/js-native-api/test_constructor/test_null.c.
 //
-// Il data &some_data del C diventa il data di napitest della funzione TestConstructor: con
-// sys.CallbackTrampoline il data identifica la funzione Go da chiamare.
+// C's &some_data becomes the napitest registration data for TestConstructor: with
+// sys.CallbackTrampoline the data identifies the Go function to call.
 package main
 
 import (
@@ -35,7 +35,7 @@ func testNullDefineClass(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Lo status delle chiamate senza controllo è letto subito dopo da AddLastStatus, come nel C.
+	// The status of unchecked calls is read immediately after via AddLastStatus, matching C.
 	nt.AddReturnedStatus(env, "envIsNull", returnValue, "Invalid argument", sys.StatusInvalidArg,
 		sys.DefineClass(nil, nt.CStr(testClass), sys.AutoLength, sys.CallbackTrampoline, testConstructorData,
 			1, &prop, &cons))
@@ -49,7 +49,7 @@ func testNullDefineClass(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	sys.DefineClass(env, nt.CStr(testClass), sys.AutoLength, nil, testConstructorData, 1, &prop, &cons)
 	nt.AddLastStatus(env, "nativeSideIsNull", returnValue)
 
-	// data NULL: la classe non viene istanziata, quindi il trampolino non la usa mai.
+	// NULL data: the class is never instantiated, so the trampoline never uses it.
 	sys.DefineClass(env, nt.CStr(testClass), sys.AutoLength, sys.CallbackTrampoline, 0, 1, &prop, &cons)
 	nt.AddLastStatus(env, "dataIsNull", returnValue)
 

@@ -1,8 +1,8 @@
-// Porting di test/node-api/test_async/test_async.c.
+// Port of test/node-api/test_async/test_async.c.
 //
-// uv_sleep diventa time.Sleep: nel test C serve solo a tenere occupato il thread del pool.
-// L'assert() di Execute diventa un panic, che sys trasforma in napi_fatal_error (abort) come
-// l'assert del C.
+// uv_sleep becomes time.Sleep: in the C test it only serves to keep the thread pool thread busy.
+// The assert() in Execute becomes a panic, which sys converts into napi_fatal_error (abort) just like
+// C's assert.
 package main
 
 import (
@@ -17,10 +17,10 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// maxCancelThreads deve superare la dimensione del thread pool di libuv (4 di default).
+// maxCancelThreads must exceed the libuv thread pool size (4 by default).
 const maxCancelThreads = 6
 
-// executeDelay è la durata di uv_sleep(1000) nel test C.
+// executeDelay is the duration of uv_sleep(1000) in the C test.
 const executeDelay = 1000 * time.Millisecond
 
 const resourceName = "TestResource"
@@ -149,7 +149,7 @@ func test(env sys.Env, info sys.CallbackInfo) sys.Value {
 
 func busyCancelComplete(env sys.Env, _ sys.Status, data any) {
 	c := data.(*carrier)
-	// Se fallisce, nt.Call ha già lanciato l'errore in JS (NODE_API_CALL_RETURN_VOID).
+	// If it fails, nt.Call has already thrown the error in JS (NODE_API_CALL_RETURN_VOID).
 	if !nt.Call(env, sys.DeleteAsyncWork(env, c.request)) {
 		return
 	}
@@ -159,7 +159,7 @@ func cancelComplete(env sys.Env, status sys.Status, data any) {
 	c := data.(*carrier)
 
 	if status == sys.StatusCancelled {
-		// Lo status atteso: il callback segnala che l'annullamento è riuscito.
+		// Expected status: the callback signals that cancellation succeeded.
 		var callback sys.Value
 		if !nt.Call(env, sys.GetReferenceValue(env, c.callback, &callback)) {
 			return
@@ -197,7 +197,7 @@ func testCancel(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Il lavoro da annullare non deve poter partire: si occupano prima tutti i thread del pool.
+	// The work to cancel must not be able to start: occupy all thread pool threads first.
 	for i := 1; i < maxCancelThreads; i++ {
 		c := &asyncCarrier[i]
 		if !nt.Call(env, sys.CreateAsyncWork(env, nil, name, sys.AsyncExecuteTrampoline,
@@ -209,8 +209,8 @@ func testCancel(env sys.Env, info sys.CallbackInfo) sys.Value {
 		}
 	}
 
-	// Si accoda il lavoro e lo si annulla subito: l'annullamento fallirebbe se fosse già partito,
-	// ma tutti i thread sono occupati dai lavori precedenti.
+	// Queue the work and cancel it immediately: cancellation would fail if it had already started,
+	// but all threads are busy with the preceding work items.
 	if !nt.Call(env, sys.GetCbInfo(env, info, &argc, &argv[0], &this, &data)) {
 		return nil
 	}
@@ -256,7 +256,7 @@ func repeatedWorkComplete(env sys.Env, status sys.Status, _ any) {
 	if !nt.Call(env, sys.CreateUint32(env, uint32(status), &jsStatus)) {
 		return
 	}
-	// Se fallisce, nt.Call ha già lanciato l'errore in JS (NODE_API_CALL_RETURN_VOID).
+	// If it fails, nt.Call has already thrown the error in JS (NODE_API_CALL_RETURN_VOID).
 	if !nt.Call(env, sys.CallFunction(env, cb, cb, 1, &jsStatus, nil)) {
 		return
 	}

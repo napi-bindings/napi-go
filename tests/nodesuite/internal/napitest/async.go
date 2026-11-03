@@ -6,10 +6,10 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// AsyncExecute equivale a napi_async_execute_callback: gira su un thread del pool di libuv.
+// AsyncExecute corresponds to napi_async_execute_callback: it runs on a libuv threadpool worker.
 type AsyncExecute func(env sys.Env, data any)
 
-// AsyncComplete equivale a napi_async_complete_callback: gira sul thread JS.
+// AsyncComplete corresponds to napi_async_complete_callback: it runs on the JS thread.
 type AsyncComplete func(env sys.Env, status sys.Status, data any)
 
 type asyncWork struct {
@@ -18,14 +18,14 @@ type asyncWork struct {
 	data     any
 }
 
-// AsyncWorkData prepara il data da passare a sys.CreateAsyncWork insieme a
-// sys.AsyncExecuteTrampoline e sys.AsyncCompleteTrampoline: equivale alla coppia di callback C
-// più il loro void* data. Il data arriva identico a execute e complete, quindi i test che in C
-// confrontano il puntatore (c == &the_carrier) confrontano qui il valore Go.
+// AsyncWorkData prepares the data to pass to sys.CreateAsyncWork along with
+// sys.AsyncExecuteTrampoline and sys.AsyncCompleteTrampoline: it corresponds to the pair of C
+// callbacks plus their void* data. The same data value is passed to execute and complete, so tests
+// that compare pointers in C (c == &the_carrier) compare the Go value here.
 //
-// Il riferimento viene rilasciato dopo complete, che Node-API chiama sempre, anche per un lavoro
-// annullato. Un lavoro creato e cancellato con napi_delete_async_work senza essere accodato non
-// lo rilascia: nei test è un caso che non si presenta.
+// The handle is released after complete, which Node-API always calls, even for canceled work.
+// Work created and deleted with napi_delete_async_work without ever being queued does not release
+// it: that case does not occur in the tests.
 func AsyncWorkData(execute AsyncExecute, complete AsyncComplete, data any) uintptr {
 	if execute == nil {
 		panic("napitest: AsyncWorkData with nil execute")

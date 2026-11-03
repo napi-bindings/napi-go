@@ -5,11 +5,11 @@ package sys
 // #cgo CFLAGS: -DNAPI_VERSION=2147483646
 import "C"
 
-// DeclaredVersion è la versione Node-API che il modulo dichiara a Node.js.
+// DeclaredVersion is the Node-API version that the module reports to Node.js.
 //
-// Build tag napi_go_test_version_mismatch, riservato ai test: dichiara VersionTestMismatch, una
-// versione che nessun Node.js supporta (sopra NODE_API_SUPPORTED_VERSION_MAX e diversa da
-// NAPI_VERSION_EXPERIMENTAL), per verificare che Node rifiuti il modulo con un errore
-// catturabile da require() (test/node-api/test_module_version_mismatch). Un addon vero non lo usa:
-// Node non lo carica mai.
+// Build tag napi_go_test_version_mismatch, reserved for tests: declares VersionTestMismatch, a
+// version that no Node.js release supports (above NODE_API_SUPPORTED_VERSION_MAX and distinct from
+// NAPI_VERSION_EXPERIMENTAL), to verify that Node rejects the module with an error catchable by
+// require() (test/node-api/test_module_version_mismatch). Real addons must never use this tag:
+// Node will always refuse to load the module.
 const DeclaredVersion = VersionTestMismatch

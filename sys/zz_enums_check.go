@@ -5,7 +5,7 @@ package sys
 // #include "zz_api.h"
 import "C"
 
-// I valori calcolati dal generatore devono coincidere con quelli del compilatore C.
+// Values computed by the generator must match those evaluated by the C compiler.
 var _ = [...]struct{}{
 	[1]struct{}{}[PropertyDefault-C.napi_default],
 	[1]struct{}{}[PropertyWritable-C.napi_writable],

@@ -1,5 +1,5 @@
-// Porting del target myobject_basic_finalizer di test/js-native-api/6_object_wrap/binding.gyp:
-// myobject.cc compilato con NAPI_EXPERIMENTAL, quindi Destructor gira durante il GC.
+// Port of the myobject_basic_finalizer target in test/js-native-api/6_object_wrap/binding.gyp:
+// myobject.cc compiled with NAPI_EXPERIMENTAL, so Destructor runs during GC.
 package main
 
 import (

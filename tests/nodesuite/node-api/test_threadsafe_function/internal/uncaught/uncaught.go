@@ -1,6 +1,6 @@
-// Package uncaught è il porting di test/node-api/test_threadsafe_function/test_uncaught_exception.c,
-// condiviso dai target test_uncaught_exception_v9 (NAPI_VERSION=9) e test_uncaught_exception
-// (NAPI_EXPERIMENTAL) del binding.gyp.
+// Package uncaught is the port of test/node-api/test_threadsafe_function/test_uncaught_exception.c,
+// shared by the test_uncaught_exception_v9 (NAPI_VERSION=9) and test_uncaught_exception
+// (NAPI_EXPERIMENTAL) targets in binding.gyp.
 package uncaught
 
 import (
@@ -10,7 +10,7 @@ import (
 	nt "github.com/napi-bindings/napi-go/tests/nodesuite/internal/napitest"
 )
 
-// threadSafeFunctionFinalize riceve come finalize_data il napi_ref della funzione JS.
+// threadSafeFunctionFinalize receives the JS function's napi_ref as finalize_data.
 func threadSafeFunctionFinalize(env sys.Env, finalizeData, _ uintptr) {
 	jsFuncRef := sys.Ref(nt.Pointer(finalizeData))
 	var jsFunc, recv sys.Value
@@ -28,7 +28,7 @@ func threadSafeFunctionFinalize(env sys.Env, finalizeData, _ uintptr) {
 	}
 }
 
-// callIntoModule verifica la chiamata a JavaScript.
+// callIntoModule tests calling into JavaScript.
 func callIntoModule(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(4)
 	var argv [4]sys.Value
@@ -57,7 +57,7 @@ func callIntoModule(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// Init è Init del C.
+// Init corresponds to C's Init.
 func Init(env sys.Env, exports sys.Value) sys.Value {
 	properties := []sys.PropertyDescriptor{
 		nt.DeclareProperty("CallIntoModule", callIntoModule),

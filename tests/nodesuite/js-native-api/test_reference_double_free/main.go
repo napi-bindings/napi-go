@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_reference_double_free/test_reference_double_free.c.
+// Port of test/js-native-api/test_reference_double_free/test_reference_double_free.c.
 package main
 
 import (
@@ -12,12 +12,12 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// gCallCount è g_call_count: il suo indirizzo è l'hint di noDeleteDestructor, come nel C.
+// gCallCount is g_call_count: its address is passed as the hint to noDeleteDestructor, matching C.
 var gCallCount uint
 
 const refSize = uint(unsafe.Sizeof(sys.Ref(nil)))
 
-// destructor riceve il napi_ref* allocato da newMyObject.
+// destructor receives the napi_ref* allocated by newMyObject.
 func destructor(env sys.Env, data, _ uintptr) {
 	ref := (*sys.Ref)(nt.Pointer(data))
 	if !nt.Call(env, sys.DeleteReference(env, *ref)) {
@@ -28,7 +28,7 @@ func destructor(env sys.Env, data, _ uintptr) {
 
 func noDeleteDestructor(_ sys.Env, data, hint uintptr) {
 	callCount := (*uint)(nt.Pointer(hint))
-	// Questo distruttore va chiamato esattamente una volta.
+	// This destructor must be called exactly once.
 	if *callCount > 0 {
 		nt.Abort()
 	}
@@ -74,11 +74,11 @@ func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 
 func noopDeleter(sys.Env, uintptr, uintptr) {}
 
-// deleteImmediately verifica che napi_remove_wrap seguita da napi_delete_reference non faccia
-// cadere il processo. È l'analogo di objectwrap_constructor_exception.cc di node-addon-api, dove
-// Napi::ObjectWrap<> viene distrutto subito dopo napi_wrap: essendo una sottoclasse di
-// Napi::Reference<>, la napi_remove_wrap del suo distruttore precede la napi_delete_reference
-// del distruttore di Napi::Reference<>.
+// deleteImmediately verifies that calling napi_remove_wrap followed by napi_delete_reference does
+// not crash the process. It mirrors objectwrap_constructor_exception.cc in node-addon-api, where
+// Napi::ObjectWrap<> is destroyed immediately after napi_wrap: because it is a subclass of
+// Napi::Reference<>, the napi_remove_wrap in its destructor runs before the napi_delete_reference
+// in the Napi::Reference<> destructor.
 func deleteImmediately(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(1)
 	var jsObj sys.Value
@@ -103,7 +103,7 @@ func deleteImmediately(env sys.Env, info sys.CallbackInfo) sys.Value {
 	if !nt.Call(env, sys.RemoveWrap(env, jsObj, nil)) {
 		return nil
 	}
-	// Dopo napi_remove_wrap Node-API non chiama più il finalizer.
+	// After napi_remove_wrap Node-API will no longer invoke the finalizer.
 	nt.DiscardFinalizer(hint)
 	if !nt.Call(env, sys.DeleteReference(env, ref)) {
 		return nil
@@ -112,7 +112,7 @@ func deleteImmediately(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// newData è il data del costruttore: si registra una volta sola.
+// newData is the constructor data: registered only once.
 var newData = nt.Register(newMyObject)
 
 func initModule(env sys.Env, exports sys.Value) sys.Value {

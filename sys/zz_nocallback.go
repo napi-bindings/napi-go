@@ -4,8 +4,8 @@
 
 package sys
 
-// Funzioni Node-API che non rientrano mai in Go durante la chiamata (vedi policy.go del
-// generatore). Con noescape permettono a cgo di lasciare sullo stack i buffer passati.
+// Node-API functions that never re-enter Go during the call (see policy.go in the generator).
+// Combined with noescape, this allows cgo to keep passed buffers on the stack.
 
 /*
 #cgo nocallback gn_napi_get_last_error_info

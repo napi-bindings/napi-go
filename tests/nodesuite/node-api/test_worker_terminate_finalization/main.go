@@ -1,5 +1,5 @@
-// Porting di test/node-api/test_worker_terminate_finalization/test_worker_terminate_finalization.c
-// (vedi test_worker_terminate per NAPI_MODULE()).
+// Port of test/node-api/test_worker_terminate_finalization/test_worker_terminate_finalization.c
+// (see test_worker_terminate regarding NAPI_MODULE()).
 package main
 
 import (
@@ -16,8 +16,8 @@ func init() { nt.ModuleInit(initModule) }
 const bufferSize = 4
 
 var (
-	// wrappedNativeData è int wrappedNativeData: una variabile globale, il cui indirizzo fa da
-	// puntatore nativo del wrap.
+	// wrappedNativeData corresponds to int wrappedNativeData: a global variable whose address
+	// serves as the wrapped native pointer.
 	wrappedNativeData int32
 	ref               sys.Ref
 )
@@ -32,7 +32,7 @@ func wrapFinalizer(env sys.Env, _, _ uintptr) {
 	}
 }
 
-// bufferFinalizer libera la memoria del buffer, che il C passa come hint.
+// bufferFinalizer frees the buffer memory, which C passes as the hint.
 func bufferFinalizer(_ sys.Env, _, hint uintptr) {
 	nt.FreeAddr(hint)
 }

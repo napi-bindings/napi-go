@@ -4,8 +4,8 @@
 
 package sys
 
-// Con napi_go_experimental i finalizer possono essere eseguiti durante il GC di V8, cioè
-// dentro qualunque funzione che alloca: nocallback solo per le funzioni che non allocano.
+// With napi_go_experimental, finalizers may run synchronously during V8 GC, i.e. inside any
+// function that allocates: mark nocallback only on functions that never allocate.
 
 /*
 #cgo nocallback gn_napi_get_last_error_info

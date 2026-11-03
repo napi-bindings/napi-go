@@ -4,29 +4,29 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// Value è un valore JavaScript (napi_value + env, come Napi::Value). Occupa due word e si passa per
-// valore senza allocazioni. È valido solo sul thread JS e solo nello handle scope in cui è stato
-// ottenuto: per conservarlo oltre la callback si usa una Ref.
+// Value represents a JavaScript value (napi_value + env, like Napi::Value). It occupies two words
+// and is passed by value without allocations. It is valid only on the JS thread and within the
+// handle scope in which it was obtained: use a Ref to retain it beyond a callback.
 //
-// Il Value zero (IsEmpty) non è un valore JS: lo restituiscono le funzioni che falliscono.
+// The zero Value (IsEmpty) does not represent a JS value; it is returned by functions that fail.
 type Value struct {
 	env sys.Env
 	raw sys.Value
 }
 
-// ValueFromRaw avvolge un napi_value di sys.
+// ValueFromRaw wraps a raw sys.Value.
 func ValueFromRaw(env sys.Env, raw sys.Value) Value { return Value{env: env, raw: raw} }
 
-// Raw restituisce il napi_value di sys.
+// Raw returns the underlying sys.Value.
 func (v Value) Raw() sys.Value { return v.raw }
 
-// Env restituisce l'env del valore.
+// Env returns the value's environment.
 func (v Value) Env() Env { return Env{raw: v.env} }
 
-// IsEmpty dice se v è il Value zero (nessun valore JS).
+// IsEmpty reports whether v is the zero Value (no underlying JS value).
 func (v Value) IsEmpty() bool { return v.raw == nil }
 
-// ValueType è il risultato di typeof secondo Node-API (napi_valuetype).
+// ValueType represents the result of typeof according to Node-API (napi_valuetype).
 type ValueType = sys.ValueType
 
 const (
@@ -42,8 +42,7 @@ const (
 	TypeBigInt    = sys.TypeBigInt
 )
 
-// Type restituisce il tipo del valore (napi_typeof). A differenza di typeof in JS, null ha
-// TypeNull.
+// Type returns the type of the value (napi_typeof). Unlike JS typeof, null has TypeNull.
 func (v Value) Type() (ValueType, error) {
 	var t sys.ValueType
 	st := sys.Typeof(v.env, v.raw, &t)
@@ -55,7 +54,7 @@ func (v Value) is(t ValueType) bool {
 	return err == nil && got == t
 }
 
-// IsUndefined, IsNull, ... controllano il tipo con napi_typeof. Un errore conta come false.
+// IsUndefined, IsNull, ... check the value's type via napi_typeof. Any error is treated as false.
 func (v Value) IsUndefined() bool { return v.is(TypeUndefined) }
 func (v Value) IsNull() bool      { return v.is(TypeNull) }
 func (v Value) IsBoolean() bool   { return v.is(TypeBoolean) }
@@ -66,20 +65,20 @@ func (v Value) IsFunction() bool  { return v.is(TypeFunction) }
 func (v Value) IsExternal() bool  { return v.is(TypeExternal) }
 func (v Value) IsBigInt() bool    { return v.is(TypeBigInt) }
 
-// IsObject dice se v è un oggetto (funzioni comprese, null escluso).
+// IsObject reports whether v is an object (including functions, excluding null).
 func (v Value) IsObject() bool {
 	t, err := v.Type()
 	return err == nil && (t == TypeObject || t == TypeFunction)
 }
 
-// IsNullish dice se v è null o undefined.
+// IsNullish reports whether v is null or undefined.
 func (v Value) IsNullish() bool {
 	t, err := v.Type()
 	return err == nil && (t == TypeNull || t == TypeUndefined)
 }
 
-// isKind seleziona la funzione napi_is_* da usare. Un indice e una switch al posto di un valore
-// funzione: con una chiamata indiretta &b finirebbe sullo heap.
+// isKind selects which napi_is_* function to invoke. Using an enum and a switch instead of a
+// function value avoids an indirect call that would cause &b to escape to the heap.
 type isKind uint8
 
 const (
@@ -117,7 +116,7 @@ func (v Value) isA(k isKind) bool {
 	return st == sys.StatusOK && b
 }
 
-// IsArray, IsArrayBuffer, ... usano le funzioni napi_is_* corrispondenti. Un errore conta come
+// IsArray, IsArrayBuffer, ... call the corresponding napi_is_* functions. Any error is treated as
 // false.
 func (v Value) IsArray() bool       { return v.isA(isArray) }
 func (v Value) IsArrayBuffer() bool { return v.isA(isArrayBuffer) }
@@ -128,21 +127,21 @@ func (v Value) IsDate() bool        { return v.isA(isDate) }
 func (v Value) IsPromise() bool     { return v.isA(isPromise) }
 func (v Value) IsError() bool       { return v.isA(isError) }
 
-// StrictEquals confronta con === (napi_strict_equals).
+// StrictEquals compares v and w with === (napi_strict_equals).
 func (v Value) StrictEquals(w Value) (bool, error) {
 	var b bool
 	st := sys.StrictEquals(v.env, v.raw, w.raw, &b)
 	return b, check(v.env, st)
 }
 
-// InstanceOf valuta v instanceof constructor. Può eseguire JS (Symbol.hasInstance).
+// InstanceOf evaluates v instanceof constructor. It may execute JS (Symbol.hasInstance).
 func (v Value) InstanceOf(constructor Function) (bool, error) {
 	var b bool
 	st := sys.Instanceof(v.env, v.raw, constructor.raw, &b)
 	return b, check(v.env, st)
 }
 
-// typeError costruisce l'errore di un controllo di tipo fallito.
+// typeError constructs the error for a failed type check.
 func typeError(st Status, want string, got Value) error {
 	t, err := got.Type()
 	desc := "an unreadable value"
@@ -178,7 +177,7 @@ func typeName(t ValueType) string {
 	return t.String()
 }
 
-// AsObject restituisce v come Object se è un oggetto o una funzione; altrimenti un *Error
+// AsObject returns v as an Object if it is an object or function; otherwise it returns an *Error
 // (TypeError, StatusObjectExpected).
 func (v Value) AsObject() (Object, error) {
 	if !v.IsObject() {
@@ -187,7 +186,7 @@ func (v Value) AsObject() (Object, error) {
 	return Object{v}, nil
 }
 
-// AsArray restituisce v come Array se è un array.
+// AsArray returns v as an Array if it is an array.
 func (v Value) AsArray() (Array, error) {
 	if !v.IsArray() {
 		return Array{}, typeError(StatusArrayExpected, "an array", v)
@@ -195,7 +194,7 @@ func (v Value) AsArray() (Array, error) {
 	return Array{Object{v}}, nil
 }
 
-// AsFunction restituisce v come Function se è una funzione.
+// AsFunction returns v as a Function if it is a function.
 func (v Value) AsFunction() (Function, error) {
 	if !v.is(TypeFunction) {
 		return Function{}, typeError(StatusFunctionExpected, "a function", v)
@@ -203,7 +202,7 @@ func (v Value) AsFunction() (Function, error) {
 	return Function{Object{v}}, nil
 }
 
-// AsString restituisce v come String se è una stringa.
+// AsString returns v as a String if it is a string.
 func (v Value) AsString() (String, error) {
 	if !v.is(TypeString) {
 		return String{}, typeError(StatusStringExpected, "a string", v)
@@ -211,7 +210,7 @@ func (v Value) AsString() (String, error) {
 	return String{v}, nil
 }
 
-// AsBigInt restituisce v come BigInt se è un bigint.
+// AsBigInt returns v as a BigInt if it is a bigint.
 func (v Value) AsBigInt() (BigInt, error) {
 	if !v.is(TypeBigInt) {
 		return BigInt{}, typeError(StatusBigIntExpected, "a bigint", v)
@@ -219,7 +218,7 @@ func (v Value) AsBigInt() (BigInt, error) {
 	return BigInt{v}, nil
 }
 
-// AsSymbol restituisce v come Symbol se è un symbol.
+// AsSymbol returns v as a Symbol if it is a symbol.
 func (v Value) AsSymbol() (Symbol, error) {
 	if !v.is(TypeSymbol) {
 		return Symbol{}, typeError(StatusInvalidArg, "a symbol", v)
@@ -227,7 +226,7 @@ func (v Value) AsSymbol() (Symbol, error) {
 	return Symbol{v}, nil
 }
 
-// AsExternal restituisce v come External se è un external.
+// AsExternal returns v as an External if it is an external.
 func (v Value) AsExternal() (External, error) {
 	if !v.is(TypeExternal) {
 		return External{}, typeError(StatusInvalidArg, "an external", v)
@@ -235,7 +234,7 @@ func (v Value) AsExternal() (External, error) {
 	return External{v}, nil
 }
 
-// AsDate restituisce v come Date se è una Date.
+// AsDate returns v as a Date if it is a Date.
 func (v Value) AsDate() (Date, error) {
 	if !v.IsDate() {
 		return Date{}, typeError(StatusDateExpected, "a Date", v)
@@ -243,7 +242,7 @@ func (v Value) AsDate() (Date, error) {
 	return Date{Object{v}}, nil
 }
 
-// AsPromise restituisce v come Promise se è una Promise.
+// AsPromise returns v as a Promise if it is a Promise.
 func (v Value) AsPromise() (Promise, error) {
 	if !v.IsPromise() {
 		return Promise{}, typeError(StatusInvalidArg, "a Promise", v)
@@ -251,7 +250,7 @@ func (v Value) AsPromise() (Promise, error) {
 	return Promise{Object{v}}, nil
 }
 
-// AsArrayBuffer restituisce v come ArrayBuffer se è un ArrayBuffer.
+// AsArrayBuffer returns v as an ArrayBuffer if it is an ArrayBuffer.
 func (v Value) AsArrayBuffer() (ArrayBuffer, error) {
 	if !v.IsArrayBuffer() {
 		return ArrayBuffer{}, typeError(sys.StatusArrayBufferExpected, "an ArrayBuffer", v)
@@ -259,8 +258,8 @@ func (v Value) AsArrayBuffer() (ArrayBuffer, error) {
 	return ArrayBuffer{Object{v}}, nil
 }
 
-// AsBuffer restituisce v come Buffer se è un Buffer di Node.js (o un Uint8Array, che Node-API
-// accetta come Buffer).
+// AsBuffer returns v as a Buffer if it is a Node.js Buffer (or a Uint8Array, which Node-API
+// accepts as a Buffer).
 func (v Value) AsBuffer() (Buffer, error) {
 	if !v.IsBuffer() {
 		return Buffer{}, typeError(StatusInvalidArg, "a Buffer", v)
@@ -268,7 +267,7 @@ func (v Value) AsBuffer() (Buffer, error) {
 	return Buffer{Object{v}}, nil
 }
 
-// AsTypedArray restituisce v come TypedArray se è un TypedArray.
+// AsTypedArray returns v as a TypedArray if it is a TypedArray.
 func (v Value) AsTypedArray() (TypedArray, error) {
 	if !v.IsTypedArray() {
 		return TypedArray{}, typeError(StatusInvalidArg, "a TypedArray", v)
@@ -276,7 +275,7 @@ func (v Value) AsTypedArray() (TypedArray, error) {
 	return TypedArray{Object{v}}, nil
 }
 
-// AsDataView restituisce v come DataView se è un DataView.
+// AsDataView returns v as a DataView if it is a DataView.
 func (v Value) AsDataView() (DataView, error) {
 	if !v.IsDataView() {
 		return DataView{}, typeError(StatusInvalidArg, "a DataView", v)
@@ -284,64 +283,64 @@ func (v Value) AsDataView() (DataView, error) {
 	return DataView{Object{v}}, nil
 }
 
-// ---- lettura dei primitivi ----
+// ---- reading primitives ----
 //
-// Node-API controlla il tipo: un valore del tipo sbagliato dà un *Error con lo status
-// corrispondente (es. StatusNumberExpected).
+// Node-API checks the value's type: a value of the wrong type returns an *Error with the
+// corresponding status (e.g. StatusNumberExpected).
 
-// Float64 legge un number.
+// Float64 reads a JS number as a float64.
 func (v Value) Float64() (float64, error) {
 	var f float64
 	st := sys.GetValueDouble(v.env, v.raw, &f)
 	return f, check(v.env, st)
 }
 
-// Int32 legge un number convertito a int32 come ToInt32 di JS (troncamento, modulo 2^32; NaN e
-// ±Infinity danno 0).
+// Int32 reads a JS number converted to int32 using JS ToInt32 semantics (truncation modulo 2^32;
+// NaN and ±Infinity yield 0).
 func (v Value) Int32() (int32, error) {
 	var i int32
 	st := sys.GetValueInt32(v.env, v.raw, &i)
 	return i, check(v.env, st)
 }
 
-// Uint32 legge un number convertito a uint32 come ToUint32 di JS.
+// Uint32 reads a JS number converted to uint32 using JS ToUint32 semantics.
 func (v Value) Uint32() (uint32, error) {
 	var u uint32
 	st := sys.GetValueUint32(v.env, v.raw, &u)
 	return u, check(v.env, st)
 }
 
-// Int64 legge un number troncato a int64; fuori intervallo satura, NaN dà 0.
+// Int64 reads a JS number truncated to int64; out-of-range values saturate, and NaN yields 0.
 func (v Value) Int64() (int64, error) {
 	var i int64
 	st := sys.GetValueInt64(v.env, v.raw, &i)
 	return i, check(v.env, st)
 }
 
-// Bool legge un boolean.
+// Bool reads a JS boolean.
 func (v Value) Bool() (bool, error) {
 	var b bool
 	st := sys.GetValueBool(v.env, v.raw, &b)
 	return b, check(v.env, st)
 }
 
-// ---- coercizione (possono eseguire JS: valueOf, toString, Symbol.toPrimitive) ----
+// ---- coercion (may execute JS: valueOf, toString, Symbol.toPrimitive) ----
 
-// ToBool applica Boolean(v).
+// ToBool applies Boolean(v).
 func (v Value) ToBool() (Value, error) {
 	var r sys.Value
 	st := sys.CoerceToBool(v.env, v.raw, &r)
 	return Env{raw: v.env}.value(r, st)
 }
 
-// ToNumber applica Number(v); lancia per i symbol e i bigint.
+// ToNumber applies Number(v); throws for symbols and bigints.
 func (v Value) ToNumber() (Value, error) {
 	var r sys.Value
 	st := sys.CoerceToNumber(v.env, v.raw, &r)
 	return Env{raw: v.env}.value(r, st)
 }
 
-// ToObject applica Object(v); lancia per null e undefined.
+// ToObject applies Object(v); throws for null and undefined.
 func (v Value) ToObject() (Object, error) {
 	var r sys.Value
 	st := sys.CoerceToObject(v.env, v.raw, &r)
@@ -349,7 +348,7 @@ func (v Value) ToObject() (Object, error) {
 	return Object{o}, err
 }
 
-// ToString applica String(v); lancia per i symbol.
+// ToString applies String(v); throws for symbols.
 func (v Value) ToString() (String, error) {
 	var r sys.Value
 	st := sys.CoerceToString(v.env, v.raw, &r)

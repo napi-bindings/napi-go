@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_worker_buffer_callback/test_worker_buffer_callback.c.
+// Port of test/node-api/test_worker_buffer_callback/test_worker_buffer_callback.c.
 package main
 
 import (
@@ -10,10 +10,10 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// bufferSize è sizeof(char).
+// bufferSize is sizeof(char).
 const bufferSize = 1
 
-// freeCallCount è condiviso da tutti gli env del processo, come la variabile globale del C.
+// freeCallCount is shared across all envs in the process, matching the global variable in C.
 var freeCallCount uint32
 
 func getFreeCallCount(env sys.Env, _ sys.CallbackInfo) sys.Value {
@@ -29,7 +29,7 @@ func finalizeCb(_ sys.Env, finalizeData, _ uintptr) {
 	freeCallCount++
 }
 
-// initModule equivale al corpo di NAPI_MODULE_INIT(): gira per ogni env, anche nei worker.
+// initModule corresponds to the body of NAPI_MODULE_INIT(): it runs for every env, including workers.
 func initModule(env sys.Env, exports sys.Value) sys.Value {
 	properties := []sys.PropertyDescriptor{
 		nt.DeclareProperty("getFreeCallCount", getFreeCallCount),
@@ -38,9 +38,9 @@ func initModule(env sys.Env, exports sys.Value) sys.Value {
 		return nil
 	}
 
-	// Variante rispetto al test senza Node-API: si crea un ArrayBuffer invece di un Buffer di
-	// Node.js, perché quest'ultimo eserciterebbe gli stessi percorsi e non quelli specifici di
-	// Node-API.
+	// Difference from the non-Node-API test: creates an ArrayBuffer instead of a Node.js Buffer,
+	// because the latter would exercise the same non-Node-API code paths rather than the
+	// Node-API-specific ones.
 	var buffer sys.Value
 	data := nt.Malloc(bufferSize)
 	cb, hint := nt.Finalizer(finalizeCb, 0)

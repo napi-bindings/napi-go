@@ -7,8 +7,8 @@ import "C"
 
 import "runtime/cgo"
 
-// NoEnvFinalizeFunc equivale a node_api_noenv_finalize: il finalizer senza env del backing store
-// di uno SharedArrayBuffer esterno, che V8 può chiamare da qualsiasi thread.
+// NoEnvFinalizeFunc corresponds to node_api_noenv_finalize: the env-less finalizer for the
+// backing store of an external SharedArrayBuffer, which V8 may call from any thread.
 type NoEnvFinalizeFunc func(data, hint uintptr)
 
 type noEnvFinalizer struct {

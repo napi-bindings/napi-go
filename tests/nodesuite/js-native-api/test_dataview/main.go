@@ -1,7 +1,7 @@
-// Porting di test/js-native-api/test_dataview/test_dataview.c.
+// Port of test/js-native-api/test_dataview/test_dataview.c.
 //
-// node_api_is_sharedarraybuffer è sperimentale e manca dagli header di sys: si chiama tramite
-// napitest.IsSharedArrayBuffer, che la risolve dal processo node.
+// node_api_is_sharedarraybuffer is experimental and omitted from sys headers: it is called via
+// napitest.IsSharedArrayBuffer, which resolves it from the node process.
 package main
 
 import (

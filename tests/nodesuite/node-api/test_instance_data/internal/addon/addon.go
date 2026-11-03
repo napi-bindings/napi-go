@@ -1,5 +1,5 @@
-// Package addon è il porting di test/node-api/test_instance_data/addon.c, condiviso dai target
-// test_set_then_ref e test_ref_then_set del binding.gyp.
+// Package addon is the port of test/node-api/test_instance_data/addon.c, shared by the
+// test_set_then_ref and test_ref_then_set targets in binding.gyp.
 package addon
 
 import (
@@ -13,20 +13,20 @@ import (
 
 const (
 	refSize = uint(unsafe.Sizeof(sys.Ref(nil)))
-	// freeMessage è il testo che lo script padre si aspetta, da solo, su stderr.
+	// freeMessage is the text expected by the parent script, by itself, on stderr.
 	freeMessage = "addon_free"
 )
 
 func addonFree(env sys.Env, data, _ uintptr) {
 	ref := (*sys.Ref)(nt.Pointer(data))
-	// Lo status non è controllato, come nel C.
+	// Status is not checked, matching C.
 	sys.DeleteReference(env, *ref)
 	nt.FreeAddr(data)
-	// Come il fprintf del C: l'errore di scrittura non ha un altro canale a cui arrivare.
+	// Matches C's fprintf: a write error has no other channel to report to.
 	fmt.Fprint(os.Stderr, freeMessage)
 }
 
-// New è addon_new: gli status non sono controllati, come nel C.
+// New corresponds to addon_new: status values are not checked, matching C.
 func New(env sys.Env, exports sys.Value, refFirst bool) sys.Value {
 	ref := (*sys.Ref)(nt.Malloc(refSize))
 	cb, hint := nt.Finalizer(addonFree, 0)

@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/2_function_arguments/2_function_arguments.c.
+// Port of test/js-native-api/2_function_arguments/2_function_arguments.c.
 package main
 
 import (

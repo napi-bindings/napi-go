@@ -1,5 +1,5 @@
-// Porting di test/node-api/test_threadsafe_function_shutdown/binding.cc. I std::thread staccati
-// diventano nt.Thread mai attesi; il template call<> del C++ diventa la funzione call.
+// Port of test/node-api/test_threadsafe_function_shutdown/binding.cc. Detached std::threads
+// become unjoined nt.Threads; the C++ call<> template becomes the call function.
 package main
 
 import (
@@ -15,27 +15,27 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// call equivale al template call<> / NAPI_CALL del C++: se status non è napi_ok stampa
-// "<nome>: <status>" su stderr e chiama abort().
+// call corresponds to the C++ call<> template / NAPI_CALL: if status is not napi_ok, it prints
+// "<name>: <status>" to stderr and calls abort().
 func call(name string, status sys.Status) {
 	if status == sys.StatusOK {
 		return
 	}
-	// L'errore della scrittura non è controllato: il processo termina subito dopo.
+	// Write error is not checked: the process aborts immediately after.
 	fmt.Fprintf(os.Stderr, "%s: %d\n", name, int(status))
 	nt.Abort()
 }
 
 const (
 	nThreads = 32
-	// callInterval è lo sleep_for(1ms) tra due chiamate.
+	// callInterval is the sleep_for(1ms) between calls.
 	callInterval = time.Millisecond
 )
 
 var runData = nt.Register(run)
 
-// logf scrive su stderr come il fprintf del C; un errore di scrittura non cambia l'esito del
-// test, che controlla solo il codice di uscita.
+// logf writes to stderr like C's fprintf; a write error does not affect the test outcome,
+// which only checks the exit code.
 func logf(format string, args ...any) {
 	if _, err := fmt.Fprintf(os.Stderr, format, args...); err != nil {
 		return

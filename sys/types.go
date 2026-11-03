@@ -12,7 +12,7 @@ import (
 	"unsafe"
 )
 
-// Handle opachi di Node-API. Sono puntatori C: si confrontano con nil e si passano per valore.
+// Opaque Node-API handles. They are C pointers: compare with nil and pass by value.
 type (
 	Env                    C.napi_env
 	Value                  C.napi_value
@@ -28,8 +28,9 @@ type (
 	AsyncCleanupHookHandle C.napi_async_cleanup_hook_handle
 )
 
-// Puntatori a funzione C accettati da Node-API. Go non può crearli: si usano i trampolini di sys
-// (CallbackTrampoline, FinalizeTrampoline, ...) oppure funzioni C del proprio pacchetto.
+// C function pointer types accepted by Node-API. Go cannot construct these directly: use the
+// trampolines provided by sys (CallbackTrampoline, FinalizeTrampoline, ...) or C functions
+// defined in your own package.
 type (
 	Callback                 C.napi_callback
 	Finalize                 C.napi_finalize
@@ -41,18 +42,18 @@ type (
 )
 
 const (
-	// AutoLength corrisponde a NAPI_AUTO_LENGTH: la stringa è terminata da NUL.
+	// AutoLength corresponds to NAPI_AUTO_LENGTH: the string is NUL-terminated.
 	AutoLength = ^uint(0)
-	// VersionExperimental corrisponde a NAPI_VERSION_EXPERIMENTAL.
+	// VersionExperimental corresponds to NAPI_VERSION_EXPERIMENTAL.
 	VersionExperimental = 2147483647
-	// VersionTestMismatch è NAPI_VERSION_EXPERIMENTAL - 1, dichiarata dal build tag
-	// napi_go_test_version_mismatch (solo test): nessun Node.js la supporta.
+	// VersionTestMismatch is NAPI_VERSION_EXPERIMENTAL - 1, declared by the
+	// napi_go_test_version_mismatch build tag (test only): no Node.js version supports it.
 	VersionTestMismatch = VersionExperimental - 1
 )
 
-// PropertyDescriptor ha lo stesso layout di napi_property_descriptor.
-// Utf8Name non deve puntare a memoria Go non fissata (runtime.Pinner) quando la struct viene
-// passata a DefineProperties o DefineClass.
+// PropertyDescriptor has the same memory layout as napi_property_descriptor.
+// Utf8Name must not point to unpinned Go memory (runtime.Pinner) when the struct is passed to
+// DefineProperties or DefineClass.
 type PropertyDescriptor struct {
 	Utf8Name   *byte
 	Name       Value
@@ -64,7 +65,7 @@ type PropertyDescriptor struct {
 	Data       uintptr
 }
 
-// ExtendedErrorInfo ha lo stesso layout di napi_extended_error_info.
+// ExtendedErrorInfo has the same memory layout as napi_extended_error_info.
 type ExtendedErrorInfo struct {
 	ErrorMessage    *byte
 	EngineReserved  unsafe.Pointer
@@ -72,13 +73,13 @@ type ExtendedErrorInfo struct {
 	ErrorCode       Status
 }
 
-// TypeTag ha lo stesso layout di napi_type_tag.
+// TypeTag has the same memory layout as napi_type_tag.
 type TypeTag struct {
 	Lower uint64
 	Upper uint64
 }
 
-// NodeVersion ha lo stesso layout di napi_node_version.
+// NodeVersion has the same memory layout as napi_node_version.
 type NodeVersion struct {
 	Major   uint32
 	Minor   uint32
@@ -86,8 +87,8 @@ type NodeVersion struct {
 	Release *byte
 }
 
-// Controlli di layout a tempo di compilazione: una differenza dà un indice negativo o fuori
-// intervallo. I wrapper generati convertono i puntatori Go ↔ C basandosi su queste uguaglianze.
+// Compile-time layout assertions: any mismatch yields a negative or out-of-bounds array index.
+// Generated wrappers cast between Go and C struct pointers relying on these layout equalities.
 var _ = [...]struct{}{
 	[1]struct{}{}[unsafe.Sizeof(uint(0))-unsafe.Sizeof(C.size_t(0))],
 	[1]struct{}{}[unsafe.Sizeof(false)-unsafe.Sizeof(C.bool(false))],
@@ -123,7 +124,7 @@ var _ = [...]struct{}{
 	[1]struct{}{}[unsafe.Offsetof(NodeVersion{}.Release)-unsafe.Offsetof(C.napi_node_version{}.release)],
 }
 
-// Name restituisce il nome C della funzione, es. "napi_create_int32".
+// Name returns the C name of the function, e.g. "napi_create_int32".
 func (f Fn) Name() string {
 	if f < 0 || f >= fnCount {
 		return "Fn(" + strconv.Itoa(int(f)) + ")"
@@ -131,11 +132,10 @@ func (f Fn) Name() string {
 	return fnInfo[f].name
 }
 
-// String restituisce il nome C della funzione.
+// String returns the C name of the function.
 func (f Fn) String() string { return f.Name() }
 
-// MinVersion restituisce la versione Node-API in cui la funzione è stata introdotta (0 se f non
-// è valida).
+// MinVersion returns the Node-API version in which the function was introduced (0 if f is invalid).
 func (f Fn) MinVersion() int {
 	if f < 0 || f >= fnCount {
 		return 0
@@ -143,7 +143,7 @@ func (f Fn) MinVersion() int {
 	return int(fnInfo[f].version)
 }
 
-// FnByName cerca una funzione per nome C.
+// FnByName looks up a function by its C name.
 func FnByName(name string) (Fn, bool) {
 	for i := range fnInfo {
 		if fnInfo[i].name == name {
@@ -153,8 +153,8 @@ func FnByName(name string) (Fn, bool) {
 	return 0, false
 }
 
-// Available dice se il processo host esporta la funzione. Prima che Node carichi il modulo
-// (ad esempio in go test) restituisce sempre false.
+// Available reports whether the host process exports the function. Before Node loads the module
+// (for example during go test) it always returns false.
 func Available(f Fn) bool {
 	return f >= 0 && f < fnCount && C.gn_api[f] != nil
 }

@@ -1,8 +1,8 @@
-// Command cbcost misura il costo di una callback C→Go vuota quando il thread chiamante
-// è stato creato dal C (come il main thread di Node) oppure è un thread del runtime Go.
-// Serve a spiegare il divario Linux/Windows osservato nel benchmark dello spike.
+// Command cbcost measures the cost of an empty C→Go callback when the calling thread
+// was created by C (like Node's main thread) versus a Go runtime thread.
+// Explains the Linux/Windows gap observed in the spike benchmark.
 //
-//	go run .            (CC=zig cc su Windows)
+//	go run .            (CC=zig cc on Windows)
 package main
 
 /*
@@ -58,6 +58,6 @@ func main() {
 			C.nop()
 		}
 	})
-	measure("C→Go da thread Go (dentro una chiamata cgo)", n, func(k int64) { C.run_in_go_thread(C.int64_t(k)) })
-	measure("C→Go da thread creato in C (come Node)", n, func(k int64) { C.run_in_c_thread(C.int64_t(k)) })
+	measure("C→Go from Go thread (inside a cgo call)", n, func(k int64) { C.run_in_go_thread(C.int64_t(k)) })
+	measure("C→Go from C-created thread (like Node)", n, func(k int64) { C.run_in_c_thread(C.int64_t(k)) })
 }

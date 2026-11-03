@@ -2,7 +2,7 @@
   "targets": {
     "test_reference": {
       "defines": ["NAPI_VERSION=9"],
-      "reason": "test_reference.c inizia con #define NAPI_VERSION 9 (node_api_symbol_for)"
+      "reason": "test_reference.c starts with #define NAPI_VERSION 9 (node_api_symbol_for)"
     }
   }
 }

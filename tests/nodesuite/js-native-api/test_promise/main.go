@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_promise/test_promise.c.
+// Port of test/js-native-api/test_promise/test_promise.c.
 package main
 
 import (
@@ -15,7 +15,7 @@ var deferred sys.Deferred
 func createPromise(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	var promise sys.Value
 
-	// Un deferred già esistente non si sovrascrive.
+	// Do not overwrite an existing deferred.
 	if deferred != nil {
 		return nil
 	}

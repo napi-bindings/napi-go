@@ -1,4 +1,4 @@
-// Test end-to-end del Layer 1 (pacchetto napi) attraverso l'addon tests/e2e/addons/napibasic.
+// End-to-end tests for Layer 1 (package napi) through the tests/e2e/addons/napibasic addon.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Worker } from 'node:worker_threads'
@@ -6,12 +6,12 @@ import { load, addonPath, isDarwinX64, nodeEval, lastJSONLine, hostNapiVersion }
 
 const A = load('napibasic')
 
-const INLINE_ARGS = 8 // GN_INLINE_ARGS in sys/internal.h: argomenti letti dal trampolino C
+const INLINE_ARGS = 8 // GN_INLINE_ARGS in sys/internal.h: arguments read by the C trampoline
 const MANY_ARGS = 20
 const STACK_STRING_BYTES = 256 // stackStringBytes in napi/primitive.go
 const UTF8_MAX_CHAR_BYTES = 4
 const LONG_STRING_LENGTH = 100_000
-const BYTE_MODULUS = 251 // byteModulus nell'addon
+const BYTE_MODULUS = 251 // byteModulus in the addon
 const BUFFER_SIZE = 1000
 const GC_OBJECTS = 2000
 const ALLOC_CALLS = 20_000
@@ -28,24 +28,24 @@ const sumPattern = (n) => {
   return s
 }
 
-// expectError verifica nome, code e (facoltativo) messaggio di un errore lanciato da fn.
+// expectError verifies the name, code, and (optional) message of an error thrown by fn.
 function expectError (fn, name, code, message) {
   assert.throws(fn, (e) => {
-    assert.equal(e.name, name, `name di ${e}`)
-    assert.equal(e.code, code, `code di ${e}`)
+    assert.equal(e.name, name, `name of ${e}`)
+    assert.equal(e.code, code, `code of ${e}`)
     if (message !== undefined) assert.equal(e.message, message)
     return true
   })
 }
 
-test('init: più funzioni di init in ordine, export materializzati per env', () => {
+test('init: multiple init functions in order, exports materialized per env', () => {
   assert.equal(A.hello(), 'world')
   assert.equal(A.secondInitSawExports, true)
   assert.equal(typeof A.Counter, 'function')
   assert.equal(A.hello.name, 'hello')
   if (hostNapiVersion >= V10) {
-    // Due build dello stesso addon sono moduli separati con il proprio stato (in un processo
-    // separato: su macOS x64 il secondo runtime Go nello stesso processo viene rifiutato).
+    // Two builds of the same addon are separate modules with their own state (in a separate
+    // process: on macOS x64 a second Go runtime in the same process is rejected).
     const r = nodeEval(`const a = require(${JSON.stringify(addonPath('napibasic'))});
       let second;
       try {
@@ -64,7 +64,7 @@ test('init: più funzioni di init in ordine, export materializzati per env', () 
   }
 })
 
-test('argomenti: nessuno, oltre il buffer inline, this, mancanti', () => {
+test('arguments: none, beyond inline buffer, this, missing', () => {
   const none = A.argInfo()
   assert.equal(none.len, 0)
   assert.equal(none.missing, undefined)
@@ -85,7 +85,7 @@ test('argomenti: nessuno, oltre il buffer inline, this, mancanti', () => {
   assert.equal(A.echo(o), o)
 })
 
-test('typeof e predicati per ogni tipo', () => {
+test('typeof and predicates for every type', () => {
   const cases = [
     [undefined, 'undefined'], [null, 'null'], [true, 'boolean'], [1, 'number'], ['s', 'string'],
     [Symbol('s'), 'symbol'], [{}, 'object'], [() => 1, 'function'], [1n, 'bigint'],
@@ -109,18 +109,18 @@ test('typeof e predicati per ogni tipo', () => {
   assert.equal(t({}).isError, false)
 })
 
-test('numeri: conversioni e valori limite', () => {
+test('numbers: conversions and boundary values', () => {
   assert.equal(A.add(0.1, 0.2), 0.1 + 0.2)
   for (const x of [0, 1, -1, 2 ** 31, -(2 ** 31) - 1, UINT32_WRAP + 5, -1.7, 2 ** 53 + 2, 1e-300]) {
     const r = A.numbers(x)
     assert.equal(r.float64, x)
-    assert.equal(r.int32, x | 0, `int32 di ${x}`)
-    assert.equal(r.uint32, x >>> 0, `uint32 di ${x}`)
-    assert.equal(r.int64big, BigInt(Math.trunc(x)), `int64 di ${x}`)
+    assert.equal(r.int32, x | 0, `int32 of ${x}`)
+    assert.equal(r.uint32, x >>> 0, `uint32 of ${x}`)
+    assert.equal(r.int64big, BigInt(Math.trunc(x)), `int64 of ${x}`)
   }
-  // -0 si conserva come float64.
+  // -0 is preserved as float64.
   assert.ok(Object.is(A.numbers(-0).float64, -0))
-  // Valori non finiti: 0 negli interi; fuori intervallo int64 satura.
+  // Non-finite values: 0 in integer types; out-of-range int64 saturates.
   for (const x of [NaN, Infinity, -Infinity]) {
     const r = A.numbers(x)
     assert.ok(Object.is(r.float64, x) || (Number.isNaN(x) && Number.isNaN(r.float64)))
@@ -136,10 +136,10 @@ test('numeri: conversioni e valori limite', () => {
   expectError(() => A.bool(0), 'TypeError', 'ERR_NAPI_BOOLEAN_EXPECTED')
 })
 
-test('stringhe: vuota, UTF-8, confine del buffer sullo stack, lunghe, UTF-16, Latin-1', () => {
+test('strings: empty, UTF-8, stack buffer boundary, long, UTF-16, Latin-1', () => {
   assert.equal(A.str(''), '')
-  assert.equal(A.str('ciao, 世界 😀'), 'ciao, 世界 😀')
-  // Attorno alla soglia del buffer sullo stack, con caratteri di 1, 2, 3 e 4 byte.
+  assert.equal(A.str('hello, 世界 😀'), 'hello, 世界 😀')
+  // Around the stack buffer threshold, with 1-, 2-, 3-, and 4-byte characters.
   const limit = STACK_STRING_BYTES - 1 - UTF8_MAX_CHAR_BYTES
   for (const ch of ['a', 'é', '世', '😀']) {
     const bytes = Buffer.byteLength(ch)
@@ -151,12 +151,12 @@ test('stringhe: vuota, UTF-8, confine del buffer sullo stack, lunghe, UTF-16, La
   }
   const long = 'x'.repeat(LONG_STRING_LENGTH) + '😀'
   assert.equal(A.str(long), long)
-  // Un surrogato isolato non è UTF-8 valido: diventa U+FFFD; in UTF-16 resta com'è.
+  // An unpaired surrogate is not valid UTF-8: it becomes U+FFFD; in UTF-16 it is preserved as-is.
   assert.equal(A.str('\uD800x'), '�x')
   assert.equal(A.utf16('\uD800x'), '\uD800x')
   assert.equal(A.utf16(''), '')
   assert.equal(A.utf16('😀 ok'), '😀 ok')
-  // Latin-1: i caratteri oltre U+00FF sono troncati al byte basso.
+  // Latin-1: characters above U+00FF are truncated to the low byte.
   assert.equal(A.latin1('café'), 'café')
   assert.equal(A.latin1('Ā'), '\u0000')
   assert.equal(A.latin1(''), '')
@@ -164,7 +164,7 @@ test('stringhe: vuota, UTF-8, confine del buffer sullo stack, lunghe, UTF-16, La
   expectError(() => A.utf16(null), 'TypeError', 'ERR_NAPI_STRING_EXPECTED')
 })
 
-test('symbol: descrizione, unicità, registro globale', () => {
+test('symbol: description, uniqueness, global registry', () => {
   const s = A.symbol('desc')
   assert.equal(typeof s, 'symbol')
   assert.equal(s.description, 'desc')
@@ -173,7 +173,7 @@ test('symbol: descrizione, unicità, registro globale', () => {
   if (hostNapiVersion >= V9) assert.equal(A.symbol('k', true), Symbol.for('k'))
 })
 
-test('bigint: int64, uint64, parole, *big.Int', () => {
+test('bigint: int64, uint64, words, *big.Int', () => {
   assert.deepEqual(A.bigint(-5n, 'i64'), [-5n, true])
   assert.deepEqual(A.bigint(INT64_MIN, 'i64'), [INT64_MIN, true])
   assert.deepEqual(A.bigint(INT64_MAX + 1n, 'i64'), [INT64_MIN, false])
@@ -188,14 +188,14 @@ test('bigint: int64, uint64, parole, *big.Int', () => {
   expectError(() => A.bigint(1, 'i64'), 'TypeError', 'ERR_NAPI_BIGINT_EXPECTED')
 })
 
-test('Date: andata e ritorno, millisecondi, Date non valida', () => {
-  // Anche fuori dall'intervallo di time.UnixNano (anni 1678-2262).
+test('Date: round-trip, milliseconds, invalid Date', () => {
+  // Even outside the range of time.UnixNano (years 1678-2262).
   const YEAR_1 = -62_135_596_800_000
   const YEAR_9999 = 253_402_300_799_999
   for (const ms of [0, -1, 1_700_000_000_123, YEAR_1, YEAR_9999]) {
     assert.equal(A.date(new Date(ms)).getTime(), ms)
   }
-  // Il valore di una Date è intero (TimeClip di JS).
+  // A Date time value is an integer (JS TimeClip).
   const FRACTION = 0.75
   assert.equal(A.date(1e12 + FRACTION, true).getTime(), 1e12)
   assert.ok(Number.isNaN(A.date(NaN, true).getTime()))
@@ -203,7 +203,7 @@ test('Date: andata e ritorno, millisecondi, Date non valida', () => {
   expectError(() => A.date({}), 'TypeError', 'ERR_NAPI_DATE_EXPECTED')
 })
 
-test('proprietà con chiave stringa, valore e indice', () => {
+test('properties by string, value, and index key', () => {
   const o = { a: 1, '': 'empty', 'è ü': 'unicode' }
   assert.equal(A.objectOps(o, 'get', 'a'), 1)
   assert.equal(A.objectOps(o, 'get', ''), 'empty')
@@ -229,15 +229,15 @@ test('proprietà con chiave stringa, valore e indice', () => {
   assert.equal(A.objectOps(arr, 'hasI', 3), false)
   assert.equal(A.objectOps(arr, 'deleteI', 0), true)
   assert.equal(0 in arr, false)
-  // Proprietà non configurabile: delete restituisce false; frozen: set non cambia nulla.
+  // Non-configurable property: delete returns false; frozen: set changes nothing.
   const frozen = Object.freeze({ k: 1 })
   assert.equal(A.objectOps(frozen, 'delete', 'k'), false)
   A.objectOps(frozen, 'set', 'k', 2)
   assert.equal(frozen.k, 1)
-  // Un getter che lancia: l'eccezione JS attraversa Go invariata.
+  // Throwing getter: the JS exception passes through Go unchanged.
   const boom = new Error('getter')
   assert.throws(() => A.objectOps({ get x () { throw boom } }, 'get', 'x'), (e) => e === boom)
-  // Proxy: le trap vengono eseguite.
+  // Proxy: traps are executed.
   const seen = []
   const proxy = new Proxy({}, { get: (_, k) => { seen.push(k); return 7 } })
   assert.equal(A.objectOps(proxy, 'get', 'p'), 7)
@@ -246,7 +246,7 @@ test('proprietà con chiave stringa, valore e indice', () => {
   expectError(() => A.objectOps(null, 'get', 'a'), 'TypeError', 'ERR_NAPI_OBJECT_EXPECTED', 'expected an object, got null')
 })
 
-test('chiavi, prototipo, freeze e seal', () => {
+test('keys, prototype, freeze, and seal', () => {
   const proto = { inherited: 1 }
   const o = Object.create(proto)
   o.own = 2
@@ -264,7 +264,7 @@ test('chiavi, prototipo, freeze e seal', () => {
   assert.ok(Object.isSealed(s) && !Object.isFrozen(s))
 })
 
-test('array: creazione, lunghezza, buchi', () => {
+test('arrays: creation, length, holes', () => {
   assert.deepEqual(A.array(), [])
   assert.deepEqual(A.array(1, 'a', null), [1, 'a', null])
   assert.equal(A.arrayLen([1, 2, 3]), 3)
@@ -272,11 +272,11 @@ test('array: creazione, lunghezza, buchi', () => {
   expectError(() => A.arrayLen({ length: 1 }), 'TypeError', 'ERR_NAPI_ARRAY_EXPECTED')
 })
 
-test('chiamata di funzioni JS: this, argomenti, eccezioni', () => {
+test('calling JS functions: this, arguments, exceptions', () => {
   const self = { k: 1 }
   assert.equal(A.call(function () { return this }, self), self)
-  // Il this non viene convertito: undefined resta tale per una funzione strict (questo file è un
-  // modulo ES), diventa globalThis per una sloppy.
+  // this is not boxed: undefined stays undefined for a strict function (this file is an ES
+  // module) and becomes globalThis for a sloppy one.
   assert.equal(A.call(function () { return this }, undefined), undefined)
   assert.equal(A.call(new Function('return this'), undefined), globalThis)
   assert.equal(A.call((...a) => a.length, null), 0)
@@ -284,7 +284,7 @@ test('chiamata di funzioni JS: this, argomenti, eccezioni', () => {
   assert.deepEqual(A.call((...a) => a, null, ...args), args)
   const err = new TypeError('from js')
   assert.throws(() => A.call(() => { throw err }, null), (e) => e === err)
-  // Un valore non Error lanciato da JS arriva com'è.
+  // A non-Error value thrown from JS arrives as-is.
   assert.throws(() => A.call(() => { throw 42 }, null), (e) => e === 42)
   expectError(() => A.call({}, null), 'TypeError', 'ERR_NAPI_FUNCTION_EXPECTED')
   class Point { constructor (x, y) { this.x = x; this.y = y } }
@@ -294,7 +294,7 @@ test('chiamata di funzioni JS: this, argomenti, eccezioni', () => {
   assert.throws(() => A.construct(() => 1), TypeError)
 })
 
-test('Catch: intercetta l\'eccezione e la cancella; senza Catch si propaga', () => {
+test('Catch: intercepts and clears the exception; without Catch it propagates', () => {
   const err = new Error('caught')
   const r = A.catch(() => { throw err })
   assert.equal(r.caught, err)
@@ -303,7 +303,7 @@ test('Catch: intercetta l\'eccezione e la cancella; senza Catch si propaga', () 
   assert.throws(() => A.catch.call('propagate', () => { throw err }), (e) => e === err)
 })
 
-test('funzioni create a runtime: nome, argomenti, new', () => {
+test('runtime-created functions: name, arguments, new', () => {
   const f = A.makeFunction('dyn')
   assert.equal(f.name, 'dyn')
   const self = {}
@@ -315,7 +315,7 @@ test('funzioni create a runtime: nome, argomenti, new', () => {
   assert.equal(A.makeFunction('').name, '')
 })
 
-test('errori Go → eccezioni JS: tipo, code, message', () => {
+test('Go errors → JS exceptions: type, code, message', () => {
   expectError(() => A.throwError('error', 'E_ONE', 'one'), 'Error', 'E_ONE', 'one')
   expectError(() => A.throwError('type', 'E_TYPE', 'bad type'), 'TypeError', 'E_TYPE', 'bad type')
   expectError(() => A.throwError('range', '', 'out of range'), 'RangeError', undefined, 'out of range')
@@ -324,21 +324,21 @@ test('errori Go → eccezioni JS: tipo, code, message', () => {
   expectError(() => A.throwError('coder', 'E_CODER', 'with code'), 'Error', 'E_CODER', 'with code')
   expectError(() => A.throwError('wrapped', 'E_WRAP', 'wrapped'), 'RangeError', 'E_WRAP', 'wrapped')
   expectError(() => A.throwError('napi'), 'TypeError', 'ERR_NAPI_NUMBER_EXPECTED', 'A number was expected')
-  // Un'eccezione già pendente non viene sostituita dall'errore restituito.
+  // An already pending exception is not replaced by the returned error.
   expectError(() => A.throwError('pending'), 'TypeError', 'FIRST', 'first')
-  // Throw lancia qualsiasi valore.
+  // Throw throws any value.
   for (const v of [42, 'str', null, { o: 1 }]) {
     assert.throws(() => A.throwError('value', v), (e) => e === v)
   }
   const e = A.throwError('newError', 'E_NEW', 'not thrown')
   assert.ok(e instanceof RangeError)
   assert.equal(e.code, 'E_NEW')
-  // Un panic diventa un Error con code GO_PANIC e il processo sopravvive.
+  // A panic becomes an Error with code GO_PANIC and the process survives.
   expectError(() => A.panic(), 'Error', 'GO_PANIC')
   assert.equal(A.hello(), 'world')
 })
 
-test('coercizione: String, Number, Boolean, Object (con JS eseguito)', () => {
+test('coercion: String, Number, Boolean, Object (running JS)', () => {
   assert.equal(A.coerce(123, 'string'), '123')
   assert.equal(A.coerce('42', 'number'), 42)
   assert.equal(A.coerce(0, 'bool'), false)
@@ -353,22 +353,22 @@ test('coercizione: String, Number, Boolean, Object (con JS eseguito)', () => {
   assert.throws(() => A.coerce(1n, 'number'), TypeError)
 })
 
-test('confronti: === e instanceof', () => {
+test('comparisons: === and instanceof', () => {
   const o = {}
   assert.deepEqual(A.compare(o, o), [true, false])
   assert.deepEqual(A.compare(NaN, NaN), [false, false])
   assert.deepEqual(A.compare(1, '1'), [false, false])
   assert.deepEqual(A.compare([], null, Array), [false, true])
   assert.deepEqual(A.compare({}, null, Array), [false, false])
-  // Symbol.hasInstance viene eseguito.
+  // Symbol.hasInstance is executed.
   const Always = { [Symbol.hasInstance]: () => true }
-  assert.throws(() => A.compare(1, 1, Always), TypeError) // non è una funzione
+  assert.throws(() => A.compare(1, 1, Always), TypeError) // not a function
   function F () {}
   Object.defineProperty(F, Symbol.hasInstance, { value: () => true })
   assert.deepEqual(A.compare(1, 1, F), [true, true])
 })
 
-test('DefineProperties: metodi, accessor, valori, attributi, chiavi symbol', () => {
+test('DefineProperties: methods, accessors, values, attributes, symbol keys', () => {
   const sym = Symbol('answer')
   const o = A.defineProps({}, sym)
   assert.equal(o.twice(21), 42)
@@ -387,12 +387,12 @@ test('DefineProperties: metodi, accessor, valori, attributi, chiavi symbol', () 
   assert.deepEqual([d('acc').enumerable, d('acc').configurable], [true, true])
   assert.deepEqual([d('answer').writable, d('answer').configurable], [false, false])
   assert.equal(d('hidden').writable, true)
-  // Proprietà senza setter o non scrivibile in strict mode: TypeError.
+  // Property without a setter or non-writable in strict mode: TypeError.
   assert.throws(() => { 'use strict'; o.readOnly = 1 }, TypeError)
   assert.throws(() => { 'use strict'; o.answer = 1 }, TypeError)
 })
 
-test('classi: costruttore, metodi, accessor, statici, sottoclassi', () => {
+test('classes: constructor, methods, accessors, statics, subclasses', () => {
   const c = new A.Counter(5)
   assert.ok(c instanceof A.Counter)
   assert.equal(c.inc(), 6)
@@ -408,7 +408,7 @@ test('classi: costruttore, metodi, accessor, statici, sottoclassi', () => {
   assert.equal(A.Counter.isCounter(1), false)
   assert.deepEqual(Object.getOwnPropertyNames(A.Counter.prototype).sort(), ['constructor', 'inc', 'value'])
   expectError(() => A.Counter(1), 'TypeError', undefined, "Class constructor Counter cannot be invoked without 'new'")
-  // Un metodo con un this che non è un Counter: V8 lo rifiuta prima di Go.
+  // Calling a method with a non-Counter this: V8 rejects it before reaching Go.
   assert.throws(() => A.Counter.prototype.inc.call({}), TypeError)
   class Sub extends A.Counter {
     double () { return this.inc(this.value) }
@@ -419,7 +419,7 @@ test('classi: costruttore, metodi, accessor, statici, sottoclassi', () => {
   expectError(() => new A.Counter('x'), 'TypeError', 'ERR_NAPI_NUMBER_EXPECTED')
 })
 
-test('Wrap: associa, legge, rimuove, tipi sbagliati', () => {
+test('Wrap: attach, read, remove, wrong types', () => {
   const o = {}
   A.wrap(o, 'wrap', 1.5)
   assert.equal(A.wrap(o, 'unwrap'), 1.5)
@@ -428,13 +428,13 @@ test('Wrap: associa, legge, rimuove, tipi sbagliati', () => {
   assert.equal(A.wrap(o, 'remove'), 1.5)
   expectError(() => A.wrap(o, 'unwrap'), 'TypeError', 'ERR_NAPI_INVALID_ARG', 'object does not wrap a Go value')
   expectError(() => A.wrap(o, 'remove'), 'TypeError', 'ERR_NAPI_INVALID_ARG')
-  // Dopo RemoveWrap si può associare un nuovo valore.
+  // After RemoveWrap a new value can be attached.
   A.wrap(o, 'wrap', 3)
   assert.equal(A.wrap(o, 'unwrap'), 3)
   expectError(() => A.wrap(1, 'wrap', 1), 'TypeError', 'ERR_NAPI_OBJECT_EXPECTED')
 })
 
-test('External: valore Go opaco', () => {
+test('External: opaque Go value', () => {
   const x = A.external('new', 'payload')
   assert.equal(typeof x, 'object')
   assert.equal(A.external('get', x), 'payload')
@@ -442,19 +442,19 @@ test('External: valore Go opaco', () => {
   expectError(() => A.external('get', {}), 'TypeError', 'ERR_NAPI_INVALID_ARG', 'expected an external, got object')
 })
 
-test('Ref: forte, conteggio, primitivi per versione', () => {
+test('Ref: strong, refcount, primitives by version', () => {
   const o = { keep: true }
   const id = A.refs('new', o, 1)
   assert.equal(A.refs('get', id), o)
   assert.equal(A.refs('ref', id), 2)
   assert.equal(A.refs('unref', id), 1)
   assert.equal(A.refs('unref', id), 0)
-  // Con conteggio 0 il riferimento è debole, ma l'oggetto è ancora raggiungibile da qui.
+  // At refcount 0 the reference is weak, but the object is still reachable from here.
   assert.equal(A.refs('get', id), o)
   A.refs('delete', id)
   expectError(() => A.refs('get', id), 'RangeError', undefined, 'unknown ref')
-  // Node-API 8: solo oggetti e simili; Node-API 10: qualsiasi valore (in un processo separato:
-  // due addon Go nello stesso processo non sono ammessi su macOS x64).
+  // Node-API 8: objects and symbols only; Node-API 10: any value (in a separate process:
+  // two Go addons in the same process are not supported on macOS x64).
   expectError(() => A.refs('new', 5, 1), 'Error', 'ERR_NAPI_INVALID_ARG')
   if (hostNapiVersion >= V10) {
     const r = nodeEval(`const b = require(${JSON.stringify(addonPath('napibasic-v10'))});
@@ -467,7 +467,7 @@ test('Ref: forte, conteggio, primitivi per versione', () => {
   }
 })
 
-test('Ref debole: il valore raccolto dal GC risulta vuoto', () => {
+test('weak Ref: value collected by GC becomes empty', () => {
   const r = nodeEval(`const a = require(${JSON.stringify(addonPath('napibasic'))});
     let id = a.refs('new', { big: new Array(1000).fill(0) }, 0);
     gc();
@@ -477,7 +477,7 @@ test('Ref debole: il valore raccolto dal GC risulta vuoto', () => {
   assert.deepEqual(lastJSONLine(r), { v: '<collected>' })
 })
 
-test('Buffer e ArrayBuffer: memoria V8, copie, esterni zero-copy, detach', () => {
+test('Buffer and ArrayBuffer: V8 memory, copies, zero-copy externals, detach', () => {
   const expected = sumPattern(BUFFER_SIZE)
   for (const op of ['new', 'copy', 'external']) {
     const b = A.buffers(op, BUFFER_SIZE)
@@ -490,7 +490,7 @@ test('Buffer e ArrayBuffer: memoria V8, copie, esterni zero-copy, detach', () =>
   assert.equal(A.buffers('new', 0).length, 0)
   assert.equal(A.buffers('copy', 0).length, 0)
   assert.equal(A.buffers('externalEmpty').length, 0)
-  // Go legge la memoria scritta da JS.
+  // Go reads memory written by JS.
   const js = Buffer.from([1, 2, 3])
   assert.equal(A.buffers('sum', js), 6)
   assert.equal(A.buffers('sum', new Uint8Array([4, 5])), 9)
@@ -512,7 +512,7 @@ test('Buffer e ArrayBuffer: memoria V8, copie, esterni zero-copy, detach', () =>
   expectError(() => A.buffers('abSum', Buffer.alloc(1)), 'TypeError', 'ERR_NAPI_ARRAYBUFFER_EXPECTED')
 })
 
-test('TypedArray e DataView: creazione, info, scrittura dalla memoria Go', () => {
+test('TypedArray and DataView: creation, info, writing from Go memory', () => {
   const INT16 = 3
   const BIGINT64 = 9
   const ab = new ArrayBuffer(16)
@@ -540,7 +540,7 @@ test('TypedArray e DataView: creazione, info, scrittura dalla memoria Go', () =>
   expectError(() => A.typed('info', []), 'TypeError', 'ERR_NAPI_INVALID_ARG', 'expected a TypedArray, got object')
 })
 
-test('Promise risolte e rifiutate sul thread JS', async () => {
+test('Promises resolved and rejected on the JS thread', async () => {
   const o = {}
   assert.equal(await A.promise('resolve', o), o)
   await assert.rejects(A.promise('reject', 'nope'), (e) => e === 'nope')
@@ -549,13 +549,13 @@ test('Promise risolte e rifiutate sul thread JS', async () => {
   expectError(() => A.promise('other'), 'RangeError', undefined, 'unknown op other')
 })
 
-test('handle scope ed escapable scope', () => {
+test('handle scopes and escapable scopes', () => {
   const SCOPE_ITERATIONS = 10_000
   assert.deepEqual({ ...A.scopes(SCOPE_ITERATIONS) }, { n: SCOPE_ITERATIONS })
   assert.deepEqual({ ...A.scopes(0) }, { n: 0 })
 })
 
-test('RunScript, versioni, nome del file del modulo', () => {
+test('RunScript, versions, module file name', () => {
   assert.equal(A.runScript('1 + 2'), 3)
   assert.equal(A.runScript('globalThis'), globalThis)
   assert.throws(() => A.runScript('1 +'), SyntaxError)
@@ -567,7 +567,7 @@ test('RunScript, versioni, nome del file del modulo', () => {
   if (hostNapiVersion >= V9) assert.ok(v.file.startsWith('file://') && v.file.endsWith('napibasic.node'), v.file)
 })
 
-test('instance data per env e worker: stato separato, cleanup hook e finalizer alla chiusura', async () => {
+test('instance data per env and worker: isolated state, cleanup hook and finalizer on exit', async () => {
   A.instanceData(1)
   assert.equal(A.instanceData(), 1)
   const before = A.counters()
@@ -578,7 +578,7 @@ test('instance data per env e worker: stato separato, cleanup hook e finalizer a
     a.instanceData(2)
     a.cleanupHook()
     parentPort.postMessage({ fresh, set: a.instanceData(), envs: a.counters().envs })`, { eval: true })
-  // Entrambi i listener prima di qualsiasi await: 'exit' può arrivare subito dopo 'message'.
+  // Attach both listeners before any await: 'exit' may fire right after 'message'.
   const exited = new Promise((resolve) => worker.once('exit', resolve))
   const msg = await new Promise((resolve, reject) => {
     worker.once('message', resolve)
@@ -586,7 +586,7 @@ test('instance data per env e worker: stato separato, cleanup hook e finalizer a
   })
   await exited
   assert.deepEqual(msg, { fresh: 0, set: 2, envs: before.envs + 1 })
-  // Il valore del main thread non cambia.
+  // Main thread value is unchanged.
   assert.equal(A.instanceData(), 1)
   const after = A.counters()
   assert.equal(after.cleanupHooksRun - before.cleanupHooksRun, 1)
@@ -595,7 +595,7 @@ test('instance data per env e worker: stato separato, cleanup hook e finalizer a
   assert.equal(after.inits - before.inits, 1)
 })
 
-test('GC: callback, valori associati, external e buffer esterni vengono rilasciati', () => {
+test('GC: callbacks, wrapped values, externals, and external buffers are released', () => {
   const r = nodeEval(`const a = require(${JSON.stringify(addonPath('napibasic'))});
     const base = a.counters();
     (function () {
@@ -620,37 +620,37 @@ test('GC: callback, valori associati, external e buffer esterni vengono rilascia
     })()`, { nodeArgs: ['--expose-gc'] })
   assert.equal(r.status, 0, r.stderr)
   const { base, peak, end } = lastJSONLine(r)
-  assert.ok(peak.callbacks > base.callbacks + GC_OBJECTS, 'funzioni registrate')
-  assert.ok(peak.handles > base.handles + GC_OBJECTS, 'handle registrati')
-  assert.equal(end.callbacks, base.callbacks, 'callback rilasciate')
-  assert.equal(end.handles, base.handles, 'handle rilasciati')
-  // Counter usa lo stesso contatore dei wrap.
+  assert.ok(peak.callbacks > base.callbacks + GC_OBJECTS, 'registered callbacks')
+  assert.ok(peak.handles > base.handles + GC_OBJECTS, 'registered handles')
+  assert.equal(end.callbacks, base.callbacks, 'released callbacks')
+  assert.equal(end.handles, base.handles, 'released handles')
+  // Counter shares the same counter as wraps.
   assert.equal(end.wrapFinalized - base.wrapFinalized, 2 * GC_OBJECTS)
   assert.equal(end.externalFinalized - base.externalFinalized, GC_OBJECTS)
   assert.equal(end.bufferFinalized - base.bufferFinalized, GC_OBJECTS)
 })
 
-test('nessuna allocazione Go per chiamata nei percorsi comuni', () => {
+test('zero Go allocations per call on common hot paths', () => {
   const measure = (fn) => {
-    fn() // riscaldamento
+    fn() // warm-up
     const before = A.goMallocs()
     for (let i = 0; i < ALLOC_CALLS; i++) fn()
     return (A.goMallocs() - before) / ALLOC_CALLS
   }
   const obj = { k: 1 }
   assert.ok(measure(() => A.noop()) < MAX_ALLOCS_PER_CALL, 'noop')
-  assert.ok(measure(() => A.noop(1, 2, 3)) < MAX_ALLOCS_PER_CALL, 'noop con argomenti')
+  assert.ok(measure(() => A.noop(1, 2, 3)) < MAX_ALLOCS_PER_CALL, 'noop with arguments')
   assert.ok(measure(() => A.hotPath(obj, '')) < MAX_ALLOCS_PER_CALL, 'hotPath')
   const zero = () => 0
-  assert.ok(measure(() => A.callBack(zero, false)) < MAX_ALLOCS_PER_CALL, 'Function.Call senza argomenti')
-  // Una stringa non vuota alloca solo la stringa Go restituita; Call con argomenti solo il loro
-  // buffer.
+  assert.ok(measure(() => A.callBack(zero, false)) < MAX_ALLOCS_PER_CALL, 'Function.Call without arguments')
+  // A non-empty string allocates only the returned Go string; Call with arguments allocates only
+  // their buffer.
   const ONE_ALLOC = 1
-  assert.ok(measure(() => A.hotPath(obj, 'hello')) <= ONE_ALLOC + MAX_ALLOCS_PER_CALL, 'hotPath con stringa')
-  assert.ok(measure(() => A.callBack(zero, true)) <= ONE_ALLOC + MAX_ALLOCS_PER_CALL, 'Function.Call con argomenti')
+  assert.ok(measure(() => A.hotPath(obj, 'hello')) <= ONE_ALLOC + MAX_ALLOCS_PER_CALL, 'hotPath with string')
+  assert.ok(measure(() => A.callBack(zero, true)) <= ONE_ALLOC + MAX_ALLOCS_PER_CALL, 'Function.Call with arguments')
 })
 
-test('il processo termina da solo con l\'addon caricato', () => {
+test('process exits cleanly on its own with the addon loaded', () => {
   const r = nodeEval(`require(${JSON.stringify(addonPath('napibasic'))}).hello()`)
   assert.equal(r.status, 0, r.stderr)
   assert.equal(r.signal, null)

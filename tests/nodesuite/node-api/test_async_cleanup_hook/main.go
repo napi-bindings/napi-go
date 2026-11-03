@@ -1,6 +1,6 @@
-// Porting di test/node-api/test_async_cleanup_hook/binding.c. uv_async_t e uv_close passano per lo
-// shim di libuv di napitest; struct AsyncData diventa una struct Go con l'handle uv_async_t in
-// memoria C (il cui campo data punta al cgo.Handle della struct, come handle->data nel C).
+// Port of test/node-api/test_async_cleanup_hook/binding.c. uv_async_t and uv_close go through
+// napitest's libuv shim; struct AsyncData becomes a Go struct with the uv_async_t handle in
+// C memory (whose data field points to the struct's cgo.Handle, matching handle->data in C).
 package main
 
 import (
@@ -15,7 +15,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// cleanupHooksExpected: AsyncCleanupHook e le due callback successive girano due volte.
+// cleanupHooksExpected: AsyncCleanupHook and the two subsequent callbacks each run twice.
 const cleanupHooksExpected = 6
 
 const refSize = uint(unsafe.Sizeof(sys.Ref(nil)))
@@ -67,7 +67,7 @@ func asyncCleanupHook(handle sys.AsyncCleanupHookHandle, arg uintptr) {
 }
 
 func objectFinalizer(env sys.Env, data, _ uintptr) {
-	// AsyncCleanupHook e le callback successive sono chiamate due volte.
+	// AsyncCleanupHook and the subsequent callbacks are called twice.
 	nt.CAssert(cleanupHookCount == cleanupHooksExpected, "cleanup_hook_count == 6")
 	ref := (*sys.Ref)(nt.Pointer(data))
 	if !nt.Call(env, sys.DeleteReference(env, *ref)) {
@@ -87,7 +87,7 @@ func createObjectWrap(env sys.Env) {
 		nt.DiscardFinalizer(hint)
 		return
 	}
-	// Un riferimento forte, così il finalizer viene chiamato allo spegnimento.
+	// Strong reference so the finalizer is called at shutdown.
 	if !nt.Call(env, sys.ReferenceRef(env, *ref, nil)) {
 		return
 	}
@@ -99,12 +99,12 @@ var (
 )
 
 func initModule(env sys.Env, _ sys.Value) sys.Value {
-	// Nel C si azzera la variabile statica per compatibilità con musl.
+	// In C the static variable is zeroed for musl compatibility.
 	cleanupHookCount = 0
-	// Wrap creato prima dei cleanup hook.
+	// Wrap created before the cleanup hooks.
 	createObjectWrap(env)
 
-	// Gli status non sono controllati, come nel C.
+	// Status values are not checked, matching C.
 	{
 		data := createAsyncData()
 		data.env = env
@@ -125,7 +125,7 @@ func initModule(env sys.Env, _ sys.Value) sys.Value {
 		sys.RemoveAsyncCleanupHook(mustNotCallHandle)
 	}
 
-	// Wrap creato dopo i cleanup hook.
+	// Wrap created after the cleanup hooks.
 	createObjectWrap(env)
 	return nil
 }

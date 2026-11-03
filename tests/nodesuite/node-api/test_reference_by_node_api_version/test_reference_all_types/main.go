@@ -1,5 +1,5 @@
-// Porting del target test_reference_all_types di test/node-api/test_reference_by_node_api_version/binding.gyp
-// (test_reference_by_node_api_version.c con NAPI_VERSION=10).
+// Port of the test_reference_all_types target from test/node-api/test_reference_by_node_api_version/binding.gyp
+// (test_reference_by_node_api_version.c with NAPI_VERSION=10).
 package main
 
 import (

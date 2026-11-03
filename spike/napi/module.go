@@ -19,25 +19,25 @@ type exportDef struct {
 
 var exportDefs []exportDef
 
-// Export registra una funzione da esporre sull'oggetto `exports` del modulo.
-// Va chiamata nelle init() del package main dell'addon: le init girano durante
-// l'inizializzazione del runtime Go, che termina prima di napi_register_module_v1.
-// Equivalente semantico di `#[napi] fn` in napi-rs (registro + materializzazione per env).
+// Export registers a function to be exposed on the module's `exports` object.
+// Must be called from init() in the addon's main package: init functions run during
+// Go runtime initialization, which completes before napi_register_module_v1.
+// Semantic equivalent of `#[napi] fn` in napi-rs (registry + per-env materialization).
 func Export(name string, fn Callback) {
 	exportDefs = append(exportDefs, exportDef{name: name, id: registerCallback(fn)})
 }
 
-// ---- stato per env (main thread e ogni worker_thread) ----
+// ---- per-env state (main thread and each worker_thread) ----
 
 type envState struct {
 	id           uintptr
-	jsThread     uint64 // thread OS del loop JS di questo env
+	jsThread     uint64 // OS thread ID of this env's JS event loop
 	ctx          context.Context
 	cancel       context.CancelFunc
-	pending      int // operazioni async in corso (solo thread JS)
+	pending      int // in-flight async operations (JS thread only)
 	dispatchRuns atomic.Uint64
 
-	mu        sync.Mutex // protegge i campi sotto
+	mu        sync.Mutex // protects the fields below
 	tsfn      C.napi_threadsafe_function
 	closed    bool
 	scheduled bool
@@ -58,12 +58,12 @@ func envStateByID(id uintptr) *envState {
 	return envs.byID[id]
 }
 
-// stateOf recupera lo stato dell'env corrente tramite napi_get_instance_data.
+// stateOf retrieves the current env's state via napi_get_instance_data.
 func stateOf(env C.napi_env) *envState {
 	return envStateByID(uintptr(C.gn_get_instance_id(env)))
 }
 
-// EnvStats restituisce (env vivi, env creati in totale) — usato dai test sui worker.
+// EnvStats returns (live envs, total envs created) — used by worker tests.
 func EnvStats() (live, total int64) { return envs.live.Load(), envs.total.Load() }
 
 //export goNapiRegisterModule
@@ -87,8 +87,8 @@ func goNapiRegisterModule(env C.napi_env, exports C.napi_value) (ret C.napi_valu
 		e.Throw(err)
 		return nil
 	}
-	// Dispatcher: una TSFN per env, senza funzione JS, non referenziata finché non
-	// ci sono operazioni async in corso (non tiene vivo l'event loop).
+	// Dispatcher: one TSFN per env, with no JS function, unreferenced as long as
+	// there are no in-flight async operations (does not keep the event loop alive).
 	if err := check(env, C.gn_new_dispatcher_tsfn(env, C.uintptr_t(st.id), &st.tsfn)); err != nil {
 		e.Throw(err)
 		return nil
@@ -122,8 +122,8 @@ func goNapiRegisterModule(env C.napi_env, exports C.napi_value) (ret C.napi_valu
 	return exports
 }
 
-// goNapiEnvCleanup viene chiamata da Node alla distruzione dell'env (uscita del
-// processo o terminazione di un worker), sul thread JS dell'env.
+// goNapiEnvCleanup is called by Node when the env is destroyed (process exit or
+// worker termination), on the env's JS thread.
 //
 //export goNapiEnvCleanup
 func goNapiEnvCleanup(id C.uintptr_t) {
@@ -131,7 +131,7 @@ func goNapiEnvCleanup(id C.uintptr_t) {
 	if st == nil {
 		return
 	}
-	st.cancel() // le goroutine async vedono ctx.Done()
+	st.cancel() // async goroutines observe ctx.Done()
 	st.mu.Lock()
 	st.closed = true
 	st.queue = nil
@@ -139,7 +139,7 @@ func goNapiEnvCleanup(id C.uintptr_t) {
 	st.tsfn = nil
 	st.mu.Unlock()
 	if tsfn != nil {
-		C.gn_abort_tsfn(tsfn) // dopo questo nessuno chiama più la TSFN (closed sotto lock)
+		C.gn_abort_tsfn(tsfn) // after this no one calls the TSFN anymore (closed under lock)
 	}
 	envs.mu.Lock()
 	delete(envs.byID, st.id)

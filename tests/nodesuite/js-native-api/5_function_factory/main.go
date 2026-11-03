@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/5_function_factory/5_function_factory.c.
+// Port of test/js-native-api/5_function_factory/5_function_factory.c.
 package main
 
 import (
@@ -10,13 +10,13 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// myFunctionData si registra una volta sola: CreateFunction crea una funzione nuova a ogni
-// chiamata e il registro di napitest non deve crescere con loro.
+// myFunctionData is registered only once: CreateFunction creates a new function on every
+// call and the napitest registry should not grow with them.
 var myFunctionData = nt.Register(myFunction)
 
 func myFunction(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	var str sys.Value
-	// La lunghezza -1 del C è SIZE_MAX, cioè NAPI_AUTO_LENGTH.
+	// C's length -1 is SIZE_MAX, i.e. NAPI_AUTO_LENGTH.
 	if !nt.Call(env, sys.CreateStringUTF8(env, nt.CStr("hello world"), sys.AutoLength, &str)) {
 		return nil
 	}

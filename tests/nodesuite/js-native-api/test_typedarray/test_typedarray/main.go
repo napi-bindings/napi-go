@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_typedarray/test_typedarray.c.
+// Port of test/js-native-api/test_typedarray/test_typedarray.c.
 package main
 
 import (
@@ -105,12 +105,12 @@ func multiply(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return outputArray
 }
 
-// finalizeCallback libera i dati dell'ArrayBuffer esterno, come free(finalize_data) nel C.
+// finalizeCallback frees external ArrayBuffer data, matching free(finalize_data) in C.
 func finalizeCallback(_ sys.Env, finalizeData, _ uintptr) {
 	nt.FreeAddr(finalizeData)
 }
 
-// externalElems è nElem del test C.
+// externalElems is nElem in the C test.
 const externalElems = 3
 
 func external(env sys.Env, _ sys.CallbackInfo) sys.Value {

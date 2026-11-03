@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_new_target/test_new_target.c.
+// Port of test/js-native-api/test_new_target/test_new_target.c.
 package main
 
 import (
@@ -24,7 +24,7 @@ func baseClass(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// this !== new.target: la chiamata arriva da super().
+	// this !== new.target because we are being invoked through super().
 	var result bool
 	if !nt.Call(env, sys.StrictEquals(env, newTargetArg, thisArg, &result)) {
 		return nil
@@ -33,7 +33,7 @@ func baseClass(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// new.target !== undefined: la chiamata è un'espressione new.
+	// new.target !== undefined because we should be called as a new expression.
 	if !nt.Assert(env, newTargetArg != nil, "newTargetArg != NULL", "newTargetArg != NULL") {
 		return nil
 	}
@@ -63,7 +63,7 @@ func constructor(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// new.target !== undefined: la chiamata è un'espressione new.
+	// new.target !== undefined because we should be called as a new expression.
 	if !nt.Assert(env, newTargetArg != nil, "newTargetArg != NULL", "newTargetArg != NULL") {
 		return nil
 	}
@@ -74,7 +74,7 @@ func constructor(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// arguments[0] è Constructor stesso (lo passa lo script).
+	// arguments[0] is Constructor itself (passed by the test script).
 	if !nt.Call(env, sys.StrictEquals(env, newTargetArg, argv, &result)) {
 		return nil
 	}

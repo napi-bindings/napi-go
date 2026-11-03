@@ -1,6 +1,6 @@
-// Porting di test/node-api/test_instance_data/test_instance_data.c. uv_thread_create/join
-// diventano nt.Thread; AddonData è una struct Go passata come instance data tramite cgo.Handle,
-// così può contenere il nt.Thread.
+// Port of test/node-api/test_instance_data/test_instance_data.c. uv_thread_create/join
+// become nt.Thread; AddonData is a Go struct passed as instance data via cgo.Handle,
+// so it can contain the nt.Thread.
 package main
 
 import (
@@ -22,12 +22,11 @@ type addonData struct {
 	thread             nt.Thread
 }
 
-// bufferBacking fa da memoria del buffer esterno di TestBufferFinalizer: il C usa l'indirizzo
-// della funzione stessa con sizeof(napi_callback) byte. Una variabile globale non viene spostata
-// dal GC di Go.
+// bufferBacking backs the external buffer in TestBufferFinalizer: C uses the address of the
+// function itself with sizeof(napi_callback) bytes. A global variable is not moved by the Go GC.
 var bufferBacking [unsafe.Sizeof(uintptr(0))]byte
 
-// getAddonData equivale a napi_get_instance_data(env, (void**)&data).
+// getAddonData corresponds to napi_get_instance_data(env, (void**)&data).
 func getAddonData(env sys.Env, call func(sys.Env, sys.Status) bool) (*addonData, bool) {
 	var data unsafe.Pointer
 	if !call(env, sys.GetInstanceData(env, &data)) {
@@ -38,7 +37,7 @@ func getAddonData(env sys.Env, call func(sys.Env, sys.Status) bool) (*addonData,
 
 func asyncWorkCbExecute(sys.Env, any) {}
 
-// callCbAndDeleteRef con optionalRef nil usa data->js_cb_ref, come il C con NULL.
+// callCbAndDeleteRef with a nil optionalRef uses data->js_cb_ref, matching C with NULL.
 func callCbAndDeleteRef(env sys.Env, optionalRef *sys.Ref) {
 	var jsCb, undefined sys.Value
 	if optionalRef == nil {
@@ -126,9 +125,9 @@ func threadsafeFunctionCallJS(env sys.Env, _ sys.Value, _, _ uintptr) {
 }
 
 func threadsafeFunctionTestThread(data *addonData) {
-	// Non serve napi_acquire_threadsafe_function: il thread principale ha impostato il
-	// conteggio a 1 e c'è un solo thread secondario. Il data della chiamata nel C è il puntatore
-	// a ThreadsafeFunctionCallJS, mai letto: qui è 0.
+	// napi_acquire_threadsafe_function is unnecessary: the main thread set the initial thread
+	// count to 1 and there is only one secondary thread. The call data in C is the pointer to
+	// ThreadsafeFunctionCallJS, which is never read; here it is 0.
 	status := sys.CallThreadsafeFunction(data.tsfn, 0, sys.TSFNNonblocking)
 	if status != sys.StatusOK {
 		sys.FatalError(nt.CStr("ThreadSafeFunctionTestThread"), sys.AutoLength, nt.CStr("Failed to call TSFN"),
@@ -154,8 +153,8 @@ func finalizeThreadsafeFunction(env sys.Env, _, _ uintptr) {
 	data.tsfn = nil
 }
 
-// testThreadsafeFunction riceve due argomenti: la callback JS e la callback di finalizzazione,
-// che fa proseguire il test.
+// testThreadsafeFunction takes two arguments: the JS callback and the finalization callback
+// that lets the test proceed.
 func testThreadsafeFunction(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(2)
 	var argv [2]sys.Value

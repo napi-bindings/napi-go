@@ -1,5 +1,5 @@
-// Porting del target test_uncaught_exception di test/node-api/test_threadsafe_function/binding.gyp
-// (test_uncaught_exception.c con NAPI_EXPERIMENTAL).
+// Port of the test_uncaught_exception target from test/node-api/test_threadsafe_function/binding.gyp
+// (test_uncaught_exception.c with NAPI_EXPERIMENTAL).
 package main
 
 import (

@@ -1,34 +1,34 @@
-// Q5 (rischio n.1): due addon napi-go compilati separatamente = due runtime Go nello
-// stesso processo Node.
+// Q5 (risk #1): two separately compiled napi-go addons = two Go runtimes in the
+// same Node process.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { Worker } from 'node:worker_threads'
 import { load, addonPath } from './helpers.mjs'
 
-// Su darwin/amd64 tutti i runtime Go tengono g nello stesso slot TLS fisso 0x30(GS): il secondo
-// runtime trova il g del primo sul main thread e lo usa come proprio (heap e M mescolati,
-// "fatal error: bad sweepgen in refill"). Limite di Go, vedi README, scoperta 8.
+// On darwin/amd64 all Go runtimes store g in the same fixed TLS slot 0x30(GS): the second
+// runtime finds the first runtime's g on the main thread and uses it as its own (mixed heaps
+// and Ms, "fatal error: bad sweepgen in refill"). Go limitation, see README, finding 8.
 const DARWIN_X64 = process.platform === 'darwin' && process.arch === 'x64'
-const SKIP_IF_SHARED_G_SLOT = DARWIN_X64 && 'darwin/amd64: due runtime Go condividono lo slot TLS di g (limite di Go)'
+const SKIP_IF_SHARED_G_SLOT = DARWIN_X64 && 'darwin/amd64: two Go runtimes share the g TLS slot (Go limitation)'
 const CHILD_TIMEOUT_MS = 30_000
-const SYSMON_RETAKE_WAIT_MS = 30 // > ForcePreemptNS (10 ms) di Go: sysmon riprende la P da _Psyscall
+const SYSMON_RETAKE_WAIT_MS = 30 // > Go ForcePreemptNS (10 ms): sysmon retakes the P from _Psyscall
 const NULL_POINTER_TEXT = '0x0'
 
-test('darwin/amd64: il secondo runtime Go riusa il g del primo (slot TLS condiviso)', {
-  skip: !DARWIN_X64 && 'solo darwin/amd64: altrove ogni runtime ha il proprio slot',
+test('darwin/amd64: second Go runtime reuses first runtime g (shared TLS slot)', {
+  skip: !DARWIN_X64 && 'darwin/amd64 only: elsewhere each runtime has its own slot',
 }, (t) => {
-  // In un processo separato: lo stato dei runtime dopo il test non è affidabile.
-  // Scriviamo beforeSecond su fd 1 prima di require('second'): l'ingresso nel secondo runtime
-  // con il g del primo può andare in crash ("fatal error: bad sweepgen in refill") già dentro
-  // goNapiRegisterModule di second se la P di basic è ancora in _Psyscall, non solo all'uscita.
+  // Run in a separate process: runtime state after this test is unreliable.
+  // Write beforeSecond to fd 1 before require('second'): entering the second runtime
+  // with the first runtime's g can crash ("fatal error: bad sweepgen in refill") right inside
+  // second's goNapiRegisterModule if basic's P is still in _Psyscall, not only on exit.
   const src = `
     const fs = require('node:fs')
     const b = require(${JSON.stringify(addonPath('basic'))})
-    const beforeSecond = b.__goTlsSlot()  // init di basic: il suo g resta legato al main thread
+    const beforeSecond = b.__goTlsSlot()  // basic init: its g remains bound to the main thread
     fs.writeSync(1, beforeSecond + '\\n')
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${SYSMON_RETAKE_WAIT_MS})
-    require(${JSON.stringify(addonPath('second'))})  // anche l'init di second entra in Go
+    require(${JSON.stringify(addonPath('second'))})  // second init also enters Go
     const afterSecond = b.__goTlsSlot()
     fs.writeSync(1, afterSecond + '\\n')`
   const r = spawnSync(process.execPath, ['-e', src], { encoding: 'utf8', timeout: CHILD_TIMEOUT_MS })
@@ -38,28 +38,28 @@ test('darwin/amd64: il secondo runtime Go riusa il g del primo (slot TLS condivi
   const firstErrLine = (r.stderr || '').split('\n')[0] || '-'
   const outcome = `code=${r.status} sig=${r.signal} stdout=${JSON.stringify(lines)} stderr: ${firstErrLine}`
   t.diagnostic(outcome)
-  assert.ok(beforeSecond, `il processo figlio non ha scritto beforeSecond: ${outcome}`)
-  assert.notEqual(beforeSecond, NULL_POINTER_TEXT, 'il runtime di basic deve aver legato un g al main thread')
+  assert.ok(beforeSecond, `child process did not write beforeSecond: ${outcome}`)
+  assert.notEqual(beforeSecond, NULL_POINTER_TEXT, 'basic runtime must have bound a g to the main thread')
   if (afterSecond !== undefined) {
-    // Se second avesse un proprio slot avrebbe legato il suo g e lo slot sarebbe cambiato.
+    // If second had its own slot, it would have bound its own g and the slot would have changed.
     assert.equal(afterSecond, beforeSecond)
   } else {
-    // Crash già durante l'init di second per aver riusato g/mcache di basic (es. bad sweepgen in refill).
-    assert.match(r.stderr || '', /^fatal error:/m, `atteso fatal error del runtime Go: ${outcome}`)
+    // Crashed already during second's init from reusing basic's g/mcache (e.g. bad sweepgen in refill).
+    assert.match(r.stderr || '', /^fatal error:/m, `expected Go runtime fatal error: ${outcome}`)
   }
 })
 
-test('due runtime Go: caricamento e chiamate sincrone', { skip: SKIP_IF_SHARED_G_SLOT }, () => {
+test('two Go runtimes: loading and synchronous calls', { skip: SKIP_IF_SHARED_G_SLOT }, () => {
   const b = load('basic')
   const s = load('second')
   assert.equal(s.name(), 'second')
   assert.equal(s.mul(6, 7), 42)
   assert.equal(b.add(6, 7), 13)
-  // indirizzi diversi = immagini (e runtime) Go distinte
+  // distinct addresses = distinct Go images (and runtimes)
   assert.notEqual(s.goAddr().split(' ')[0], b.info().goAddr)
 })
 
-test('due runtime Go: input limite, null ed errori isolati per runtime', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
+test('two Go runtimes: edge-case inputs, null, and isolated errors per runtime', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
   const b = load('basic')
   const s = load('second')
   assert.equal(s.mul(Number.MAX_VALUE, 2), Infinity)
@@ -68,14 +68,14 @@ test('due runtime Go: input limite, null ed errori isolati per runtime', { skip:
   assert.throws(() => s.mul(null, 1), /A number was expected/)
   assert.throws(() => s.mul(), /A number was expected/)
   assert.equal(await s.sleep(0), 0)
-  // un panic nel runtime A non tocca il runtime B
+  // a panic in runtime A does not affect runtime B
   assert.throws(() => b.panicNow(''), { code: 'GO_PANIC', message: 'boom: ' })
   await assert.rejects(b.panicAsync(), { code: 'GO_PANIC' })
   assert.equal(s.mul(3, 3), 9)
   assert.equal(b.echo(''), '')
 })
 
-test('due runtime Go: async, GC e CPU concorrenti in entrambi', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
+test('two Go runtimes: concurrent async, GC, and CPU in both', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
   const b = load('basic')
   const s = load('second')
   const jobs = []
@@ -87,7 +87,7 @@ test('due runtime Go: async, GC e CPU concorrenti in entrambi', { skip: SKIP_IF_
   b.goGC()
 })
 
-test('due runtime Go: entrambi caricati in worker concorrenti', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
+test('two Go runtimes: both loaded in concurrent workers', { skip: SKIP_IF_SHARED_G_SLOT }, async () => {
   const src = `
     const { parentPort } = require('node:worker_threads')
     const b = require(${JSON.stringify(addonPath('basic'))})

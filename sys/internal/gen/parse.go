@@ -9,29 +9,29 @@ import (
 	"strings"
 )
 
-// Param è un parametro di una funzione Node-API così come appare nell'header.
+// Param is a parameter of a Node-API function as declared in the C header.
 type Param struct {
-	CType string // tipo normalizzato, es. "const napi_value*"
-	Name  string // nome C, es. "argv"
+	CType string // normalized C type, e.g. "const napi_value*"
+	Name  string // C parameter name, e.g. "argv"
 }
 
-// Func è una funzione Node-API dichiarata negli header.
+// Func is a Node-API function declared in the C headers.
 type Func struct {
-	Name     string // es. "napi_create_int32"
-	Ret      string // "napi_status" oppure "void"
+	Name     string // e.g. "napi_create_int32"
+	Ret      string // "napi_status" or "void"
 	NoReturn bool   // NAPI_NO_RETURN (napi_fatal_error)
 	Params   []Param
-	Header   string // file di origine
-	Version  int    // versione Node-API minima, da symbols.js
+	Header   string // source header file
+	Version  int    // minimum Node-API version, from symbols.js
 }
 
-// EnumMember è un valore di un enum C con il valore già calcolato.
+// EnumMember is a C enum constant with its evaluated integer value.
 type EnumMember struct {
 	CName string
 	Value int64
 }
 
-// Enum è un typedef enum degli header.
+// Enum is a typedef enum parsed from the C headers.
 type Enum struct {
 	CName   string
 	Members []EnumMember
@@ -45,8 +45,8 @@ var (
 	reWS   = regexp.MustCompile(`\s+`)
 )
 
-// stripComments rimuove commenti // e /* */. Gli header Node-API non hanno letterali stringa
-// contenenti sequenze di commento, quindi non serve gestirli.
+// stripComments removes // and /* */ comments. The Node-API headers do not contain string literals
+// with comment delimiters, so string literal handling is unnecessary.
 func stripComments(src string) string {
 	var b strings.Builder
 	for i := 0; i < len(src); {
@@ -72,9 +72,9 @@ func stripComments(src string) string {
 	return b.String()
 }
 
-// stripPreprocessor rimuove le direttive (#if, #define, ...) comprese le righe di continuazione.
-// Le dichiarazioni condizionate da NAPI_VERSION vengono quindi tutte incluse: la versione di
-// ogni funzione arriva da symbols.js, non dalle #if.
+// stripPreprocessor removes preprocessor directives (#if, #define, ...) including backslash
+// continuation lines. Declarations guarded by NAPI_VERSION are therefore all included; each
+// function's minimum version is taken from symbols.js rather than #if guards.
 func stripPreprocessor(src string) string {
 	var out []string
 	cont := false
@@ -93,7 +93,7 @@ func clean(src string) string {
 	return stripPreprocessor(stripComments(src))
 }
 
-// normType normalizza gli spazi di un tipo C: "const char *" → "const char*".
+// normType normalizes whitespace in a C type: "const char *" → "const char*".
 func normType(t string) string {
 	t = reWS.ReplaceAllString(strings.TrimSpace(t), " ")
 	t = reStar.ReplaceAllString(t, "*")
@@ -109,14 +109,14 @@ func parseParams(list string) ([]Param, error) {
 	for _, raw := range strings.Split(list, ",") {
 		m := reName.FindStringSubmatch(strings.TrimSpace(raw))
 		if m == nil || strings.TrimSpace(m[1]) == "" {
-			return nil, fmt.Errorf("parametro non riconosciuto: %q", raw)
+			return nil, fmt.Errorf("unrecognized parameter: %q", raw)
 		}
 		params = append(params, Param{CType: normType(m[1]), Name: m[2]})
 	}
 	return params, nil
 }
 
-// parseFuncs estrae le dichiarazioni NAPI_EXTERN da un header.
+// parseFuncs extracts NAPI_EXTERN function declarations from a header file.
 func parseFuncs(header, src string) ([]Func, error) {
 	text := clean(src)
 	var funcs []Func
@@ -133,15 +133,15 @@ func parseFuncs(header, src string) ([]Func, error) {
 			Header:   header,
 		})
 	}
-	// Ogni NAPI_EXTERN deve essere stato riconosciuto: una dichiarazione con forma nuova non deve
-	// sparire in silenzio dal binding.
+	// Every NAPI_EXTERN occurrence must be matched: a declaration with a new shape must not be
+	// silently dropped from the bindings.
 	if want := strings.Count(text, "NAPI_EXTERN"); want != len(funcs) {
-		return nil, fmt.Errorf("%s: %d dichiarazioni NAPI_EXTERN, %d riconosciute", header, want, len(funcs))
+		return nil, fmt.Errorf("%s: %d NAPI_EXTERN declarations, %d matched", header, want, len(funcs))
 	}
 	return funcs, nil
 }
 
-// parseEnums estrae i typedef enum e ne calcola i valori.
+// parseEnums extracts typedef enum blocks and evaluates their member values.
 func parseEnums(src string) ([]Enum, error) {
 	text := clean(src)
 	var enums []Enum
@@ -173,8 +173,8 @@ func parseEnums(src string) ([]Enum, error) {
 	return enums, nil
 }
 
-// evalExpr valuta le espressioni costanti usate negli enum Node-API: interi, identificatori già
-// definiti, parentesi, << e |.
+// evalExpr evaluates constant expressions used in Node-API enums: integer literals, previously
+// defined enum identifiers, parentheses, <<, and |.
 func evalExpr(expr string, env map[string]int64) (int64, error) {
 	p := &exprParser{toks: tokenize(expr), env: env}
 	v, err := p.or()
@@ -182,7 +182,7 @@ func evalExpr(expr string, env map[string]int64) (int64, error) {
 		return 0, err
 	}
 	if p.pos != len(p.toks) {
-		return 0, fmt.Errorf("token in eccesso in %q", expr)
+		return 0, fmt.Errorf("unexpected trailing tokens in %q", expr)
 	}
 	return v, nil
 }
@@ -206,7 +206,7 @@ func tokenize(s string) []string {
 				j++
 			}
 			if j == i {
-				toks = append(toks, string(c)) // carattere non previsto: errore nel parser
+				toks = append(toks, string(c)) // unexpected character: will surface as a parser error
 				i++
 				continue
 			}
@@ -257,14 +257,14 @@ func (p *exprParser) primary() (int64, error) {
 	p.pos++
 	switch {
 	case t == "":
-		return 0, fmt.Errorf("espressione incompleta")
+		return 0, fmt.Errorf("incomplete expression")
 	case t == "(":
 		v, err := p.or()
 		if err != nil {
 			return 0, err
 		}
 		if p.peek() != ")" {
-			return 0, fmt.Errorf("manca ')'")
+			return 0, fmt.Errorf("missing ')'")
 		}
 		p.pos++
 		return v, nil
@@ -273,7 +273,7 @@ func (p *exprParser) primary() (int64, error) {
 	default:
 		v, ok := p.env[t]
 		if !ok {
-			return 0, fmt.Errorf("identificatore sconosciuto %q", t)
+			return 0, fmt.Errorf("unknown identifier %q", t)
 		}
 		return v, nil
 	}
@@ -284,9 +284,9 @@ var (
 	reSymbol       = regexp.MustCompile(`'(\w+)'`)
 )
 
-// parseSymbols legge symbols.js e restituisce, per ogni funzione, la prima versione Node-API in
-// cui compare. Il file elenca le versioni in ordine crescente, ciascuna come superset della
-// precedente (spread di vN-1).
+// parseSymbols reads symbols.js and returns the first Node-API version in which each function
+// appears. The file lists versions in ascending order, each spreading the previous version's
+// arrays (...vN-1).
 func parseSymbols(src string) (map[string]int, int, error) {
 	versions := map[string]int{}
 	cur, maxVersion := 0, 0
@@ -299,7 +299,7 @@ func parseSymbols(src string) (map[string]int, int, error) {
 				return nil, 0, err
 			}
 			if v <= cur {
-				return nil, 0, fmt.Errorf("symbols.js: versione %d dopo la %d", v, cur)
+				return nil, 0, fmt.Errorf("symbols.js: version %d after %d", v, cur)
 			}
 			cur, maxVersion = v, v
 			continue
@@ -321,20 +321,20 @@ func parseSymbols(src string) (map[string]int, int, error) {
 		return nil, 0, err
 	}
 	if len(versions) == 0 {
-		return nil, 0, fmt.Errorf("symbols.js: nessun simbolo trovato")
+		return nil, 0, fmt.Errorf("symbols.js: no symbols found")
 	}
 	return versions, maxVersion, nil
 }
 
-// assignVersions completa le Func con la versione minima e verifica che header e symbols.js
-// descrivano lo stesso insieme di funzioni.
+// assignVersions populates each Func's minimum version and verifies that the headers and
+// symbols.js describe the exact same set of functions.
 func assignVersions(funcs []Func, versions map[string]int) error {
 	declared := map[string]bool{}
 	var problems []string
 	for i := range funcs {
 		v, ok := versions[funcs[i].Name]
 		if !ok {
-			problems = append(problems, funcs[i].Name+": dichiarata negli header ma assente da symbols.js")
+			problems = append(problems, funcs[i].Name+": declared in headers but missing from symbols.js")
 			continue
 		}
 		funcs[i].Version = v
@@ -342,12 +342,12 @@ func assignVersions(funcs []Func, versions map[string]int) error {
 	}
 	for name := range versions {
 		if !declared[name] {
-			problems = append(problems, name+": in symbols.js ma non dichiarata negli header")
+			problems = append(problems, name+": in symbols.js but not declared in headers")
 		}
 	}
 	if len(problems) > 0 {
 		sort.Strings(problems)
-		return fmt.Errorf("header e symbols.js non coincidono:\n  %s", strings.Join(problems, "\n  "))
+		return fmt.Errorf("headers and symbols.js do not match:\n  %s", strings.Join(problems, "\n  "))
 	}
 	return nil
 }

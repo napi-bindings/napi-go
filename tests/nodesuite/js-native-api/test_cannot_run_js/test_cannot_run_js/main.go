@@ -1,5 +1,5 @@
-// Porting del target test_cannot_run_js di test/js-native-api/test_cannot_run_js/binding.gyp
-// (test_cannot_run_js.c con NAPI_VERSION=10).
+// Port of the test_cannot_run_js target in test/js-native-api/test_cannot_run_js/binding.gyp
+// (test_cannot_run_js.c with NAPI_VERSION=10).
 package main
 
 import (

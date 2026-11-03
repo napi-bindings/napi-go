@@ -1,6 +1,6 @@
-// Porting di test/js-native-api/8_passing_wrapped/myobject.cc e myobject.h. La classe C++
-// MyObject diventa la struct myObject; il puntatore passato a napi_wrap è un cgo.Handle,
-// cancellato dal Destructor come la delete del C.
+// Port of test/js-native-api/8_passing_wrapped/myobject.cc and myobject.h. The C++ MyObject
+// class becomes the myObject struct; the pointer passed to napi_wrap is a cgo.Handle,
+// deleted by the Destructor like C++ delete.
 package main
 
 import (
@@ -18,24 +18,24 @@ type myObject struct {
 }
 
 var (
-	// finalizeCount è size_t finalize_count, esposto come uint32 come nel C.
+	// finalizeCount is size_t finalize_count, exposed as uint32 as in C.
 	finalizeCount uint32
-	// constructor è MyObject::constructor.
+	// constructor is MyObject::constructor.
 	constructor sys.Ref
-	// newData è il data del costruttore: si registra una volta sola.
+	// newData is the constructor data: registered only once.
 	newData = nt.Register(newMyObject)
 )
 
-// val è MyObject::Val.
+// val is MyObject::Val.
 func (o *myObject) val() float64 { return o.value }
 
-// release equivale a ~MyObject: lo status non è controllato, come nel C.
+// release is equivalent to ~MyObject: status is not checked, matching C.
 func (o *myObject) release() {
 	finalizeCount++
 	sys.DeleteReference(o.env, o.wrapper)
 }
 
-// destructor è MyObject::Destructor.
+// destructor is MyObject::Destructor.
 func destructor(_ sys.Env, nativeObject, _ uintptr) {
 	h := cgo.Handle(nativeObject)
 	obj := h.Value().(*myObject)
@@ -43,7 +43,7 @@ func destructor(_ sys.Env, nativeObject, _ uintptr) {
 	obj.release()
 }
 
-// unwrap equivale a napi_unwrap(env, value, (void**)&obj).
+// unwrap is equivalent to napi_unwrap(env, value, (void**)&obj).
 func unwrap(env sys.Env, value sys.Value) (*myObject, bool) {
 	var data unsafe.Pointer
 	if !nt.Call(env, sys.Unwrap(env, value, &data)) {
@@ -52,7 +52,7 @@ func unwrap(env sys.Env, value sys.Value) (*myObject, bool) {
 	return cgo.Handle(uintptr(data)).Value().(*myObject), true
 }
 
-// initClass è MyObject::Init.
+// initClass is MyObject::Init.
 func initClass(env sys.Env) sys.Status {
 	var cons sys.Value
 	status := sys.DefineClass(env, nt.CStr("MyObject"), sys.AutoLength, sys.CallbackTrampoline, newData,
@@ -69,7 +69,7 @@ func initClass(env sys.Env) sys.Status {
 	return sys.StatusOK
 }
 
-// newMyObject è MyObject::New.
+// newMyObject is MyObject::New.
 func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(1)
 	var args [1]sys.Value
@@ -95,8 +95,8 @@ func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 
 	obj.env = env
 
-	// La chiamata a napi_wrap deve chiedere il riferimento all'oggetto con il parametro di
-	// uscita: così si verifica il caso di un riferimento distrutto dal proprio finalizer.
+	// Retrieve the resulting reference to the object via the napi_wrap out parameter to test
+	// the case where a reference is destroyed by its own finalizer.
 	h := cgo.NewHandle(obj)
 	cb, hint := nt.Finalizer(destructor, 0)
 	if !nt.Call(env, sys.Wrap(env, this, uintptr(h), cb, hint, &obj.wrapper)) {
@@ -108,7 +108,7 @@ func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return this
 }
 
-// newInstance è MyObject::NewInstance.
+// newInstance is MyObject::NewInstance.
 func newInstance(env sys.Env, arg sys.Value, instance *sys.Value) sys.Status {
 	const argc = 1
 	argv := [argc]sys.Value{arg}

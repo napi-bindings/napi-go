@@ -12,11 +12,11 @@ import (
 	"os"
 )
 
-// ErrEnvClosed è restituito quando l'env di destinazione è già stato distrutto.
+// ErrEnvClosed is returned when the target env has already been destroyed.
 var ErrEnvClosed = errors.New("napi: env closed")
 
-// post accoda fn per l'esecuzione sul thread JS dell'env. Sicura da qualsiasi goroutine.
-// Le notifiche sono coalescenti: una sola chiamata alla TSFN per "ondata" di risultati.
+// post enqueues fn for execution on the env's JS thread. Safe from any goroutine.
+// Notifications are coalesced: at most one TSFN call per batch of queued items.
 func (st *envState) post(fn func(Env)) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -28,8 +28,8 @@ func (st *envState) post(fn func(Env)) error {
 		return nil
 	}
 	st.scheduled = true
-	// Chiamata sotto lock: il cleanup imposta closed e rilascia la TSFN sotto lo stesso
-	// lock, quindi la TSFN non può essere usata dopo il rilascio.
+	// Called under lock: cleanup sets closed and releases the TSFN under the same
+	// lock, so the TSFN can never be called after release.
 	if s := C.gn_call_tsfn(st.tsfn); s != C.napi_ok {
 		st.scheduled = false
 		return &Error{Status: Status(s), Message: "napi_call_threadsafe_function failed"}
@@ -48,7 +48,7 @@ func goNapiDispatch(env C.napi_env, id C.uintptr_t) {
 	st.queue = nil
 	st.scheduled = false
 	st.mu.Unlock()
-	if env == nil { // TSFN in chiusura: scarta
+	if env == nil { // TSFN closing: discard
 		return
 	}
 	st.dispatchRuns.Add(1)
@@ -61,23 +61,23 @@ func goNapiDispatch(env C.napi_env, id C.uintptr_t) {
 func runOnJSThread(e Env, fn func(Env)) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "napi-go: panic nel dispatcher: %v\n", r)
+			fmt.Fprintf(os.Stderr, "napi-go: panic in dispatcher: %v\n", r)
 		}
 	}()
 	_ = e.Scope(func() error { fn(e); return nil })
 }
 
-// ---- Promise risolte da goroutine ----
+// ---- Promises resolved from goroutines ----
 
-// Resolver converte il risultato di una goroutine in un valore JS; gira sul thread JS.
+// Resolver converts the result of a goroutine into a JS value; runs on the JS thread.
 type Resolver func(env Env) (Value, error)
 
-// Promise crea una Promise JS e avvia work in una nuova goroutine. work non ha accesso
-// all'Env: restituisce un Resolver che verrà eseguito sul thread JS per convertire il
-// risultato. ctx viene cancellato alla distruzione dell'env.
+// Promise creates a JS Promise and runs work in a new goroutine. work does not have
+// access to Env: it returns a Resolver that will run on the JS thread to convert the
+// result. ctx is canceled when the env is destroyed.
 //
-// Equivalente semantico: napi_create_promise + napi_threadsafe_function in napi-rs
-// (`AsyncTask`/`async fn`), ma con un'unica TSFN condivisa per env.
+// Semantic equivalent: napi_create_promise + napi_threadsafe_function in napi-rs
+// (`AsyncTask`/`async fn`), but using a single shared TSFN per env.
 func (c CallContext) Promise(work func(ctx context.Context) (Resolver, error)) (Value, error) {
 	env := c.env
 	st := stateOf(env)
@@ -90,7 +90,7 @@ func (c CallContext) Promise(work func(ctx context.Context) (Resolver, error)) (
 		return Value{}, err
 	}
 	st.pending++
-	if st.pending == 1 { // c'è lavoro in corso: tieni vivo l'event loop
+	if st.pending == 1 { // work in flight: keep the event loop alive
 		C.gn_napi_ref_threadsafe_function(env, st.tsfn)
 	}
 	go func() {
@@ -102,7 +102,7 @@ func (c CallContext) Promise(work func(ctx context.Context) (Resolver, error)) (
 				C.gn_napi_unref_threadsafe_function(e.raw, st.tsfn)
 			}
 		})
-		// Se l'env è chiuso la Promise non verrà mai risolta: l'env non esiste più.
+		// If the env is closed the Promise will never settle: the env no longer exists.
 	}()
 	return Value{env, promise}, nil
 }
@@ -135,8 +135,8 @@ func settle(e Env, d C.napi_deferred, res Resolver, err error) {
 	C.gn_napi_reject_deferred(e.raw, d, ev.raw)
 }
 
-// Post esegue fn sul thread JS dell'env di c, da qualsiasi goroutine (API grezza dello
-// spike: la Fase 3 la sostituirà con TSFN tipizzate).
+// Poster returns a function that schedules fn on c's env JS thread from any goroutine
+// (raw spike API: Phase 3 will replace this with typed TSFNs).
 func (c CallContext) Poster() func(func(Env)) error {
 	st := stateOf(c.env)
 	return func(fn func(Env)) error {
@@ -147,7 +147,7 @@ func (c CallContext) Poster() func(func(Env)) error {
 	}
 }
 
-// JSThreadID restituisce il thread OS del loop JS dell'env (diagnostica).
+// JSThreadID returns the OS thread ID of the env's JS event loop (diagnostics).
 func (c CallContext) JSThreadID() uint64 {
 	if st := stateOf(c.env); st != nil {
 		return st.jsThread
@@ -155,7 +155,7 @@ func (c CallContext) JSThreadID() uint64 {
 	return 0
 }
 
-// DispatchRuns restituisce quante volte il dispatcher dell'env è stato eseguito.
+// DispatchRuns returns how many times the env's dispatcher has run.
 func (c CallContext) DispatchRuns() uint64 {
 	if st := stateOf(c.env); st != nil {
 		return st.dispatchRuns.Load()
