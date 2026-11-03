@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_symbol/test_symbol.c.
+// Port of test/js-native-api/test_symbol/test_symbol.c.
 package main
 
 import (

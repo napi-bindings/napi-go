@@ -12,47 +12,47 @@ import (
 	"unsafe"
 )
 
-// Trampolini C da passare a Node-API. Entrano in Go attraverso gli handler registrati qui sotto.
+// C trampolines to pass to Node-API. They enter Go through the handlers registered below.
 var (
-	// CallbackTrampoline per CreateFunction, DefineClass, PropertyDescriptor: chiama il
-	// CallbackHandler con il data della funzione.
+	// CallbackTrampoline is used with CreateFunction, DefineClass, and PropertyDescriptor:
+	// it invokes the registered CallbackHandler with the function's data payload.
 	CallbackTrampoline = Callback(C.napi_callback(C.gn_callback))
-	// FinalizeTrampoline per Wrap, AddFinalizer, CreateExternal*, SetInstanceData, ...
+	// FinalizeTrampoline is used with Wrap, AddFinalizer, CreateExternal*, SetInstanceData, ...
 	FinalizeTrampoline = Finalize(C.napi_finalize(C.gn_finalize))
-	// CallJSTrampoline per CreateThreadsafeFunction.
+	// CallJSTrampoline is used with CreateThreadsafeFunction.
 	CallJSTrampoline = ThreadsafeFunctionCallJS(C.napi_threadsafe_function_call_js(C.gn_call_js))
-	// AsyncExecuteTrampoline e AsyncCompleteTrampoline per CreateAsyncWork.
+	// AsyncExecuteTrampoline and AsyncCompleteTrampoline are used with CreateAsyncWork.
 	AsyncExecuteTrampoline  = AsyncExecuteCallback(C.napi_async_execute_callback(C.gn_async_execute))
 	AsyncCompleteTrampoline = AsyncCompleteCallback(C.napi_async_complete_callback(C.gn_async_complete))
-	// CleanupHookTrampoline per AddEnvCleanupHook / RemoveEnvCleanupHook.
+	// CleanupHookTrampoline is used with AddEnvCleanupHook / RemoveEnvCleanupHook.
 	CleanupHookTrampoline = CleanupHook(C.napi_cleanup_hook(C.gn_cleanup_hook))
-	// AsyncCleanupHookTrampoline per AddAsyncCleanupHook.
+	// AsyncCleanupHookTrampoline is used with AddAsyncCleanupHook.
 	AsyncCleanupHookTrampoline = AsyncCleanupHook(C.napi_async_cleanup_hook(C.gn_async_cleanup_hook))
 )
 
-// inlineArgs deve coincidere con GN_INLINE_ARGS di internal.h.
+// inlineArgs must match GN_INLINE_ARGS in internal.h.
 const inlineArgs = C.GN_INLINE_ARGS
 
 type (
-	// ModuleInitHandler inizializza il modulo per un env (main thread o worker) e restituisce
-	// l'oggetto delle export. Senza handler require() fallisce con ERR_NAPI_GO_NO_HANDLER e il
-	// messaggio di Node.js per un modulo senza entry point.
+	// ModuleInitHandler initializes the module for an env (main thread or worker) and returns
+	// the exports object. Without a handler, require() fails with ERR_NAPI_GO_NO_HANDLER and
+	// Node.js's standard message for a module without an entry point.
 	ModuleInitHandler func(env Env, exports Value) Value
-	// CallbackHandler gestisce ogni chiamata a una funzione creata con CallbackTrampoline. args
-	// è valido solo durante la chiamata. Restituire nil equivale a undefined.
+	// CallbackHandler handles every call to a function created with CallbackTrampoline. args
+	// is valid only for the duration of the call. Returning nil is equivalent to returning undefined.
 	CallbackHandler func(env Env, info CallbackInfo, data uintptr, this Value, args []Value) Value
-	// FinalizeHandler riceve data e hint passati insieme a FinalizeTrampoline.
+	// FinalizeHandler receives the data and hint pointers passed alongside FinalizeTrampoline.
 	FinalizeHandler func(env Env, data, hint uintptr)
-	// CallJSHandler riceve il context della TSFN e il data passato a CallThreadsafeFunction.
-	// env e jsCallback sono nil se la TSFN viene distrutta con elementi in coda.
+	// CallJSHandler receives the TSFN context and the data passed to CallThreadsafeFunction.
+	// env and jsCallback are nil when the TSFN is being torn down with queued items remaining.
 	CallJSHandler func(env Env, jsCallback Value, context, data uintptr)
-	// AsyncExecuteHandler gira su un thread del pool di libuv: non può chiamare Node-API.
+	// AsyncExecuteHandler runs on a libuv worker pool thread and must not call Node-API functions.
 	AsyncExecuteHandler func(env Env, data uintptr)
-	// AsyncCompleteHandler gira sul thread JS dopo AsyncExecuteHandler.
+	// AsyncCompleteHandler runs on the JS thread after AsyncExecuteHandler completes.
 	AsyncCompleteHandler func(env Env, status Status, data uintptr)
-	// CleanupHookHandler riceve l'arg passato ad AddEnvCleanupHook.
+	// CleanupHookHandler receives the arg passed to AddEnvCleanupHook.
 	CleanupHookHandler func(arg uintptr)
-	// AsyncCleanupHookHandler riceve l'handle da passare a RemoveAsyncCleanupHook.
+	// AsyncCleanupHookHandler receives the handle to pass to RemoveAsyncCleanupHook.
 	AsyncCleanupHookHandler func(handle AsyncCleanupHookHandle, arg uintptr)
 )
 
@@ -67,10 +67,10 @@ var (
 	asyncCleanupHookHandler atomic.Pointer[AsyncCleanupHookHandler]
 )
 
-// Gli handler vanno registrati in init(): il runtime Go completa l'inizializzazione dei pacchetti
-// prima di eseguire qualsiasi ingresso da C. Un handler nil rimuove quello registrato.
+// Handlers should be registered in init(): the Go runtime finishes initializing all packages
+// before executing any entry from C. Passing a nil handler clears the registered handler.
 
-// SetModuleInitHandler registra il ModuleInitHandler.
+// SetModuleInitHandler registers the ModuleInitHandler.
 func SetModuleInitHandler(h ModuleInitHandler) {
 	if h == nil {
 		moduleInitHandler.Store(nil)
@@ -79,7 +79,7 @@ func SetModuleInitHandler(h ModuleInitHandler) {
 	moduleInitHandler.Store(&h)
 }
 
-// SetCallbackHandler registra il CallbackHandler.
+// SetCallbackHandler registers the CallbackHandler.
 func SetCallbackHandler(h CallbackHandler) {
 	if h == nil {
 		callbackHandler.Store(nil)
@@ -88,7 +88,7 @@ func SetCallbackHandler(h CallbackHandler) {
 	callbackHandler.Store(&h)
 }
 
-// SetFinalizeHandler registra il FinalizeHandler.
+// SetFinalizeHandler registers the FinalizeHandler.
 func SetFinalizeHandler(h FinalizeHandler) {
 	if h == nil {
 		finalizeHandler.Store(nil)
@@ -97,7 +97,7 @@ func SetFinalizeHandler(h FinalizeHandler) {
 	finalizeHandler.Store(&h)
 }
 
-// SetCallJSHandler registra il CallJSHandler.
+// SetCallJSHandler registers the CallJSHandler.
 func SetCallJSHandler(h CallJSHandler) {
 	if h == nil {
 		callJSHandler.Store(nil)
@@ -106,7 +106,7 @@ func SetCallJSHandler(h CallJSHandler) {
 	callJSHandler.Store(&h)
 }
 
-// SetAsyncExecuteHandler registra il AsyncExecuteHandler.
+// SetAsyncExecuteHandler registers the AsyncExecuteHandler.
 func SetAsyncExecuteHandler(h AsyncExecuteHandler) {
 	if h == nil {
 		asyncExecuteHandler.Store(nil)
@@ -115,7 +115,7 @@ func SetAsyncExecuteHandler(h AsyncExecuteHandler) {
 	asyncExecuteHandler.Store(&h)
 }
 
-// SetAsyncCompleteHandler registra il AsyncCompleteHandler.
+// SetAsyncCompleteHandler registers the AsyncCompleteHandler.
 func SetAsyncCompleteHandler(h AsyncCompleteHandler) {
 	if h == nil {
 		asyncCompleteHandler.Store(nil)
@@ -124,7 +124,7 @@ func SetAsyncCompleteHandler(h AsyncCompleteHandler) {
 	asyncCompleteHandler.Store(&h)
 }
 
-// SetCleanupHookHandler registra il CleanupHookHandler.
+// SetCleanupHookHandler registers the CleanupHookHandler.
 func SetCleanupHookHandler(h CleanupHookHandler) {
 	if h == nil {
 		cleanupHookHandler.Store(nil)
@@ -133,7 +133,7 @@ func SetCleanupHookHandler(h CleanupHookHandler) {
 	cleanupHookHandler.Store(&h)
 }
 
-// SetAsyncCleanupHookHandler registra il AsyncCleanupHookHandler.
+// SetAsyncCleanupHookHandler registers the AsyncCleanupHookHandler.
 func SetAsyncCleanupHookHandler(h AsyncCleanupHookHandler) {
 	if h == nil {
 		asyncCleanupHookHandler.Store(nil)
@@ -142,15 +142,15 @@ func SetAsyncCleanupHookHandler(h AsyncCleanupHookHandler) {
 	asyncCleanupHookHandler.Store(&h)
 }
 
-// ModuleAPIVersion restituisce il valore che il modulo dichiara a Node.js tramite
-// node_api_module_get_api_version_v1 (uguale a DeclaredVersion).
+// ModuleAPIVersion returns the version value reported by the module to Node.js via
+// node_api_module_get_api_version_v1 (equal to DeclaredVersion).
 func ModuleAPIVersion() int32 { return int32(C.gn_module_api_version()) }
 
-// noModuleInitMessage è il messaggio di Node.js (ERR_DLOPEN_FAILED) per un modulo senza funzione
-// di init, usato quando non è registrato un ModuleInitHandler.
+// noModuleInitMessage is Node.js's standard message (ERR_DLOPEN_FAILED) for a module without an
+// init function, used when no ModuleInitHandler is registered.
 const noModuleInitMessage = "Module has no declared entry point."
 
-// Codici degli errori JS lanciati da sys.
+// Error codes for JS errors thrown by sys.
 const (
 	CodePanic          = "GO_PANIC"
 	CodeNoHandler      = "ERR_NAPI_GO_NO_HANDLER"
@@ -159,22 +159,23 @@ const (
 	CodeInternal       = "ERR_NAPI_GO_INTERNAL"
 )
 
-// cstring restituisce una copia di s terminata da NUL, da passare a Node-API per la durata di una
-// chiamata.
+// cstring returns a NUL-terminated copy of s suitable for passing to Node-API for the duration of
+// a single call.
 func cstring(s string) *byte {
 	b := make([]byte, len(s)+1)
 	copy(b, s)
 	return &b[0]
 }
 
-// throwError lancia un Error JS con code e message. Se un'eccezione è già pendente resta quella.
+// throwError throws a JS Error with code and message. If an exception is already pending, it is
+// preserved.
 func throwError(env Env, code, message string) {
 	var pending bool
 	if IsExceptionPending(env, &pending) == StatusOK && pending {
 		return
 	}
 	if st := ThrowError(env, cstring(code), cstring(message)); st != StatusOK {
-		// L'errore non arriva a JS: resta almeno su stderr.
+		// If the error cannot be delivered to JS, at least log it to stderr.
 		fmt.Fprintf(os.Stderr, "%s (napi_throw_error: %s)\n", message, st)
 	}
 }
@@ -183,8 +184,8 @@ func panicMessage(where string, r any) string {
 	return fmt.Sprintf("napi-go: panic in %s: %v", where, r)
 }
 
-// fatal termina il processo: un panic dove non si può lanciare un'eccezione JS si comporta come
-// un panic Go non recuperato.
+// fatal terminates the process: a panic in a context where a JS exception cannot be thrown
+// behaves like an unrecovered Go panic.
 func fatal(where string, r any) {
 	msg := panicMessage(where, r)
 	FatalError(cstring("napi-go"), AutoLength, cstring(msg), AutoLength)
@@ -201,8 +202,8 @@ func goNapiRegisterModule(env C.napi_env, exports C.napi_value) (ret C.napi_valu
 	}()
 	h := moduleInitHandler.Load()
 	if h == nil {
-		// Come Node.js per un modulo senza funzione di init (napi_module con nm_register_func
-		// NULL): require() fallisce invece di restituire un oggetto vuoto.
+		// Match Node.js behavior for a module without an init function (napi_module with
+		// nm_register_func == NULL): require() fails instead of returning an empty exports object.
 		throwError(e, CodeNoHandler, noModuleInitMessage)
 		return nil
 	}
@@ -229,7 +230,7 @@ func goNapiCallback(env C.napi_env, info C.napi_callback_info, data C.uintptr_t,
 	if n <= inlineArgs {
 		args = unsafe.Slice((*Value)(unsafe.Pointer(argv)), n)
 	} else {
-		// Più argomenti del buffer letto in C: si rileggono tutti.
+		// More arguments than fit in the C stack buffer: re-fetch all of them.
 		args = make([]Value, n)
 		if st := GetCbInfo(e, CallbackInfo(info), &n, &args[0], nil, nil); st != StatusOK {
 			throwError(e, CodeInternal, "napi-go: napi_get_cb_info failed: "+st.String())

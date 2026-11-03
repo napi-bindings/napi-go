@@ -1,5 +1,5 @@
-// Porting di test/js-native-api/test_finalizer/test_finalizer.c (NAPI_EXPERIMENTAL): i
-// finalizer "basic" girano durante il GC, quelli che toccano JS vengono rimandati con
+// Port of test/js-native-api/test_finalizer/test_finalizer.c (NAPI_EXPERIMENTAL):
+// "basic" finalizers run during GC, while those that touch JS are deferred via
 // node_api_post_finalizer.
 package main
 
@@ -14,7 +14,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// finalizerData è la struct FinalizerData del C, allocata in memoria C come instance data.
+// finalizerData is C's FinalizerData struct, allocated in C memory as instance data.
 type finalizerData struct {
 	finalizeCount int32
 	jsFunc        sys.Ref
@@ -22,7 +22,7 @@ type finalizerData struct {
 
 const finalizerDataSize = uint(unsafe.Sizeof(finalizerData{}))
 
-// instanceData equivale a napi_get_instance_data(env, (void**)&data).
+// instanceData is equivalent to napi_get_instance_data(env, (void**)&data).
 func instanceData(env sys.Env, call func(env sys.Env, status sys.Status) bool) (*finalizerData, bool) {
 	var data unsafe.Pointer
 	if !call(env, sys.GetInstanceData(env, &data)) {
@@ -36,13 +36,13 @@ func finalizerOnlyCallback(env sys.Env, finalizeData, _ uintptr) {
 	data.finalizeCount++
 	count := data.finalizeCount
 
-	// L'instance data è accessibile anche durante il GC.
+	// Instance data is accessible even during GC.
 	data, ok := instanceData(env, nt.BasicCall)
 	if !ok {
 		return
 	}
-	// Il C usa un'assegnazione (count = data->finalize_count) come condizione: è vera se il
-	// conteggio non è zero. Il porting conserva lo stesso controllo.
+	// C uses an assignment (count = data->finalize_count) as a condition: it is true when the
+	// count is non-zero. The port preserves the same check.
 	count = data.finalizeCount
 	if !nt.BasicAssert(count != 0, "count = data->finalize_count", "Expected to be the same FinalizerData") {
 		return
@@ -68,7 +68,7 @@ func finalizerCallingJSCallback(env sys.Env, finalizeData, _ uintptr) {
 	data.finalizeCount++
 }
 
-// finalizerWithJSCallback rimanda a dopo il GC il codice che tocca JS.
+// finalizerWithJSCallback defers code that touches JS until after GC.
 func finalizerWithJSCallback(env sys.Env, finalizeData, finalizeHint uintptr) {
 	cb, hint := nt.Finalizer(finalizerCallingJSCallback, finalizeHint)
 	if !nt.BasicCall(env, nt.PostFinalizer(env, cb, finalizeData, hint)) {
@@ -77,8 +77,8 @@ func finalizerWithJSCallback(env sys.Env, finalizeData, finalizeHint uintptr) {
 	}
 }
 
-// finalizerWithFailedJSCallback chiama di proposito un'API che tocca JS durante il GC: Node.js
-// termina il processo ("Finalizer is calling a function that may affect GC state").
+// finalizerWithFailedJSCallback intentionally calls a JS-touching API during GC: Node.js
+// terminates the process ("Finalizer is calling a function that may affect GC state").
 func finalizerWithFailedJSCallback(env sys.Env, finalizeData, _ uintptr) {
 	var obj sys.Value
 	data := (*finalizerData)(nt.Pointer(finalizeData))
@@ -88,8 +88,8 @@ func finalizerWithFailedJSCallback(env sys.Env, finalizeData, _ uintptr) {
 	}
 }
 
-// addFinalizerWith equivale alla parte comune di addFinalizer, addFinalizerWithJS e
-// addFinalizerFailOnJS: napi_add_finalizer di argv[0] con l'instance data come data.
+// addFinalizerWith corresponds to the shared part of addFinalizer, addFinalizerWithJS, and
+// addFinalizerFailOnJS: napi_add_finalizer on argv[0] with instance data as data.
 func addFinalizerWith(env sys.Env, object sys.Value, data *finalizerData, finalizer nt.FinalizeFunc) {
 	cb, hint := nt.Finalizer(finalizer, 0)
 	if !nt.Call(env, sys.AddFinalizer(env, object, uintptr(unsafe.Pointer(data)), cb, hint, nil)) {
@@ -113,7 +113,7 @@ func addFinalizer(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// addFinalizerWithJS aggiunge un finalizer che chiama JS e riesce.
+// addFinalizerWithJS adds a finalizer that calls JS and succeeds.
 func addFinalizerWithJS(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(2)
 	var argv [2]sys.Value
@@ -140,7 +140,7 @@ func addFinalizerWithJS(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// addFinalizerFailOnJS aggiunge un finalizer che chiama JS e fallisce.
+// addFinalizerFailOnJS adds a finalizer that calls JS and fails.
 func addFinalizerFailOnJS(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(1)
 	var argv [1]sys.Value

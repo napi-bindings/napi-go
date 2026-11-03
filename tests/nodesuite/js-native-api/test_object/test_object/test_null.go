@@ -1,7 +1,7 @@
-// Porting di test/js-native-api/test_object/test_null.c.
+// Port of test/js-native-api/test_object/test_null.c.
 //
-// In tutte le funzioni lo status delle chiamate senza controllo è letto subito dopo da
-// AddLastStatus, come nel C.
+// In all functions, the status of unchecked calls is read immediately after via
+// AddLastStatus, matching C.
 package main
 
 import (
@@ -21,7 +21,7 @@ const (
 	keyName         = "key"
 )
 
-// newObjects crea return_value e object, come all'inizio di quasi tutte le funzioni del C.
+// newObjects creates return_value and object, matching the start of most functions in C.
 func newObjects(env sys.Env) (returnValue, object sys.Value, ok bool) {
 	if !nt.Call(env, sys.CreateObject(env, &returnValue)) {
 		return nil, nil, false
@@ -32,7 +32,7 @@ func newObjects(env sys.Env) (returnValue, object sys.Value, ok bool) {
 	return returnValue, object, true
 }
 
-// newObjectsAndKey aggiunge la chiave "someString".
+// newObjectsAndKey also creates the "someString" key.
 func newObjectsAndKey(env sys.Env) (returnValue, object, key sys.Value, ok bool) {
 	returnValue, object, ok = newObjects(env)
 	if !ok {
@@ -79,7 +79,7 @@ func nullGetProperty(env sys.Env, _ sys.CallbackInfo) sys.Value {
 
 type boolValuedPropAPI func(env sys.Env, object, key sys.Value, result *bool) sys.Status
 
-// testBoolValuedPropAPI equivale a TestBoolValuedPropApi.
+// testBoolValuedPropAPI is equivalent to TestBoolValuedPropApi.
 func testBoolValuedPropAPI(api boolValuedPropAPI) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		returnValue, object, key, ok := newObjectsAndKey(env)
@@ -158,7 +158,7 @@ func nullSetElement(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		sys.SetElement(nil, object, 0, object))
 	sys.SetElement(env, nil, 0, object)
 	nt.AddLastStatus(env, "objectIsNull", returnValue)
-	// Come nel C: napi_set_property con chiave 0 (NULL), non napi_set_element.
+	// As in C: napi_set_property with key 0 (NULL), not napi_set_element.
 	sys.SetProperty(env, object, nil, nil)
 	nt.AddLastStatus(env, "valueIsNull", returnValue)
 	return returnValue
@@ -172,7 +172,7 @@ func nullGetElement(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	var prop sys.Value
 	nt.AddReturnedStatus(env, "envIsNull", returnValue, invalidArgument, sys.StatusInvalidArg,
 		sys.GetElement(nil, object, 0, &prop))
-	// Come nel C: napi_get_property con chiave 0 (NULL), non napi_get_element.
+	// As in C: napi_get_property with key 0 (NULL), not napi_get_element.
 	sys.GetProperty(env, nil, nil, &prop)
 	nt.AddLastStatus(env, "objectIsNull", returnValue)
 	sys.GetProperty(env, object, nil, nil)
@@ -182,7 +182,7 @@ func nullGetElement(env sys.Env, _ sys.CallbackInfo) sys.Value {
 
 type boolValuedElementAPI func(env sys.Env, object sys.Value, index uint32, result *bool) sys.Status
 
-// testBoolValuedElementAPI equivale a TestBoolValuedElementApi.
+// testBoolValuedElementAPI is equivalent to TestBoolValuedElementApi.
 func testBoolValuedElementAPI(api boolValuedElementAPI) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		returnValue, object, ok := newObjects(env)
@@ -225,7 +225,7 @@ func nullDefineProperties(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	sys.DefineProperties(env, object, 1, nil)
 	nt.AddLastStatus(env, "descriptorListIsNull", returnValue)
 
-	// Come nel C le varianti seguenti modificano desc ma passano comunque NULL come lista.
+	// As in C, the following variants mutate desc but still pass NULL as the descriptor list.
 	desc.Utf8Name = nil
 	sys.DefineProperties(env, object, 1, nil)
 	nt.AddLastStatus(env, "utf8nameIsNull", returnValue)

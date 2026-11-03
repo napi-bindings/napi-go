@@ -1,21 +1,22 @@
 /*
- * pin.c — impedisce che il .node venga scaricato mentre il runtime Go è vivo.
+ * pin.c — prevents the .node shared library from being unloaded while the Go runtime is alive.
  *
- * Problema (osservato su macOS arm64, Go 1.24–1.27, Node 22): quando un worker_thread termina,
- * Node chiude con dlclose gli addon che quel worker ha caricato. Se nessun altro env ha caricato
- * l'addon, il contatore di dlopen arriva a zero e dyld scarica la libreria, ma il runtime Go
- * non può essere fermato: i suoi thread, gli handler di segnale e il distruttore TSD del thread
- * del worker (cgo bindm) restano puntati su codice non più registrato. Risultato: il thread del
- * worker resta in _pthread_tsd_cleanup → _sigtramp → "<unknown binary>" a CPU piena e il processo
- * non termina (Worker::JoinThread → pthread_join). Su Linux non succede perché Go marca i
- * c-shared con DF_1_NODELETE; su macOS i Mach-O non hanno un flag equivalente.
+ * Problem (observed on macOS arm64, Go 1.24–1.27, Node 22): when a worker_thread exits,
+ * Node calls dlclose on addons loaded by that worker. If no other env has loaded the addon,
+ * the dlopen reference count drops to zero and dyld unloads the image, even though the Go
+ * runtime cannot be stopped: its background threads, signal handlers, and the worker thread's
+ * pthread TSD destructor (cgo bindm) remain pointing at unmapped code. As a result, the worker
+ * thread spins in _pthread_tsd_cleanup → _sigtramp → "<unknown binary>" at 100% CPU and the
+ * process never exits (Worker::JoinThread → pthread_join). On Linux this does not happen
+ * because Go links c-shared objects with DF_1_NODELETE; macOS Mach-O binaries have no
+ * equivalent linker flag.
  *
- * Correzione: al primo napi_register_module_v1 il modulo riapre se stesso con
- * RTLD_NOLOAD | RTLD_NODELETE (Unix) o si fissa con GET_MODULE_HANDLE_EX_FLAG_PIN (Windows):
- * da quel momento resta in memoria fino alla fine del processo, come su Linux.
+ * Fix: on the first napi_register_module_v1 call, the module reopens itself with
+ * RTLD_NOLOAD | RTLD_NODELETE (Unix) or pins itself with GET_MODULE_HANDLE_EX_FLAG_PIN (Windows),
+ * keeping the image mapped until process exit, just like on Linux.
  */
 #if !defined(_WIN32) && !defined(_GNU_SOURCE)
-#define _GNU_SOURCE /* dladdr/Dl_info su glibc: va definito prima di qualsiasi include */
+#define _GNU_SOURCE /* dladdr/Dl_info on glibc: must be defined before any include */
 #endif
 #include <stdio.h>
 #include "internal.h"
@@ -33,8 +34,8 @@ void gn_pin_module(void) {
     fprintf(stderr, "napi-go: cannot pin the addon in memory: dladdr failed\n");
     return;
   }
-  /* RTLD_NOLOAD: la libreria è già caricata, la riapertura aggiunge solo RTLD_NODELETE. Il
-     riferimento in più non viene mai rilasciato, di proposito. */
+  /* RTLD_NOLOAD: the library is already loaded; reopening only adds RTLD_NODELETE.
+     The extra reference is intentionally never closed. */
   if (dlopen(di.dli_fname, RTLD_LAZY | RTLD_NOLOAD | RTLD_NODELETE) == NULL) {
     const char* err = dlerror();
     fprintf(stderr, "napi-go: cannot pin %s in memory: %s\n", di.dli_fname, err ? err : "dlopen failed");

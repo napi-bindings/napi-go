@@ -1,15 +1,15 @@
 /*
- * gonapi.h — Layer 0 dello spike napi-go.
+ * gonapi.h — Layer 0 of the napi-go spike.
  *
- * I simboli Node-API NON vengono linkati: sono risolti a runtime dal processo
- * host (node.exe, electron.exe, libnode...) e conservati in una tabella di
- * function pointer (stesso approccio di napi-sys con la feature `dyn-symbols`).
+ * Node-API symbols are NOT linked at build time: they are resolved at runtime from the
+ * host process (node.exe, electron.exe, libnode...) and stored in a function pointer
+ * table (same approach as napi-sys with the `dyn-symbols` feature).
  *
- * Questo header viene incluso nel preambolo cgo di file che usano //export,
- * quindi finisce anche in _cgo_export.h: deve contenere SOLO dichiarazioni e
- * funzioni `static inline` (mai definizioni non-static).
+ * This header is included in the cgo preamble of files that use //export,
+ * so it also ends up in _cgo_export.h: it must contain ONLY declarations and
+ * `static inline` functions (never non-static definitions).
  *
- * Nella Fase 1 questa lista X-macro sarà generata dagli header ufficiali.
+ * In Phase 1 this X-macro list will be generated from the official headers.
  */
 #ifndef GONAPI_H
 #define GONAPI_H
@@ -19,7 +19,7 @@
 #include <stdbool.h>
 #include <node_api.h>
 
-/* X(tipo_ritorno, nome, (parametri), (argomenti)) — funzioni OBBLIGATORIE (Node-API <= 8) */
+/* X(return_type, name, (parameters), (arguments)) — REQUIRED functions (Node-API <= 8) */
 #define GN_NAPI_REQUIRED(X)                                                                         \
   X(napi_status, napi_get_last_error_info, (napi_env env, const napi_extended_error_info** r), (env, r)) \
   X(napi_status, napi_get_undefined, (napi_env env, napi_value* r), (env, r))                       \
@@ -65,13 +65,13 @@
   X(napi_status, napi_get_version, (napi_env env, uint32_t* r), (env, r))                           \
   X(napi_status, napi_get_node_version, (napi_env env, const napi_node_version** r), (env, r))
 
-/* Funzioni OPZIONALI (Node-API >= 9): solo rilevate a runtime, mai chiamate se assenti. */
+/* OPTIONAL functions (Node-API >= 9): only probed at runtime, never called if absent. */
 #define GN_NAPI_OPTIONAL(X)                                                                         \
   X(napi_status, node_api_symbol_for, (napi_env env, const char* s, size_t n, napi_value* r), (env, s, n, r)) \
   X(napi_status, node_api_get_module_file_name, (napi_env env, const char** r), (env, r))           \
   X(napi_status, node_api_create_property_key_utf8, (napi_env env, const char* s, size_t n, napi_value* r), (env, s, n, r))
 
-/* ---- tabella dei function pointer ---- */
+/* ---- function pointer table ---- */
 #define GN_FIELD(ret, name, params, args) ret (NAPI_CDECL *name) params;
 typedef struct gn_napi_table {
   GN_NAPI_REQUIRED(GN_FIELD)
@@ -81,7 +81,7 @@ typedef struct gn_napi_table {
 
 extern gn_napi_table gn_napi;
 
-/* ---- wrapper static inline: gn_<nome>(...) chiamabili da cgo ---- */
+/* ---- static inline wrappers: gn_<name>(...) callable from cgo ---- */
 #define GN_WRAP(ret, name, params, args) \
   static inline ret gn_##name params { return gn_napi.name args; }
 GN_NAPI_REQUIRED(GN_WRAP)
@@ -89,33 +89,33 @@ GN_NAPI_OPTIONAL(GN_WRAP)
 #undef GN_WRAP
 
 /* ---- loader (loader.c) ---- */
-/* Restituisce 0 se tutti i simboli obbligatori sono stati risolti, altrimenti
-   il numero di simboli mancanti (il primo è in *first_missing). */
+/* Returns 0 if all required symbols were resolved, otherwise the number of
+   missing symbols (the first missing symbol name is stored in *first_missing). */
 int gn_load_symbols_once(const char** first_missing);
 int gn_symbols_required_count(void);
 int gn_symbols_optional_loaded(void);
 int gn_has_symbol(const char* name);
 uint64_t gn_thread_id(void);
 
-/* ---- trampolini (trampoline.c) ---- */
+/* ---- trampolines (trampoline.c) ---- */
 napi_value gn_callback(napi_env env, napi_callback_info info);
 void gn_tsfn_call_js(napi_env env, napi_value js_cb, void* ctx, void* data);
 void gn_env_cleanup(void* arg);
 
-/* ---- diagnostica (diag.c): __sigInfo(signo) in C puro, senza entrare in Go ---- */
+/* ---- diagnostics (diag.c): __sigInfo(signo) in pure C, without entering Go ---- */
 napi_status gn_register_diag(napi_env env, napi_value exports);
 
-/* ---- sigfix.c: ripristina SA_RESETHAND su node::SignalExit dopo l'initsig del runtime Go ---- */
+/* ---- sigfix.c: restores SA_RESETHAND on node::SignalExit after Go runtime initsig ---- */
 void gn_repair_node_signal_handlers(void);
 int gn_signal_repaired(int signo);
 
-/* Numero di argomenti letti "inline" sullo stack C prima di entrare in Go. */
+/* Number of arguments read "inline" on the C stack before entering Go. */
 #define GN_INLINE_ARGS 8
 
-/* ---- percorso tipizzato: conversione dei primitivi interamente in C ----
- * Per funzioni con firma nota (es. func(float64, float64) float64) il trampolino
- * tipizzato legge e converte gli argomenti in C, entra in Go UNA volta con valori
- * primitivi e converte il risultato in C: zero chiamate Go→C nel caso felice. */
+/* ---- typed path: primitive conversion entirely in C ----
+ * For functions with a known signature (e.g., func(float64, float64) float64), the typed
+ * trampoline reads and converts arguments in C, enters Go ONCE with primitive values,
+ * and converts the result in C: zero Go→C calls on the happy path. */
 enum { GN_K_VALUE = 0, GN_K_F64 = 1, GN_K_I32 = 2, GN_K_BOOL = 3, GN_K_STR = 4, GN_K_UNDEF = 5 };
 #define GN_STRBUF 512
 typedef struct { const char* p; size_t n; } gn_str;
@@ -136,9 +136,9 @@ static inline napi_status gn_new_typed_function(napi_env env, const char* name, 
 }
 static inline gn_sig* gn_alloc_sig(void) { return (gn_sig*)calloc(1, sizeof(gn_sig)); }
 
-/* ---- helper "batch" a singolo attraversamento cgo ---- */
+/* ---- single-crossing cgo "batch" helpers ---- */
 
-/* Risultato per valore: nessun puntatore Go passato a C → nessuna escape → zero allocazioni. */
+/* Result returned by value: no Go pointer passed to C → no escape → zero allocations. */
 typedef struct { napi_value v; napi_status s; } gn_value_result;
 typedef struct { double v; napi_status s; } gn_double_result;
 typedef struct { int32_t v; napi_status s; } gn_int32_result;
@@ -158,11 +158,11 @@ static inline gn_int32_result gn_get_int32(napi_env env, napi_value v) {
 static inline gn_value_result gn_undefined(napi_env env) {
   gn_value_result r; r.s = gn_napi.napi_get_undefined(env, &r.v); return r;
 }
-/* La stringa Go è passata ptr+len per la sola durata della chiamata (consentito:
-   i byte non contengono puntatori Go); V8 la copia. */
+/* The Go string is passed as ptr+len for the duration of the call only (allowed:
+   the bytes contain no Go pointers); V8 copies it. */
 static inline gn_value_result gn_new_string_utf8(napi_env env, const char* s, size_t n) {
   gn_value_result r;
-  if (s == NULL) { s = ""; n = 0; } /* stringa Go vuota: unsafe.StringData può essere nil */
+  if (s == NULL) { s = ""; n = 0; } /* empty Go string: unsafe.StringData may be nil */
   r.s = gn_napi.napi_create_string_utf8(env, s, n, &r.v);
   return r;
 }
@@ -185,9 +185,9 @@ static inline const char* gn_last_error_message(napi_env env) {
   if (gn_napi.napi_get_last_error_info(env, &info) != napi_ok || info == NULL) return NULL;
   return info->error_message;
 }
-/* Lettura stringa in un solo attraversamento: chiede la lunghezza e, se entra in
-   `buf` (memoria Go, tipicamente sullo stack), copia subito.
-   Ritorna la lunghezza in byte; *copied = 1 se il contenuto è già in buf. */
+/* Single-crossing string read: queries the length and, if it fits into `buf`
+   (Go memory, typically stack-allocated), copies it immediately.
+   Returns the byte length; *copied = 1 if the content is already in buf. */
 static inline napi_status gn_get_string_utf8(napi_env env, napi_value v, char* buf, size_t cap,
                                              size_t* len, int* copied) {
   napi_status s = gn_napi.napi_get_value_string_utf8(env, v, NULL, 0, len);
@@ -200,13 +200,13 @@ static inline napi_status gn_get_string_utf8(napi_env env, napi_value v, char* b
   }
   return s;
 }
-/* Crea una funzione JS che punta al trampolino unico; `id` è un indice nel registro Go
-   (non un puntatore Go), quindi le regole cgo sui puntatori sono rispettate. */
+/* Creates a JS function pointing to the single trampoline; `id` is an index into the Go
+   registry (not a Go pointer), so cgo pointer rules are satisfied. */
 static inline napi_status gn_new_function(napi_env env, const char* name, size_t n, uintptr_t id,
                                           napi_value* r) {
   return gn_napi.napi_create_function(env, name, n, gn_callback, (void*)id, r);
 }
-/* TSFN per il dispatcher dell'env: nessuna funzione JS, ctx = id dell'env. */
+/* TSFN for the env dispatcher: no JS function, ctx = env ID. */
 static inline napi_status gn_new_dispatcher_tsfn(napi_env env, uintptr_t env_id,
                                                  napi_threadsafe_function* r) {
   napi_value name;
@@ -218,7 +218,7 @@ static inline napi_status gn_new_dispatcher_tsfn(napi_env env, uintptr_t env_id,
 static inline napi_status gn_add_cleanup_hook(napi_env env, uintptr_t env_id) {
   return gn_napi.napi_add_env_cleanup_hook(env, gn_env_cleanup, (void*)env_id);
 }
-/* Throw di un Error JS con messaggio e codice (ptr+len, senza malloc). */
+/* Throws a JS Error with message and code (ptr+len, without malloc). */
 static inline napi_status gn_throw_error(napi_env env, const char* msg, size_t msg_len,
                                          const char* code, size_t code_len) {
   napi_value m, c = NULL, e;

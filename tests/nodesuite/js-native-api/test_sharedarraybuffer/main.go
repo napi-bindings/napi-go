@@ -1,5 +1,5 @@
-// Porting di test/js-native-api/test_sharedarraybuffer/test_sharedarraybuffer.c
-// (NAPI_EXPERIMENTAL, vedi napi-go.json). Le due API sperimentali passano per napitest.
+// Port of test/js-native-api/test_sharedarraybuffer/test_sharedarraybuffer.c
+// (NAPI_EXPERIMENTAL, see napi-go.json). Both experimental APIs go through napitest.
 package main
 
 import (
@@ -13,7 +13,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// byteModulus è il 256 di bytes[i] = i % 256.
+// byteModulus is the 256 in bytes[i] = i % 256.
 const byteModulus = 256
 
 func testIsSharedArrayBuffer(env sys.Env, info sys.CallbackInfo) sys.Value {
@@ -91,7 +91,7 @@ func testGetSharedArrayBufferInfo(env sys.Env, info sys.CallbackInfo) sys.Value 
 	}
 
 	var ret sys.Value
-	// Troncamento a uint32 come la conversione implicita size_t → uint32_t del C.
+	// Truncate to uint32 to match C's implicit size_t -> uint32_t conversion.
 	if !nt.Call(env, sys.CreateUint32(env, uint32(byteLength), &ret)) {
 		return nil
 	}
@@ -125,7 +125,7 @@ func testSharedArrayBufferData(env sys.Env, info sys.CallbackInfo) sys.Value {
 
 	writeTestDataToBuffer(data, byteLength)
 
-	// Restituisce la validità del puntatore ai dati.
+	// Return whether the data pointer is valid.
 	dataValid := data != nil && byteLength > 0
 	var ret sys.Value
 	if !nt.Call(env, sys.GetBoolean(env, dataValid, &ret)) {

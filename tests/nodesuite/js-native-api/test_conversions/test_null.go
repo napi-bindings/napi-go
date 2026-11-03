@@ -1,5 +1,5 @@
-// Porting di test/js-native-api/test_conversions/test_null.c: le macro GEN_NULL_CHECK_BINDING e
-// GEN_NULL_CHECK_STRING_BINDING diventano due funzioni generiche.
+// Port of test/js-native-api/test_conversions/test_null.c: the GEN_NULL_CHECK_BINDING and
+// GEN_NULL_CHECK_STRING_BINDING macros become two generic functions.
 package main
 
 import (
@@ -9,7 +9,7 @@ import (
 
 const invalidArgument = "Invalid argument"
 
-// stringBufLen e stringLength sono arg_type buf[4] e size_t length = 3 della macro C.
+// stringBufLen and stringLength correspond to arg_type buf[4] and size_t length = 3 in the C macro.
 const (
 	stringBufLen = 4
 	stringLength = 3
@@ -17,9 +17,9 @@ const (
 
 type getFn[T any] func(env sys.Env, value sys.Value, result *T) sys.Status
 
-// genNullCheckBinding equivale a GEN_NULL_CHECK_BINDING: chiama api con env, value e result NULL
-// a turno, poi con un oggetto al posto del tipo atteso. Lo status delle chiamate senza controllo
-// è letto subito dopo da AddLastStatus, come nella macro C.
+// genNullCheckBinding is equivalent to GEN_NULL_CHECK_BINDING: calls api with NULL env, value,
+// and result in turn, then with an object instead of the expected type. The status of unchecked
+// calls is read immediately after via AddLastStatus, matching the C macro.
 func genNullCheckBinding[T any](api getFn[T]) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var returnValue sys.Value
@@ -41,7 +41,7 @@ func genNullCheckBinding[T any](api getFn[T]) nt.Func {
 
 type getStringFn[T byte | uint16] func(env sys.Env, value sys.Value, buf *T, bufsize uint, result *uint) sys.Status
 
-// genNullCheckStringBinding equivale a GEN_NULL_CHECK_STRING_BINDING.
+// genNullCheckStringBinding is equivalent to GEN_NULL_CHECK_STRING_BINDING.
 func genNullCheckStringBinding[T byte | uint16](api getStringFn[T]) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var returnValue sys.Value

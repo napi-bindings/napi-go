@@ -1,6 +1,6 @@
-// Porting di test/node-api/test_threadsafe_function_abort/binding.cc. La classe C++ Context
-// diventa la struct tsfnContext, passata come context della TSFN tramite cgo.Handle; il template
-// call<> del C++ diventa la funzione call.
+// Port of test/node-api/test_threadsafe_function_abort/binding.cc. The C++ Context class
+// becomes the tsfnContext struct, passed as the TSFN context via cgo.Handle; the C++ call<>
+// template becomes the call function.
 package main
 
 import (
@@ -16,13 +16,13 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// call equivale al template call<> / NAPI_CALL del C++: se status non è napi_ok stampa
-// "<nome>: <status>" su stderr e chiama abort().
+// call corresponds to the C++ call<> template / NAPI_CALL: if status is not napi_ok, it prints
+// "<name>: <status>" to stderr and calls abort().
 func call(name string, status sys.Status) {
 	if status == sys.StatusOK {
 		return
 	}
-	// L'errore della scrittura non è controllato: il processo termina subito dopo.
+	// Write error is not checked: the process aborts immediately after.
 	fmt.Fprintf(os.Stderr, "%s: %d\n", name, int(status))
 	nt.Abort()
 }
@@ -38,7 +38,7 @@ type tsfnContext struct {
 	state contextState
 }
 
-// initialThreadCount è l'initial_thread_count della TSFN.
+// initialThreadCount is the TSFN's initial_thread_count.
 const initialThreadCount = 1
 
 var runData = nt.Register(run)

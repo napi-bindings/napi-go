@@ -1,6 +1,6 @@
-/* Addon Node-API in C puro: baseline per misurare l'overhead aggiunto da cgo.
+/* Pure C Node-API addon: baseline for measuring the overhead added by cgo.
  * Build (Unix): cc -O2 -shared -fPIC -I../../napi/include cref.c -o cref.node
- *               (macOS: aggiungere -undefined dynamic_lookup)
+ *               (macOS: add -undefined dynamic_lookup)
  */
 #include <node_api.h>
 #include <stdlib.h>

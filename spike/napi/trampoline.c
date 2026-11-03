@@ -1,10 +1,9 @@
 /*
- * trampoline.c — unici punti di ingresso C → Go.
+ * trampoline.c — sole C → Go entry points.
  *
- * Tutte le funzioni JS create da napi-go puntano a gn_callback: il `data` della
- * funzione è un indice nel registro Go. napi_get_cb_info viene chiamata qui,
- * prima di entrare in Go, così ogni chiamata JS→Go attraversa cgo una volta sola
- * per argc/argv/this/data.
+ * Every JS function created by napi-go points to gn_callback: the function's `data`
+ * is an index into the Go registry. napi_get_cb_info is called here, before
+ * entering Go, so every JS→Go call crosses cgo only once for argc/argv/this/data.
  */
 #include "gonapi.h"
 #include "_cgo_export.h"
@@ -15,7 +14,7 @@ napi_value gn_callback(napi_env env, napi_callback_info info) {
   napi_value self = NULL;
   void* data = NULL;
   if (gn_napi.napi_get_cb_info(env, info, &argc, argv, &self, &data) != napi_ok) return NULL;
-  /* Gli slot argv[argc..GN_INLINE_ARGS) sono riempiti da Node con `undefined`. */
+  /* Slots argv[argc..GN_INLINE_ARGS) are filled by Node with `undefined`. */
   return goNapiCallback(env, info, (uintptr_t)data, argc, argv, self);
 }
 
@@ -26,7 +25,7 @@ napi_value gn_typed_callback(napi_env env, napi_callback_info info) {
   if (gn_napi.napi_get_cb_info(env, info, &argc, argv, NULL, &data) != napi_ok) return NULL;
   const gn_sig* sig = (const gn_sig*)data;
   gn_arg args[GN_INLINE_ARGS];
-  char sbuf[GN_STRBUF]; /* stringhe in ingresso: buffer condiviso sullo stack */
+  char sbuf[GN_STRBUF]; /* input strings: shared stack buffer */
   size_t used = 0;
   for (int32_t i = 0; i < sig->nargs; i++) {
     args[i].kind = sig->kinds[i];
@@ -55,7 +54,7 @@ napi_value gn_typed_callback(napi_env env, napi_callback_info info) {
           args[i].u.s.p = sbuf + used;
           args[i].u.s.n = w;
           used += w + 1;
-        } else { /* troppo lunga: Go la leggerà dal napi_value */
+        } else { /* too long: Go will read it from the napi_value */
           args[i].kind = GN_K_VALUE;
           args[i].u.v = argv[i];
         }
@@ -69,9 +68,9 @@ napi_value gn_typed_callback(napi_env env, napi_callback_info info) {
   char obuf[GN_STRBUF];
   gn_arg out;
   out.kind = sig->ret;
-  out.u.s.p = obuf; /* per GN_K_STR: Go copia qui il risultato (capacità in n) */
+  out.u.s.p = obuf; /* for GN_K_STR: Go copies the result here (capacity in n) */
   out.u.s.n = sizeof obuf;
-  if (goNapiTypedCallback(env, sig->id, args, sig->nargs, &out) != 0) return NULL; /* Go ha già lanciato */
+  if (goNapiTypedCallback(env, sig->id, args, sig->nargs, &out) != 0) return NULL; /* Go already threw */
   napi_value r = NULL;
   switch (out.kind) {
     case GN_K_F64: gn_napi.napi_create_double(env, out.u.f64, &r); break;
@@ -87,8 +86,8 @@ number_expected:
   return NULL;
 }
 
-/* call_js del dispatcher: eseguita sul thread JS dell'env. Con env == NULL la TSFN
-   sta venendo distrutta (teardown): Go deve solo scartare la coda. */
+/* Dispatcher call_js: executed on the env's JS thread. With env == NULL the TSFN
+   is being torn down: Go must simply discard the queue. */
 void gn_tsfn_call_js(napi_env env, napi_value js_cb, void* ctx, void* data) {
   (void)js_cb; (void)data;
   goNapiDispatch(env, (uintptr_t)ctx);

@@ -1,5 +1,5 @@
-// Porting del target test_pending_exception di test/js-native-api/test_cannot_run_js/binding.gyp
-// (test_cannot_run_js.c con NAPI_VERSION=9).
+// Port of the test_pending_exception target in test/js-native-api/test_cannot_run_js/binding.gyp
+// (test_cannot_run_js.c with NAPI_VERSION=9).
 package main
 
 import (

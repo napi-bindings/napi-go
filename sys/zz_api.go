@@ -39,10 +39,10 @@ import "C"
 
 import "unsafe"
 
-// Fn identifica una funzione Node-API della tabella risolta a runtime.
+// Fn identifies a Node-API function in the runtime-resolved function table.
 type Fn int
 
-// Funzioni Node-API, nell'ordine degli header.
+// Node-API functions, in header declaration order.
 const (
 	FnGetLastErrorInfo             Fn = iota // napi_get_last_error_info
 	FnGetUndefined                           // napi_get_undefined
@@ -200,13 +200,13 @@ const (
 	FnGetModuleFileName                      // node_api_get_module_file_name
 )
 
-// fnCount è il numero di funzioni nella tabella.
+// fnCount is the total number of functions in the table.
 const fnCount = 154
 
-// MaxVersion è la versione Node-API più alta descritta dagli header vendorizzati.
+// MaxVersion is the highest Node-API version described by the vendored headers.
 const MaxVersion = 10
 
-// La tabella Go e quella C devono avere la stessa lunghezza.
+// The Go and C tables must have the same length.
 var (
 	_ [fnCount - C.GN_API_COUNT]struct{}
 	_ [C.GN_API_COUNT - fnCount]struct{}
@@ -372,8 +372,8 @@ var fnInfo = [fnCount]struct {
 	{"node_api_get_module_file_name", 9},
 }
 
-// GetLastErrorInfo chiama napi_get_last_error_info (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetLastErrorInfo calls napi_get_last_error_info (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_last_error_info
 func GetLastErrorInfo(env Env, result **ExtendedErrorInfo) Status {
@@ -390,8 +390,8 @@ func GetLastErrorInfo(env Env, result **ExtendedErrorInfo) Status {
 	return Status(gnR.status)
 }
 
-// GetUndefined chiama napi_get_undefined (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetUndefined calls napi_get_undefined (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_undefined
 func GetUndefined(env Env, result *Value) Status {
@@ -408,8 +408,8 @@ func GetUndefined(env Env, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// GetNull chiama napi_get_null (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetNull calls napi_get_null (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_null
 func GetNull(env Env, result *Value) Status {
@@ -426,8 +426,8 @@ func GetNull(env Env, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// GetGlobal chiama napi_get_global (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetGlobal calls napi_get_global (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_global
 func GetGlobal(env Env, result *Value) Status {
@@ -444,8 +444,8 @@ func GetGlobal(env Env, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// GetBoolean chiama napi_get_boolean (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetBoolean calls napi_get_boolean (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_boolean
 func GetBoolean(env Env, value bool, result *Value) Status {
@@ -462,8 +462,8 @@ func GetBoolean(env Env, value bool, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateObject chiama napi_create_object (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateObject calls napi_create_object (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_object
 func CreateObject(env Env, result *Value) Status {
@@ -480,8 +480,8 @@ func CreateObject(env Env, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateArray chiama napi_create_array (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateArray calls napi_create_array (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_array
 func CreateArray(env Env, result *Value) Status {
@@ -498,8 +498,8 @@ func CreateArray(env Env, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateArrayWithLength chiama napi_create_array_with_length (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateArrayWithLength calls napi_create_array_with_length (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_array_with_length
 func CreateArrayWithLength(env Env, length uint, result *Value) Status {
@@ -516,8 +516,8 @@ func CreateArrayWithLength(env Env, length uint, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateDouble chiama napi_create_double (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateDouble calls napi_create_double (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_double
 func CreateDouble(env Env, value float64, result *Value) Status {
@@ -534,8 +534,8 @@ func CreateDouble(env Env, value float64, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateInt32 chiama napi_create_int32 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateInt32 calls napi_create_int32 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_int32
 func CreateInt32(env Env, value int32, result *Value) Status {
@@ -552,8 +552,8 @@ func CreateInt32(env Env, value int32, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateUint32 chiama napi_create_uint32 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateUint32 calls napi_create_uint32 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_uint32
 func CreateUint32(env Env, value uint32, result *Value) Status {
@@ -570,8 +570,8 @@ func CreateUint32(env Env, value uint32, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateInt64 chiama napi_create_int64 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateInt64 calls napi_create_int64 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_int64
 func CreateInt64(env Env, value int64, result *Value) Status {
@@ -588,8 +588,8 @@ func CreateInt64(env Env, value int64, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateStringLatin1 chiama napi_create_string_latin1 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateStringLatin1 calls napi_create_string_latin1 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_string_latin1
 func CreateStringLatin1(env Env, str *byte, length uint, result *Value) Status {
@@ -606,8 +606,8 @@ func CreateStringLatin1(env Env, str *byte, length uint, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateStringUTF8 chiama napi_create_string_utf8 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateStringUTF8 calls napi_create_string_utf8 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_string_utf8
 func CreateStringUTF8(env Env, str *byte, length uint, result *Value) Status {
@@ -624,8 +624,8 @@ func CreateStringUTF8(env Env, str *byte, length uint, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateStringUTF16 chiama napi_create_string_utf16 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateStringUTF16 calls napi_create_string_utf16 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_string_utf16
 func CreateStringUTF16(env Env, str *uint16, length uint, result *Value) Status {
@@ -642,9 +642,9 @@ func CreateStringUTF16(env Env, str *uint16, length uint, result *Value) Status 
 	return Status(gnR.status)
 }
 
-// CreateExternalStringLatin1 chiama node_api_create_external_string_latin1 (Node-API 10).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
-// I buffer passati vengono conservati da Node-API: non devono essere memoria Go.
+// CreateExternalStringLatin1 calls node_api_create_external_string_latin1 (Node-API 10).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
+// Passed buffers are retained by Node-API and must not point to Go memory.
 //
 // https://nodejs.org/api/n-api.html#node_api_create_external_string_latin1
 func CreateExternalStringLatin1(env Env, str *byte, length uint, finalizeCallback Finalize, finalizeHint uintptr, result *Value, copied *bool) Status {
@@ -667,9 +667,9 @@ func CreateExternalStringLatin1(env Env, str *byte, length uint, finalizeCallbac
 	return Status(gnR.status)
 }
 
-// CreateExternalStringUTF16 chiama node_api_create_external_string_utf16 (Node-API 10).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
-// I buffer passati vengono conservati da Node-API: non devono essere memoria Go.
+// CreateExternalStringUTF16 calls node_api_create_external_string_utf16 (Node-API 10).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
+// Passed buffers are retained by Node-API and must not point to Go memory.
 //
 // https://nodejs.org/api/n-api.html#node_api_create_external_string_utf16
 func CreateExternalStringUTF16(env Env, str *uint16, length uint, finalizeCallback Finalize, finalizeHint uintptr, result *Value, copied *bool) Status {
@@ -692,8 +692,8 @@ func CreateExternalStringUTF16(env Env, str *uint16, length uint, finalizeCallba
 	return Status(gnR.status)
 }
 
-// CreatePropertyKeyLatin1 chiama node_api_create_property_key_latin1 (Node-API 10).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreatePropertyKeyLatin1 calls node_api_create_property_key_latin1 (Node-API 10).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#node_api_create_property_key_latin1
 func CreatePropertyKeyLatin1(env Env, str *byte, length uint, result *Value) Status {
@@ -710,8 +710,8 @@ func CreatePropertyKeyLatin1(env Env, str *byte, length uint, result *Value) Sta
 	return Status(gnR.status)
 }
 
-// CreatePropertyKeyUTF8 chiama node_api_create_property_key_utf8 (Node-API 10).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreatePropertyKeyUTF8 calls node_api_create_property_key_utf8 (Node-API 10).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#node_api_create_property_key_utf8
 func CreatePropertyKeyUTF8(env Env, str *byte, length uint, result *Value) Status {
@@ -728,8 +728,8 @@ func CreatePropertyKeyUTF8(env Env, str *byte, length uint, result *Value) Statu
 	return Status(gnR.status)
 }
 
-// CreatePropertyKeyUTF16 chiama node_api_create_property_key_utf16 (Node-API 10).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreatePropertyKeyUTF16 calls node_api_create_property_key_utf16 (Node-API 10).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#node_api_create_property_key_utf16
 func CreatePropertyKeyUTF16(env Env, str *uint16, length uint, result *Value) Status {
@@ -746,8 +746,8 @@ func CreatePropertyKeyUTF16(env Env, str *uint16, length uint, result *Value) St
 	return Status(gnR.status)
 }
 
-// CreateSymbol chiama napi_create_symbol (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateSymbol calls napi_create_symbol (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_symbol
 func CreateSymbol(env Env, description Value, result *Value) Status {
@@ -764,8 +764,8 @@ func CreateSymbol(env Env, description Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// SymbolFor chiama node_api_symbol_for (Node-API 9).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// SymbolFor calls node_api_symbol_for (Node-API 9).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#node_api_symbol_for
 func SymbolFor(env Env, utf8description *byte, length uint, result *Value) Status {
@@ -782,8 +782,8 @@ func SymbolFor(env Env, utf8description *byte, length uint, result *Value) Statu
 	return Status(gnR.status)
 }
 
-// CreateFunction chiama napi_create_function (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateFunction calls napi_create_function (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_function
 func CreateFunction(env Env, utf8name *byte, length uint, cb Callback, data uintptr, result *Value) Status {
@@ -800,8 +800,8 @@ func CreateFunction(env Env, utf8name *byte, length uint, cb Callback, data uint
 	return Status(gnR.status)
 }
 
-// CreateError chiama napi_create_error (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateError calls napi_create_error (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_error
 func CreateError(env Env, code Value, msg Value, result *Value) Status {
@@ -818,8 +818,8 @@ func CreateError(env Env, code Value, msg Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateTypeError chiama napi_create_type_error (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateTypeError calls napi_create_type_error (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_type_error
 func CreateTypeError(env Env, code Value, msg Value, result *Value) Status {
@@ -836,8 +836,8 @@ func CreateTypeError(env Env, code Value, msg Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateRangeError chiama napi_create_range_error (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateRangeError calls napi_create_range_error (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_range_error
 func CreateRangeError(env Env, code Value, msg Value, result *Value) Status {
@@ -854,8 +854,8 @@ func CreateRangeError(env Env, code Value, msg Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateSyntaxError chiama node_api_create_syntax_error (Node-API 9).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateSyntaxError calls node_api_create_syntax_error (Node-API 9).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#node_api_create_syntax_error
 func CreateSyntaxError(env Env, code Value, msg Value, result *Value) Status {
@@ -872,8 +872,8 @@ func CreateSyntaxError(env Env, code Value, msg Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// Typeof chiama napi_typeof (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// Typeof calls napi_typeof (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_typeof
 func Typeof(env Env, value Value, result *ValueType) Status {
@@ -890,8 +890,8 @@ func Typeof(env Env, value Value, result *ValueType) Status {
 	return Status(gnR.status)
 }
 
-// GetValueDouble chiama napi_get_value_double (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueDouble calls napi_get_value_double (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_double
 func GetValueDouble(env Env, value Value, result *float64) Status {
@@ -908,8 +908,8 @@ func GetValueDouble(env Env, value Value, result *float64) Status {
 	return Status(gnR.status)
 }
 
-// GetValueInt32 chiama napi_get_value_int32 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueInt32 calls napi_get_value_int32 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_int32
 func GetValueInt32(env Env, value Value, result *int32) Status {
@@ -926,8 +926,8 @@ func GetValueInt32(env Env, value Value, result *int32) Status {
 	return Status(gnR.status)
 }
 
-// GetValueUint32 chiama napi_get_value_uint32 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueUint32 calls napi_get_value_uint32 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_uint32
 func GetValueUint32(env Env, value Value, result *uint32) Status {
@@ -944,8 +944,8 @@ func GetValueUint32(env Env, value Value, result *uint32) Status {
 	return Status(gnR.status)
 }
 
-// GetValueInt64 chiama napi_get_value_int64 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueInt64 calls napi_get_value_int64 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_int64
 func GetValueInt64(env Env, value Value, result *int64) Status {
@@ -962,8 +962,8 @@ func GetValueInt64(env Env, value Value, result *int64) Status {
 	return Status(gnR.status)
 }
 
-// GetValueBool chiama napi_get_value_bool (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueBool calls napi_get_value_bool (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_bool
 func GetValueBool(env Env, value Value, result *bool) Status {
@@ -980,8 +980,8 @@ func GetValueBool(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetValueStringLatin1 chiama napi_get_value_string_latin1 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueStringLatin1 calls napi_get_value_string_latin1 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_string_latin1
 func GetValueStringLatin1(env Env, value Value, buf *byte, bufsize uint, result *uint) Status {
@@ -998,8 +998,8 @@ func GetValueStringLatin1(env Env, value Value, buf *byte, bufsize uint, result 
 	return Status(gnR.status)
 }
 
-// GetValueStringUTF8 chiama napi_get_value_string_utf8 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueStringUTF8 calls napi_get_value_string_utf8 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_string_utf8
 func GetValueStringUTF8(env Env, value Value, buf *byte, bufsize uint, result *uint) Status {
@@ -1016,8 +1016,8 @@ func GetValueStringUTF8(env Env, value Value, buf *byte, bufsize uint, result *u
 	return Status(gnR.status)
 }
 
-// GetValueStringUTF16 chiama napi_get_value_string_utf16 (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueStringUTF16 calls napi_get_value_string_utf16 (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_string_utf16
 func GetValueStringUTF16(env Env, value Value, buf *uint16, bufsize uint, result *uint) Status {
@@ -1034,8 +1034,8 @@ func GetValueStringUTF16(env Env, value Value, buf *uint16, bufsize uint, result
 	return Status(gnR.status)
 }
 
-// CoerceToBool chiama napi_coerce_to_bool (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CoerceToBool calls napi_coerce_to_bool (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_coerce_to_bool
 func CoerceToBool(env Env, value Value, result *Value) Status {
@@ -1052,8 +1052,8 @@ func CoerceToBool(env Env, value Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CoerceToNumber chiama napi_coerce_to_number (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CoerceToNumber calls napi_coerce_to_number (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_coerce_to_number
 func CoerceToNumber(env Env, value Value, result *Value) Status {
@@ -1070,8 +1070,8 @@ func CoerceToNumber(env Env, value Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CoerceToObject chiama napi_coerce_to_object (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CoerceToObject calls napi_coerce_to_object (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_coerce_to_object
 func CoerceToObject(env Env, value Value, result *Value) Status {
@@ -1088,8 +1088,8 @@ func CoerceToObject(env Env, value Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CoerceToString chiama napi_coerce_to_string (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CoerceToString calls napi_coerce_to_string (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_coerce_to_string
 func CoerceToString(env Env, value Value, result *Value) Status {
@@ -1106,8 +1106,8 @@ func CoerceToString(env Env, value Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// GetPrototype chiama napi_get_prototype (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetPrototype calls napi_get_prototype (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_prototype
 func GetPrototype(env Env, object Value, result *Value) Status {
@@ -1124,8 +1124,8 @@ func GetPrototype(env Env, object Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// GetPropertyNames chiama napi_get_property_names (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetPropertyNames calls napi_get_property_names (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_property_names
 func GetPropertyNames(env Env, object Value, result *Value) Status {
@@ -1142,15 +1142,15 @@ func GetPropertyNames(env Env, object Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// SetProperty chiama napi_set_property (Node-API 1).
+// SetProperty calls napi_set_property (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_set_property
 func SetProperty(env Env, object Value, key Value, value Value) Status {
 	return Status(C.gn_napi_set_property(C.napi_env(env), C.napi_value(object), C.napi_value(key), C.napi_value(value)))
 }
 
-// HasProperty chiama napi_has_property (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// HasProperty calls napi_has_property (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_has_property
 func HasProperty(env Env, object Value, key Value, result *bool) Status {
@@ -1167,8 +1167,8 @@ func HasProperty(env Env, object Value, key Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetProperty chiama napi_get_property (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetProperty calls napi_get_property (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_property
 func GetProperty(env Env, object Value, key Value, result *Value) Status {
@@ -1185,8 +1185,8 @@ func GetProperty(env Env, object Value, key Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// DeleteProperty chiama napi_delete_property (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// DeleteProperty calls napi_delete_property (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_delete_property
 func DeleteProperty(env Env, object Value, key Value, result *bool) Status {
@@ -1203,8 +1203,8 @@ func DeleteProperty(env Env, object Value, key Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// HasOwnProperty chiama napi_has_own_property (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// HasOwnProperty calls napi_has_own_property (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_has_own_property
 func HasOwnProperty(env Env, object Value, key Value, result *bool) Status {
@@ -1221,15 +1221,15 @@ func HasOwnProperty(env Env, object Value, key Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// SetNamedProperty chiama napi_set_named_property (Node-API 1).
+// SetNamedProperty calls napi_set_named_property (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_set_named_property
 func SetNamedProperty(env Env, object Value, utf8name *byte, value Value) Status {
 	return Status(C.gn_napi_set_named_property(C.napi_env(env), C.napi_value(object), (*C.char)(unsafe.Pointer(utf8name)), C.napi_value(value)))
 }
 
-// HasNamedProperty chiama napi_has_named_property (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// HasNamedProperty calls napi_has_named_property (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_has_named_property
 func HasNamedProperty(env Env, object Value, utf8name *byte, result *bool) Status {
@@ -1246,8 +1246,8 @@ func HasNamedProperty(env Env, object Value, utf8name *byte, result *bool) Statu
 	return Status(gnR.status)
 }
 
-// GetNamedProperty chiama napi_get_named_property (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetNamedProperty calls napi_get_named_property (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_named_property
 func GetNamedProperty(env Env, object Value, utf8name *byte, result *Value) Status {
@@ -1264,15 +1264,15 @@ func GetNamedProperty(env Env, object Value, utf8name *byte, result *Value) Stat
 	return Status(gnR.status)
 }
 
-// SetElement chiama napi_set_element (Node-API 1).
+// SetElement calls napi_set_element (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_set_element
 func SetElement(env Env, object Value, index uint32, value Value) Status {
 	return Status(C.gn_napi_set_element(C.napi_env(env), C.napi_value(object), C.uint32_t(index), C.napi_value(value)))
 }
 
-// HasElement chiama napi_has_element (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// HasElement calls napi_has_element (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_has_element
 func HasElement(env Env, object Value, index uint32, result *bool) Status {
@@ -1289,8 +1289,8 @@ func HasElement(env Env, object Value, index uint32, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetElement chiama napi_get_element (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetElement calls napi_get_element (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_element
 func GetElement(env Env, object Value, index uint32, result *Value) Status {
@@ -1307,8 +1307,8 @@ func GetElement(env Env, object Value, index uint32, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// DeleteElement chiama napi_delete_element (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// DeleteElement calls napi_delete_element (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_delete_element
 func DeleteElement(env Env, object Value, index uint32, result *bool) Status {
@@ -1325,15 +1325,15 @@ func DeleteElement(env Env, object Value, index uint32, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// DefineProperties chiama napi_define_properties (Node-API 1).
+// DefineProperties calls napi_define_properties (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_define_properties
 func DefineProperties(env Env, object Value, propertyCount uint, properties *PropertyDescriptor) Status {
 	return Status(C.gn_napi_define_properties(C.napi_env(env), C.napi_value(object), C.size_t(propertyCount), (*C.napi_property_descriptor)(unsafe.Pointer(properties))))
 }
 
-// IsArray chiama napi_is_array (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsArray calls napi_is_array (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_array
 func IsArray(env Env, value Value, result *bool) Status {
@@ -1350,8 +1350,8 @@ func IsArray(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetArrayLength chiama napi_get_array_length (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetArrayLength calls napi_get_array_length (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_array_length
 func GetArrayLength(env Env, value Value, result *uint32) Status {
@@ -1368,8 +1368,8 @@ func GetArrayLength(env Env, value Value, result *uint32) Status {
 	return Status(gnR.status)
 }
 
-// StrictEquals chiama napi_strict_equals (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// StrictEquals calls napi_strict_equals (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_strict_equals
 func StrictEquals(env Env, lhs Value, rhs Value, result *bool) Status {
@@ -1386,8 +1386,8 @@ func StrictEquals(env Env, lhs Value, rhs Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// CallFunction chiama napi_call_function (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CallFunction calls napi_call_function (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_call_function
 func CallFunction(env Env, recv Value, fn Value, argc uint, argv *Value, result *Value) Status {
@@ -1404,8 +1404,8 @@ func CallFunction(env Env, recv Value, fn Value, argc uint, argv *Value, result 
 	return Status(gnR.status)
 }
 
-// NewInstance chiama napi_new_instance (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// NewInstance calls napi_new_instance (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_new_instance
 func NewInstance(env Env, constructor Value, argc uint, argv *Value, result *Value) Status {
@@ -1422,8 +1422,8 @@ func NewInstance(env Env, constructor Value, argc uint, argv *Value, result *Val
 	return Status(gnR.status)
 }
 
-// Instanceof chiama napi_instanceof (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// Instanceof calls napi_instanceof (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_instanceof
 func Instanceof(env Env, object Value, constructor Value, result *bool) Status {
@@ -1440,8 +1440,8 @@ func Instanceof(env Env, object Value, constructor Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetCbInfo chiama napi_get_cb_info (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetCbInfo calls napi_get_cb_info (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_cb_info
 func GetCbInfo(env Env, cbinfo CallbackInfo, argc *uint, argv *Value, thisArg *Value, data *unsafe.Pointer) Status {
@@ -1464,8 +1464,8 @@ func GetCbInfo(env Env, cbinfo CallbackInfo, argc *uint, argv *Value, thisArg *V
 	return Status(gnR.status)
 }
 
-// GetNewTarget chiama napi_get_new_target (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetNewTarget calls napi_get_new_target (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_new_target
 func GetNewTarget(env Env, cbinfo CallbackInfo, result *Value) Status {
@@ -1482,8 +1482,8 @@ func GetNewTarget(env Env, cbinfo CallbackInfo, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// DefineClass chiama napi_define_class (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// DefineClass calls napi_define_class (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_define_class
 func DefineClass(env Env, utf8name *byte, length uint, constructor Callback, data uintptr, propertyCount uint, properties *PropertyDescriptor, result *Value) Status {
@@ -1500,8 +1500,8 @@ func DefineClass(env Env, utf8name *byte, length uint, constructor Callback, dat
 	return Status(gnR.status)
 }
 
-// Wrap chiama napi_wrap (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// Wrap calls napi_wrap (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_wrap
 func Wrap(env Env, jsObject Value, nativeObject uintptr, finalizeCb Finalize, finalizeHint uintptr, result *Ref) Status {
@@ -1518,8 +1518,8 @@ func Wrap(env Env, jsObject Value, nativeObject uintptr, finalizeCb Finalize, fi
 	return Status(gnR.status)
 }
 
-// Unwrap chiama napi_unwrap (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// Unwrap calls napi_unwrap (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_unwrap
 func Unwrap(env Env, jsObject Value, result *unsafe.Pointer) Status {
@@ -1536,8 +1536,8 @@ func Unwrap(env Env, jsObject Value, result *unsafe.Pointer) Status {
 	return Status(gnR.status)
 }
 
-// RemoveWrap chiama napi_remove_wrap (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// RemoveWrap calls napi_remove_wrap (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_remove_wrap
 func RemoveWrap(env Env, jsObject Value, result *unsafe.Pointer) Status {
@@ -1554,8 +1554,8 @@ func RemoveWrap(env Env, jsObject Value, result *unsafe.Pointer) Status {
 	return Status(gnR.status)
 }
 
-// CreateExternal chiama napi_create_external (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateExternal calls napi_create_external (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_external
 func CreateExternal(env Env, data uintptr, finalizeCb Finalize, finalizeHint uintptr, result *Value) Status {
@@ -1572,8 +1572,8 @@ func CreateExternal(env Env, data uintptr, finalizeCb Finalize, finalizeHint uin
 	return Status(gnR.status)
 }
 
-// GetValueExternal chiama napi_get_value_external (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueExternal calls napi_get_value_external (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_external
 func GetValueExternal(env Env, value Value, result *unsafe.Pointer) Status {
@@ -1590,8 +1590,8 @@ func GetValueExternal(env Env, value Value, result *unsafe.Pointer) Status {
 	return Status(gnR.status)
 }
 
-// CreateReference chiama napi_create_reference (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateReference calls napi_create_reference (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_reference
 func CreateReference(env Env, value Value, initialRefcount uint32, result *Ref) Status {
@@ -1608,15 +1608,15 @@ func CreateReference(env Env, value Value, initialRefcount uint32, result *Ref) 
 	return Status(gnR.status)
 }
 
-// DeleteReference chiama napi_delete_reference (Node-API 1).
+// DeleteReference calls napi_delete_reference (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_delete_reference
 func DeleteReference(env Env, ref Ref) Status {
 	return Status(C.gn_napi_delete_reference(C.napi_env(env), C.napi_ref(ref)))
 }
 
-// ReferenceRef chiama napi_reference_ref (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// ReferenceRef calls napi_reference_ref (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_reference_ref
 func ReferenceRef(env Env, ref Ref, result *uint32) Status {
@@ -1633,8 +1633,8 @@ func ReferenceRef(env Env, ref Ref, result *uint32) Status {
 	return Status(gnR.status)
 }
 
-// ReferenceUnref chiama napi_reference_unref (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// ReferenceUnref calls napi_reference_unref (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_reference_unref
 func ReferenceUnref(env Env, ref Ref, result *uint32) Status {
@@ -1651,8 +1651,8 @@ func ReferenceUnref(env Env, ref Ref, result *uint32) Status {
 	return Status(gnR.status)
 }
 
-// GetReferenceValue chiama napi_get_reference_value (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetReferenceValue calls napi_get_reference_value (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_reference_value
 func GetReferenceValue(env Env, ref Ref, result *Value) Status {
@@ -1669,8 +1669,8 @@ func GetReferenceValue(env Env, ref Ref, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// OpenHandleScope chiama napi_open_handle_scope (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// OpenHandleScope calls napi_open_handle_scope (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_open_handle_scope
 func OpenHandleScope(env Env, result *HandleScope) Status {
@@ -1687,15 +1687,15 @@ func OpenHandleScope(env Env, result *HandleScope) Status {
 	return Status(gnR.status)
 }
 
-// CloseHandleScope chiama napi_close_handle_scope (Node-API 1).
+// CloseHandleScope calls napi_close_handle_scope (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_close_handle_scope
 func CloseHandleScope(env Env, scope HandleScope) Status {
 	return Status(C.gn_napi_close_handle_scope(C.napi_env(env), C.napi_handle_scope(scope)))
 }
 
-// OpenEscapableHandleScope chiama napi_open_escapable_handle_scope (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// OpenEscapableHandleScope calls napi_open_escapable_handle_scope (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_open_escapable_handle_scope
 func OpenEscapableHandleScope(env Env, result *EscapableHandleScope) Status {
@@ -1712,15 +1712,15 @@ func OpenEscapableHandleScope(env Env, result *EscapableHandleScope) Status {
 	return Status(gnR.status)
 }
 
-// CloseEscapableHandleScope chiama napi_close_escapable_handle_scope (Node-API 1).
+// CloseEscapableHandleScope calls napi_close_escapable_handle_scope (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_close_escapable_handle_scope
 func CloseEscapableHandleScope(env Env, scope EscapableHandleScope) Status {
 	return Status(C.gn_napi_close_escapable_handle_scope(C.napi_env(env), C.napi_escapable_handle_scope(scope)))
 }
 
-// EscapeHandle chiama napi_escape_handle (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// EscapeHandle calls napi_escape_handle (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_escape_handle
 func EscapeHandle(env Env, scope EscapableHandleScope, escapee Value, result *Value) Status {
@@ -1737,43 +1737,43 @@ func EscapeHandle(env Env, scope EscapableHandleScope, escapee Value, result *Va
 	return Status(gnR.status)
 }
 
-// Throw chiama napi_throw (Node-API 1).
+// Throw calls napi_throw (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_throw
 func Throw(env Env, error Value) Status {
 	return Status(C.gn_napi_throw(C.napi_env(env), C.napi_value(error)))
 }
 
-// ThrowError chiama napi_throw_error (Node-API 1).
+// ThrowError calls napi_throw_error (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_throw_error
 func ThrowError(env Env, code *byte, msg *byte) Status {
 	return Status(C.gn_napi_throw_error(C.napi_env(env), (*C.char)(unsafe.Pointer(code)), (*C.char)(unsafe.Pointer(msg))))
 }
 
-// ThrowTypeError chiama napi_throw_type_error (Node-API 1).
+// ThrowTypeError calls napi_throw_type_error (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_throw_type_error
 func ThrowTypeError(env Env, code *byte, msg *byte) Status {
 	return Status(C.gn_napi_throw_type_error(C.napi_env(env), (*C.char)(unsafe.Pointer(code)), (*C.char)(unsafe.Pointer(msg))))
 }
 
-// ThrowRangeError chiama napi_throw_range_error (Node-API 1).
+// ThrowRangeError calls napi_throw_range_error (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_throw_range_error
 func ThrowRangeError(env Env, code *byte, msg *byte) Status {
 	return Status(C.gn_napi_throw_range_error(C.napi_env(env), (*C.char)(unsafe.Pointer(code)), (*C.char)(unsafe.Pointer(msg))))
 }
 
-// ThrowSyntaxError chiama node_api_throw_syntax_error (Node-API 9).
+// ThrowSyntaxError calls node_api_throw_syntax_error (Node-API 9).
 //
 // https://nodejs.org/api/n-api.html#node_api_throw_syntax_error
 func ThrowSyntaxError(env Env, code *byte, msg *byte) Status {
 	return Status(C.gn_node_api_throw_syntax_error(C.napi_env(env), (*C.char)(unsafe.Pointer(code)), (*C.char)(unsafe.Pointer(msg))))
 }
 
-// IsError chiama napi_is_error (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsError calls napi_is_error (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_error
 func IsError(env Env, value Value, result *bool) Status {
@@ -1790,8 +1790,8 @@ func IsError(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// IsExceptionPending chiama napi_is_exception_pending (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsExceptionPending calls napi_is_exception_pending (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_exception_pending
 func IsExceptionPending(env Env, result *bool) Status {
@@ -1808,8 +1808,8 @@ func IsExceptionPending(env Env, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetAndClearLastException chiama napi_get_and_clear_last_exception (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetAndClearLastException calls napi_get_and_clear_last_exception (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_and_clear_last_exception
 func GetAndClearLastException(env Env, result *Value) Status {
@@ -1826,8 +1826,8 @@ func GetAndClearLastException(env Env, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// IsArrayBuffer chiama napi_is_arraybuffer (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsArrayBuffer calls napi_is_arraybuffer (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_arraybuffer
 func IsArrayBuffer(env Env, value Value, result *bool) Status {
@@ -1844,8 +1844,8 @@ func IsArrayBuffer(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// CreateArrayBuffer chiama napi_create_arraybuffer (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateArrayBuffer calls napi_create_arraybuffer (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_arraybuffer
 func CreateArrayBuffer(env Env, byteLength uint, data *unsafe.Pointer, result *Value) Status {
@@ -1868,8 +1868,8 @@ func CreateArrayBuffer(env Env, byteLength uint, data *unsafe.Pointer, result *V
 	return Status(gnR.status)
 }
 
-// CreateExternalArrayBuffer chiama napi_create_external_arraybuffer (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateExternalArrayBuffer calls napi_create_external_arraybuffer (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_external_arraybuffer
 func CreateExternalArrayBuffer(env Env, externalData uintptr, byteLength uint, finalizeCb Finalize, finalizeHint uintptr, result *Value) Status {
@@ -1886,8 +1886,8 @@ func CreateExternalArrayBuffer(env Env, externalData uintptr, byteLength uint, f
 	return Status(gnR.status)
 }
 
-// GetArrayBufferInfo chiama napi_get_arraybuffer_info (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetArrayBufferInfo calls napi_get_arraybuffer_info (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_arraybuffer_info
 func GetArrayBufferInfo(env Env, arraybuffer Value, data *unsafe.Pointer, byteLength *uint) Status {
@@ -1910,8 +1910,8 @@ func GetArrayBufferInfo(env Env, arraybuffer Value, data *unsafe.Pointer, byteLe
 	return Status(gnR.status)
 }
 
-// IsTypedArray chiama napi_is_typedarray (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsTypedArray calls napi_is_typedarray (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_typedarray
 func IsTypedArray(env Env, value Value, result *bool) Status {
@@ -1928,8 +1928,8 @@ func IsTypedArray(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// CreateTypedArray chiama napi_create_typedarray (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateTypedArray calls napi_create_typedarray (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_typedarray
 func CreateTypedArray(env Env, typ TypedArrayType, length uint, arraybuffer Value, byteOffset uint, result *Value) Status {
@@ -1946,8 +1946,8 @@ func CreateTypedArray(env Env, typ TypedArrayType, length uint, arraybuffer Valu
 	return Status(gnR.status)
 }
 
-// GetTypedArrayInfo chiama napi_get_typedarray_info (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetTypedArrayInfo calls napi_get_typedarray_info (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_typedarray_info
 func GetTypedArrayInfo(env Env, typedarray Value, typ *TypedArrayType, length *uint, data *unsafe.Pointer, arraybuffer *Value, byteOffset *uint) Status {
@@ -1988,8 +1988,8 @@ func GetTypedArrayInfo(env Env, typedarray Value, typ *TypedArrayType, length *u
 	return Status(gnR.status)
 }
 
-// CreateDataView chiama napi_create_dataview (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateDataView calls napi_create_dataview (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_dataview
 func CreateDataView(env Env, length uint, arraybuffer Value, byteOffset uint, result *Value) Status {
@@ -2006,8 +2006,8 @@ func CreateDataView(env Env, length uint, arraybuffer Value, byteOffset uint, re
 	return Status(gnR.status)
 }
 
-// IsDataView chiama napi_is_dataview (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsDataView calls napi_is_dataview (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_dataview
 func IsDataView(env Env, value Value, result *bool) Status {
@@ -2024,8 +2024,8 @@ func IsDataView(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetDataViewInfo chiama napi_get_dataview_info (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetDataViewInfo calls napi_get_dataview_info (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_dataview_info
 func GetDataViewInfo(env Env, dataview Value, bytelength *uint, data *unsafe.Pointer, arraybuffer *Value, byteOffset *uint) Status {
@@ -2060,8 +2060,8 @@ func GetDataViewInfo(env Env, dataview Value, bytelength *uint, data *unsafe.Poi
 	return Status(gnR.status)
 }
 
-// GetVersion chiama napi_get_version (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetVersion calls napi_get_version (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_version
 func GetVersion(env Env, result *uint32) Status {
@@ -2078,8 +2078,8 @@ func GetVersion(env Env, result *uint32) Status {
 	return Status(gnR.status)
 }
 
-// CreatePromise chiama napi_create_promise (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreatePromise calls napi_create_promise (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_promise
 func CreatePromise(env Env, deferred *Deferred, promise *Value) Status {
@@ -2102,22 +2102,22 @@ func CreatePromise(env Env, deferred *Deferred, promise *Value) Status {
 	return Status(gnR.status)
 }
 
-// ResolveDeferred chiama napi_resolve_deferred (Node-API 1).
+// ResolveDeferred calls napi_resolve_deferred (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_resolve_deferred
 func ResolveDeferred(env Env, deferred Deferred, resolution Value) Status {
 	return Status(C.gn_napi_resolve_deferred(C.napi_env(env), C.napi_deferred(deferred), C.napi_value(resolution)))
 }
 
-// RejectDeferred chiama napi_reject_deferred (Node-API 1).
+// RejectDeferred calls napi_reject_deferred (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_reject_deferred
 func RejectDeferred(env Env, deferred Deferred, rejection Value) Status {
 	return Status(C.gn_napi_reject_deferred(C.napi_env(env), C.napi_deferred(deferred), C.napi_value(rejection)))
 }
 
-// IsPromise chiama napi_is_promise (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsPromise calls napi_is_promise (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_promise
 func IsPromise(env Env, value Value, isPromise *bool) Status {
@@ -2134,8 +2134,8 @@ func IsPromise(env Env, value Value, isPromise *bool) Status {
 	return Status(gnR.status)
 }
 
-// RunScript chiama napi_run_script (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// RunScript calls napi_run_script (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_run_script
 func RunScript(env Env, script Value, result *Value) Status {
@@ -2152,8 +2152,8 @@ func RunScript(env Env, script Value, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// AdjustExternalMemory chiama napi_adjust_external_memory (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// AdjustExternalMemory calls napi_adjust_external_memory (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_adjust_external_memory
 func AdjustExternalMemory(env Env, changeInBytes int64, adjustedValue *int64) Status {
@@ -2170,8 +2170,8 @@ func AdjustExternalMemory(env Env, changeInBytes int64, adjustedValue *int64) St
 	return Status(gnR.status)
 }
 
-// CreateDate chiama napi_create_date (Node-API 5).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateDate calls napi_create_date (Node-API 5).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_date
 func CreateDate(env Env, time float64, result *Value) Status {
@@ -2188,8 +2188,8 @@ func CreateDate(env Env, time float64, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// IsDate chiama napi_is_date (Node-API 5).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsDate calls napi_is_date (Node-API 5).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_date
 func IsDate(env Env, value Value, isDate *bool) Status {
@@ -2206,8 +2206,8 @@ func IsDate(env Env, value Value, isDate *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetDateValue chiama napi_get_date_value (Node-API 5).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetDateValue calls napi_get_date_value (Node-API 5).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_date_value
 func GetDateValue(env Env, value Value, result *float64) Status {
@@ -2224,8 +2224,8 @@ func GetDateValue(env Env, value Value, result *float64) Status {
 	return Status(gnR.status)
 }
 
-// AddFinalizer chiama napi_add_finalizer (Node-API 5).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// AddFinalizer calls napi_add_finalizer (Node-API 5).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_add_finalizer
 func AddFinalizer(env Env, jsObject Value, finalizeData uintptr, finalizeCb Finalize, finalizeHint uintptr, result *Ref) Status {
@@ -2242,8 +2242,8 @@ func AddFinalizer(env Env, jsObject Value, finalizeData uintptr, finalizeCb Fina
 	return Status(gnR.status)
 }
 
-// CreateBigIntInt64 chiama napi_create_bigint_int64 (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateBigIntInt64 calls napi_create_bigint_int64 (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_bigint_int64
 func CreateBigIntInt64(env Env, value int64, result *Value) Status {
@@ -2260,8 +2260,8 @@ func CreateBigIntInt64(env Env, value int64, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateBigIntUint64 chiama napi_create_bigint_uint64 (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateBigIntUint64 calls napi_create_bigint_uint64 (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_bigint_uint64
 func CreateBigIntUint64(env Env, value uint64, result *Value) Status {
@@ -2278,8 +2278,8 @@ func CreateBigIntUint64(env Env, value uint64, result *Value) Status {
 	return Status(gnR.status)
 }
 
-// CreateBigIntWords chiama napi_create_bigint_words (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateBigIntWords calls napi_create_bigint_words (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_bigint_words
 func CreateBigIntWords(env Env, signBit int32, wordCount uint, words *uint64, result *Value) Status {
@@ -2296,8 +2296,8 @@ func CreateBigIntWords(env Env, signBit int32, wordCount uint, words *uint64, re
 	return Status(gnR.status)
 }
 
-// GetValueBigIntInt64 chiama napi_get_value_bigint_int64 (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueBigIntInt64 calls napi_get_value_bigint_int64 (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_bigint_int64
 func GetValueBigIntInt64(env Env, value Value, result *int64, lossless *bool) Status {
@@ -2320,8 +2320,8 @@ func GetValueBigIntInt64(env Env, value Value, result *int64, lossless *bool) St
 	return Status(gnR.status)
 }
 
-// GetValueBigIntUint64 chiama napi_get_value_bigint_uint64 (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueBigIntUint64 calls napi_get_value_bigint_uint64 (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_bigint_uint64
 func GetValueBigIntUint64(env Env, value Value, result *uint64, lossless *bool) Status {
@@ -2344,8 +2344,8 @@ func GetValueBigIntUint64(env Env, value Value, result *uint64, lossless *bool) 
 	return Status(gnR.status)
 }
 
-// GetValueBigIntWords chiama napi_get_value_bigint_words (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetValueBigIntWords calls napi_get_value_bigint_words (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_value_bigint_words
 func GetValueBigIntWords(env Env, value Value, signBit *int32, wordCount *uint, words *uint64) Status {
@@ -2362,8 +2362,8 @@ func GetValueBigIntWords(env Env, value Value, signBit *int32, wordCount *uint, 
 	return Status(gnR.status)
 }
 
-// GetAllPropertyNames chiama napi_get_all_property_names (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetAllPropertyNames calls napi_get_all_property_names (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_all_property_names
 func GetAllPropertyNames(env Env, object Value, keyMode KeyCollectionMode, keyFilter KeyFilter, keyConversion KeyConversion, result *Value) Status {
@@ -2380,15 +2380,15 @@ func GetAllPropertyNames(env Env, object Value, keyMode KeyCollectionMode, keyFi
 	return Status(gnR.status)
 }
 
-// SetInstanceData chiama napi_set_instance_data (Node-API 6).
+// SetInstanceData calls napi_set_instance_data (Node-API 6).
 //
 // https://nodejs.org/api/n-api.html#napi_set_instance_data
 func SetInstanceData(env Env, data uintptr, finalizeCb Finalize, finalizeHint uintptr) Status {
 	return Status(C.gn_napi_set_instance_data(C.napi_env(env), C.uintptr_t(data), C.napi_finalize(finalizeCb), C.uintptr_t(finalizeHint)))
 }
 
-// GetInstanceData chiama napi_get_instance_data (Node-API 6).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetInstanceData calls napi_get_instance_data (Node-API 6).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_instance_data
 func GetInstanceData(env Env, data *unsafe.Pointer) Status {
@@ -2405,15 +2405,15 @@ func GetInstanceData(env Env, data *unsafe.Pointer) Status {
 	return Status(gnR.status)
 }
 
-// DetachArrayBuffer chiama napi_detach_arraybuffer (Node-API 7).
+// DetachArrayBuffer calls napi_detach_arraybuffer (Node-API 7).
 //
 // https://nodejs.org/api/n-api.html#napi_detach_arraybuffer
 func DetachArrayBuffer(env Env, arraybuffer Value) Status {
 	return Status(C.gn_napi_detach_arraybuffer(C.napi_env(env), C.napi_value(arraybuffer)))
 }
 
-// IsDetachedArrayBuffer chiama napi_is_detached_arraybuffer (Node-API 7).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsDetachedArrayBuffer calls napi_is_detached_arraybuffer (Node-API 7).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_detached_arraybuffer
 func IsDetachedArrayBuffer(env Env, value Value, result *bool) Status {
@@ -2430,15 +2430,15 @@ func IsDetachedArrayBuffer(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// TypeTagObject chiama napi_type_tag_object (Node-API 8).
+// TypeTagObject calls napi_type_tag_object (Node-API 8).
 //
 // https://nodejs.org/api/n-api.html#napi_type_tag_object
 func TypeTagObject(env Env, value Value, typeTag *TypeTag) Status {
 	return Status(C.gn_napi_type_tag_object(C.napi_env(env), C.napi_value(value), (*C.napi_type_tag)(unsafe.Pointer(typeTag))))
 }
 
-// CheckObjectTypeTag chiama napi_check_object_type_tag (Node-API 8).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CheckObjectTypeTag calls napi_check_object_type_tag (Node-API 8).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_check_object_type_tag
 func CheckObjectTypeTag(env Env, value Value, typeTag *TypeTag, result *bool) Status {
@@ -2455,29 +2455,29 @@ func CheckObjectTypeTag(env Env, value Value, typeTag *TypeTag, result *bool) St
 	return Status(gnR.status)
 }
 
-// ObjectFreeze chiama napi_object_freeze (Node-API 8).
+// ObjectFreeze calls napi_object_freeze (Node-API 8).
 //
 // https://nodejs.org/api/n-api.html#napi_object_freeze
 func ObjectFreeze(env Env, object Value) Status {
 	return Status(C.gn_napi_object_freeze(C.napi_env(env), C.napi_value(object)))
 }
 
-// ObjectSeal chiama napi_object_seal (Node-API 8).
+// ObjectSeal calls napi_object_seal (Node-API 8).
 //
 // https://nodejs.org/api/n-api.html#napi_object_seal
 func ObjectSeal(env Env, object Value) Status {
 	return Status(C.gn_napi_object_seal(C.napi_env(env), C.napi_value(object)))
 }
 
-// FatalError chiama napi_fatal_error (Node-API 1).
+// FatalError calls napi_fatal_error (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_fatal_error
 func FatalError(location *byte, locationLen uint, message *byte, messageLen uint) {
 	C.gn_napi_fatal_error((*C.char)(unsafe.Pointer(location)), C.size_t(locationLen), (*C.char)(unsafe.Pointer(message)), C.size_t(messageLen))
 }
 
-// AsyncInit chiama napi_async_init (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// AsyncInit calls napi_async_init (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_async_init
 func AsyncInit(env Env, asyncResource Value, asyncResourceName Value, result *AsyncContext) Status {
@@ -2494,15 +2494,15 @@ func AsyncInit(env Env, asyncResource Value, asyncResourceName Value, result *As
 	return Status(gnR.status)
 }
 
-// AsyncDestroy chiama napi_async_destroy (Node-API 1).
+// AsyncDestroy calls napi_async_destroy (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_async_destroy
 func AsyncDestroy(env Env, asyncContext AsyncContext) Status {
 	return Status(C.gn_napi_async_destroy(C.napi_env(env), C.napi_async_context(asyncContext)))
 }
 
-// MakeCallback chiama napi_make_callback (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// MakeCallback calls napi_make_callback (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_make_callback
 func MakeCallback(env Env, asyncContext AsyncContext, recv Value, fn Value, argc uint, argv *Value, result *Value) Status {
@@ -2519,8 +2519,8 @@ func MakeCallback(env Env, asyncContext AsyncContext, recv Value, fn Value, argc
 	return Status(gnR.status)
 }
 
-// CreateBuffer chiama napi_create_buffer (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateBuffer calls napi_create_buffer (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_buffer
 func CreateBuffer(env Env, length uint, data *unsafe.Pointer, result *Value) Status {
@@ -2543,8 +2543,8 @@ func CreateBuffer(env Env, length uint, data *unsafe.Pointer, result *Value) Sta
 	return Status(gnR.status)
 }
 
-// CreateExternalBuffer chiama napi_create_external_buffer (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateExternalBuffer calls napi_create_external_buffer (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_external_buffer
 func CreateExternalBuffer(env Env, length uint, data uintptr, finalizeCb Finalize, finalizeHint uintptr, result *Value) Status {
@@ -2561,8 +2561,8 @@ func CreateExternalBuffer(env Env, length uint, data uintptr, finalizeCb Finaliz
 	return Status(gnR.status)
 }
 
-// CreateBufferFromArrayBuffer chiama node_api_create_buffer_from_arraybuffer (Node-API 10).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateBufferFromArrayBuffer calls node_api_create_buffer_from_arraybuffer (Node-API 10).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#node_api_create_buffer_from_arraybuffer
 func CreateBufferFromArrayBuffer(env Env, arraybuffer Value, byteOffset uint, byteLength uint, result *Value) Status {
@@ -2579,8 +2579,8 @@ func CreateBufferFromArrayBuffer(env Env, arraybuffer Value, byteOffset uint, by
 	return Status(gnR.status)
 }
 
-// CreateBufferCopy chiama napi_create_buffer_copy (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateBufferCopy calls napi_create_buffer_copy (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_buffer_copy
 func CreateBufferCopy(env Env, length uint, data unsafe.Pointer, resultData *unsafe.Pointer, result *Value) Status {
@@ -2603,8 +2603,8 @@ func CreateBufferCopy(env Env, length uint, data unsafe.Pointer, resultData *uns
 	return Status(gnR.status)
 }
 
-// IsBuffer chiama napi_is_buffer (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// IsBuffer calls napi_is_buffer (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_is_buffer
 func IsBuffer(env Env, value Value, result *bool) Status {
@@ -2621,8 +2621,8 @@ func IsBuffer(env Env, value Value, result *bool) Status {
 	return Status(gnR.status)
 }
 
-// GetBufferInfo chiama napi_get_buffer_info (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetBufferInfo calls napi_get_buffer_info (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_buffer_info
 func GetBufferInfo(env Env, value Value, data *unsafe.Pointer, length *uint) Status {
@@ -2645,8 +2645,8 @@ func GetBufferInfo(env Env, value Value, data *unsafe.Pointer, length *uint) Sta
 	return Status(gnR.status)
 }
 
-// CreateAsyncWork chiama napi_create_async_work (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateAsyncWork calls napi_create_async_work (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_async_work
 func CreateAsyncWork(env Env, asyncResource Value, asyncResourceName Value, execute AsyncExecuteCallback, complete AsyncCompleteCallback, data uintptr, result *AsyncWork) Status {
@@ -2663,29 +2663,29 @@ func CreateAsyncWork(env Env, asyncResource Value, asyncResourceName Value, exec
 	return Status(gnR.status)
 }
 
-// DeleteAsyncWork chiama napi_delete_async_work (Node-API 1).
+// DeleteAsyncWork calls napi_delete_async_work (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_delete_async_work
 func DeleteAsyncWork(env Env, work AsyncWork) Status {
 	return Status(C.gn_napi_delete_async_work(C.napi_env(env), C.napi_async_work(work)))
 }
 
-// QueueAsyncWork chiama napi_queue_async_work (Node-API 1).
+// QueueAsyncWork calls napi_queue_async_work (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_queue_async_work
 func QueueAsyncWork(env Env, work AsyncWork) Status {
 	return Status(C.gn_napi_queue_async_work(C.napi_env(env), C.napi_async_work(work)))
 }
 
-// CancelAsyncWork chiama napi_cancel_async_work (Node-API 1).
+// CancelAsyncWork calls napi_cancel_async_work (Node-API 1).
 //
 // https://nodejs.org/api/n-api.html#napi_cancel_async_work
 func CancelAsyncWork(env Env, work AsyncWork) Status {
 	return Status(C.gn_napi_cancel_async_work(C.napi_env(env), C.napi_async_work(work)))
 }
 
-// GetNodeVersion chiama napi_get_node_version (Node-API 1).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetNodeVersion calls napi_get_node_version (Node-API 1).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_node_version
 func GetNodeVersion(env Env, version **NodeVersion) Status {
@@ -2702,8 +2702,8 @@ func GetNodeVersion(env Env, version **NodeVersion) Status {
 	return Status(gnR.status)
 }
 
-// GetUVEventLoop chiama napi_get_uv_event_loop (Node-API 2).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetUVEventLoop calls napi_get_uv_event_loop (Node-API 2).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_uv_event_loop
 func GetUVEventLoop(env Env, loop *unsafe.Pointer) Status {
@@ -2720,29 +2720,29 @@ func GetUVEventLoop(env Env, loop *unsafe.Pointer) Status {
 	return Status(gnR.status)
 }
 
-// FatalException chiama napi_fatal_exception (Node-API 3).
+// FatalException calls napi_fatal_exception (Node-API 3).
 //
 // https://nodejs.org/api/n-api.html#napi_fatal_exception
 func FatalException(env Env, err Value) Status {
 	return Status(C.gn_napi_fatal_exception(C.napi_env(env), C.napi_value(err)))
 }
 
-// AddEnvCleanupHook chiama napi_add_env_cleanup_hook (Node-API 3).
+// AddEnvCleanupHook calls napi_add_env_cleanup_hook (Node-API 3).
 //
 // https://nodejs.org/api/n-api.html#napi_add_env_cleanup_hook
 func AddEnvCleanupHook(env Env, fun CleanupHook, arg uintptr) Status {
 	return Status(C.gn_napi_add_env_cleanup_hook(C.napi_env(env), C.napi_cleanup_hook(fun), C.uintptr_t(arg)))
 }
 
-// RemoveEnvCleanupHook chiama napi_remove_env_cleanup_hook (Node-API 3).
+// RemoveEnvCleanupHook calls napi_remove_env_cleanup_hook (Node-API 3).
 //
 // https://nodejs.org/api/n-api.html#napi_remove_env_cleanup_hook
 func RemoveEnvCleanupHook(env Env, fun CleanupHook, arg uintptr) Status {
 	return Status(C.gn_napi_remove_env_cleanup_hook(C.napi_env(env), C.napi_cleanup_hook(fun), C.uintptr_t(arg)))
 }
 
-// OpenCallbackScope chiama napi_open_callback_scope (Node-API 3).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// OpenCallbackScope calls napi_open_callback_scope (Node-API 3).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_open_callback_scope
 func OpenCallbackScope(env Env, resourceObject Value, context AsyncContext, result *CallbackScope) Status {
@@ -2759,15 +2759,15 @@ func OpenCallbackScope(env Env, resourceObject Value, context AsyncContext, resu
 	return Status(gnR.status)
 }
 
-// CloseCallbackScope chiama napi_close_callback_scope (Node-API 3).
+// CloseCallbackScope calls napi_close_callback_scope (Node-API 3).
 //
 // https://nodejs.org/api/n-api.html#napi_close_callback_scope
 func CloseCallbackScope(env Env, scope CallbackScope) Status {
 	return Status(C.gn_napi_close_callback_scope(C.napi_env(env), C.napi_callback_scope(scope)))
 }
 
-// CreateThreadsafeFunction chiama napi_create_threadsafe_function (Node-API 4).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// CreateThreadsafeFunction calls napi_create_threadsafe_function (Node-API 4).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_create_threadsafe_function
 func CreateThreadsafeFunction(env Env, fn Value, asyncResource Value, asyncResourceName Value, maxQueueSize uint, initialThreadCount uint, threadFinalizeData uintptr, threadFinalizeCb Finalize, context uintptr, callJSCb ThreadsafeFunctionCallJS, result *ThreadsafeFunction) Status {
@@ -2784,8 +2784,8 @@ func CreateThreadsafeFunction(env Env, fn Value, asyncResource Value, asyncResou
 	return Status(gnR.status)
 }
 
-// GetThreadsafeFunctionContext chiama napi_get_threadsafe_function_context (Node-API 4).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetThreadsafeFunctionContext calls napi_get_threadsafe_function_context (Node-API 4).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_get_threadsafe_function_context
 func GetThreadsafeFunctionContext(fn ThreadsafeFunction, result *unsafe.Pointer) Status {
@@ -2802,43 +2802,43 @@ func GetThreadsafeFunctionContext(fn ThreadsafeFunction, result *unsafe.Pointer)
 	return Status(gnR.status)
 }
 
-// CallThreadsafeFunction chiama napi_call_threadsafe_function (Node-API 4).
+// CallThreadsafeFunction calls napi_call_threadsafe_function (Node-API 4).
 //
 // https://nodejs.org/api/n-api.html#napi_call_threadsafe_function
 func CallThreadsafeFunction(fn ThreadsafeFunction, data uintptr, isBlocking ThreadsafeFunctionCallMode) Status {
 	return Status(C.gn_napi_call_threadsafe_function(C.napi_threadsafe_function(fn), C.uintptr_t(data), C.napi_threadsafe_function_call_mode(isBlocking)))
 }
 
-// AcquireThreadsafeFunction chiama napi_acquire_threadsafe_function (Node-API 4).
+// AcquireThreadsafeFunction calls napi_acquire_threadsafe_function (Node-API 4).
 //
 // https://nodejs.org/api/n-api.html#napi_acquire_threadsafe_function
 func AcquireThreadsafeFunction(fn ThreadsafeFunction) Status {
 	return Status(C.gn_napi_acquire_threadsafe_function(C.napi_threadsafe_function(fn)))
 }
 
-// ReleaseThreadsafeFunction chiama napi_release_threadsafe_function (Node-API 4).
+// ReleaseThreadsafeFunction calls napi_release_threadsafe_function (Node-API 4).
 //
 // https://nodejs.org/api/n-api.html#napi_release_threadsafe_function
 func ReleaseThreadsafeFunction(fn ThreadsafeFunction, mode ThreadsafeFunctionReleaseMode) Status {
 	return Status(C.gn_napi_release_threadsafe_function(C.napi_threadsafe_function(fn), C.napi_threadsafe_function_release_mode(mode)))
 }
 
-// UnrefThreadsafeFunction chiama napi_unref_threadsafe_function (Node-API 4).
+// UnrefThreadsafeFunction calls napi_unref_threadsafe_function (Node-API 4).
 //
 // https://nodejs.org/api/n-api.html#napi_unref_threadsafe_function
 func UnrefThreadsafeFunction(env Env, fn ThreadsafeFunction) Status {
 	return Status(C.gn_napi_unref_threadsafe_function(C.napi_env(env), C.napi_threadsafe_function(fn)))
 }
 
-// RefThreadsafeFunction chiama napi_ref_threadsafe_function (Node-API 4).
+// RefThreadsafeFunction calls napi_ref_threadsafe_function (Node-API 4).
 //
 // https://nodejs.org/api/n-api.html#napi_ref_threadsafe_function
 func RefThreadsafeFunction(env Env, fn ThreadsafeFunction) Status {
 	return Status(C.gn_napi_ref_threadsafe_function(C.napi_env(env), C.napi_threadsafe_function(fn)))
 }
 
-// AddAsyncCleanupHook chiama napi_add_async_cleanup_hook (Node-API 8).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// AddAsyncCleanupHook calls napi_add_async_cleanup_hook (Node-API 8).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#napi_add_async_cleanup_hook
 func AddAsyncCleanupHook(env Env, hook AsyncCleanupHook, arg uintptr, removeHandle *AsyncCleanupHookHandle) Status {
@@ -2855,15 +2855,15 @@ func AddAsyncCleanupHook(env Env, hook AsyncCleanupHook, arg uintptr, removeHand
 	return Status(gnR.status)
 }
 
-// RemoveAsyncCleanupHook chiama napi_remove_async_cleanup_hook (Node-API 8).
+// RemoveAsyncCleanupHook calls napi_remove_async_cleanup_hook (Node-API 8).
 //
 // https://nodejs.org/api/n-api.html#napi_remove_async_cleanup_hook
 func RemoveAsyncCleanupHook(removeHandle AsyncCleanupHookHandle) Status {
 	return Status(C.gn_napi_remove_async_cleanup_hook(C.napi_async_cleanup_hook_handle(removeHandle)))
 }
 
-// GetModuleFileName chiama node_api_get_module_file_name (Node-API 9).
-// Le uscite vengono scritte solo se lo status è StatusOK; un puntatore nil diventa NULL.
+// GetModuleFileName calls node_api_get_module_file_name (Node-API 9).
+// Outputs are written only when the returned status is StatusOK; a nil pointer passes NULL.
 //
 // https://nodejs.org/api/n-api.html#node_api_get_module_file_name
 func GetModuleFileName(env Env, result **byte) Status {

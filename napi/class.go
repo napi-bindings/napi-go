@@ -7,12 +7,12 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// DefineClass crea una classe JS (napi_define_class). constructor viene chiamata con new: il this
-// del CallContext è l'istanza, a cui di solito si associa un valore Go con Wrap. Le proprietà
-// con Static vanno sul costruttore, le altre sul prototipo. Le callback restano registrate finché
-// il costruttore vive.
+// DefineClass defines a JS class (napi_define_class). constructor is invoked with new: the
+// CallContext's this is the new instance, which typically wraps a Go value via Wrap. Properties
+// with the Static attribute are defined on the constructor; all others are defined on the
+// prototype. Callbacks remain registered for as long as the constructor is alive.
 //
-// Chiamare la classe senza new lancia un TypeError, come per le classi JS.
+// Calling the class without new throws a TypeError, matching standard JS class semantics.
 func (e Env) DefineClass(name string, constructor Callback, props ...Property) (Function, error) {
 	if constructor == nil {
 		return Function{}, TypeError("", "DefineClass: nil constructor")
@@ -42,8 +42,8 @@ func (e Env) DefineClass(name string, constructor Callback, props ...Property) (
 	return f, nil
 }
 
-// requireNew rifiuta le chiamate senza new: Node-API, a differenza delle classi JS, le
-// accetterebbe con un this sbagliato.
+// requireNew rejects calls without new: unlike JS classes, Node-API would otherwise allow them
+// with an unexpected this receiver.
 func requireNew(name string, fn Callback) Callback {
 	return func(c CallContext) (Value, error) {
 		if !c.IsConstructCall() {
@@ -53,20 +53,20 @@ func requireNew(name string, fn Callback) Callback {
 	}
 }
 
-// ---- Promise risolte sul thread JS ----
+// ---- Promises settled on the JS thread ----
 
-// Promise è una Promise JS.
+// Promise represents a JS Promise.
 type Promise struct{ Object }
 
-// Deferred risolve o rifiuta la Promise creata da NewPromise (napi_deferred). Si usa una volta
-// sola e solo sul thread JS dell'env; per risolvere da una goroutine servono le API asincrone
-// (Fase 3).
+// Deferred resolves or rejects the Promise created by NewPromise (napi_deferred). It may be used
+// only once and only on the env's JS thread; settling a Promise from a goroutine requires the
+// asynchronous APIs (Phase 3).
 type Deferred struct {
 	env sys.Env
 	raw sys.Deferred
 }
 
-// NewPromise crea una Promise in attesa e il Deferred che la conclude.
+// NewPromise creates a pending Promise and the Deferred that settles it.
 func (e Env) NewPromise() (Promise, Deferred, error) {
 	var d sys.Deferred
 	var r sys.Value
@@ -78,18 +78,18 @@ func (e Env) NewPromise() (Promise, Deferred, error) {
 	return Promise{Object{v}}, Deferred{env: e.raw, raw: d}, nil
 }
 
-// Resolve risolve la Promise con v.
+// Resolve resolves the Promise with v.
 func (d Deferred) Resolve(v Value) error {
 	return check(d.env, sys.ResolveDeferred(d.env, d.raw, v.raw))
 }
 
-// Reject rifiuta la Promise con v.
+// Reject rejects the Promise with v.
 func (d Deferred) Reject(v Value) error {
 	return check(d.env, sys.RejectDeferred(d.env, d.raw, v.raw))
 }
 
-// RejectError rifiuta la Promise con l'Error JS che rappresenta err (stesse regole di una
-// callback che restituisce err).
+// RejectError rejects the Promise with the JS Error representing err (following the same rules as
+// a callback returning err).
 func (d Deferred) RejectError(err error) error {
 	if err == nil {
 		return TypeError("", "RejectError: nil error")

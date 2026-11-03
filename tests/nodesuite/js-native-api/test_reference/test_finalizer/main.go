@@ -1,5 +1,5 @@
-// Porting di test/js-native-api/test_reference/test_finalizer.c: un finalizer che chiama JS e
-// lancia un'eccezione, consegnata a uncaughtException.
+// Port of test/js-native-api/test_reference/test_finalizer.c: a finalizer that calls JS and
+// throws an exception, delivered to uncaughtException.
 package main
 
 import (
@@ -13,8 +13,8 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// testValue è static int test_value (vedi test_reference); finalizeCount è azzerato come nel C
-// anche se nessuno lo legge.
+// testValue is static int test_value (see test_reference); finalizeCount is zeroed as in C
+// even though nothing reads it.
 var (
 	testValue     int32 = 1
 	finalizeCount int32
@@ -22,7 +22,7 @@ var (
 
 func testValueAddr() unsafe.Pointer { return unsafe.Pointer(&testValue) }
 
-// finalizeExternalCallJs riceve come hint il napi_ref della funzione JS.
+// finalizeExternalCallJs receives the napi_ref of the JS function as hint.
 func finalizeExternalCallJs(env sys.Env, data, hint uintptr) {
 	actualValue := nt.Pointer(data)
 	if !nt.Assert(env, actualValue == testValueAddr(), "actual_value == &test_value",

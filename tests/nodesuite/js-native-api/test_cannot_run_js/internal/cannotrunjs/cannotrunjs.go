@@ -1,7 +1,7 @@
-// Package cannotrunjs è il porting di test/js-native-api/test_cannot_run_js/test_cannot_run_js.c,
-// condiviso dai target test_cannot_run_js (NAPI_VERSION=10) e test_pending_exception
-// (NAPI_VERSION=9) del binding.gyp. Il ramo #if NAPI_VERSION > 9 del C dipende da
-// sys.DeclaredVersion, fissata dal build tag del target.
+// Package cannotrunjs is the port of test/js-native-api/test_cannot_run_js/test_cannot_run_js.c,
+// shared by the test_cannot_run_js (NAPI_VERSION=10) and test_pending_exception
+// (NAPI_VERSION=9) targets in binding.gyp. The C #if NAPI_VERSION > 9 branch depends on
+// sys.DeclaredVersion, set by the target's build tag.
 package cannotrunjs
 
 import (
@@ -13,8 +13,8 @@ import (
 
 const refSize = uint(unsafe.Sizeof(sys.Ref(nil)))
 
-// cannotRunJSVersion è la prima versione Node-API in cui le chiamate che eseguono JS durante lo
-// spegnimento dell'ambiente restituiscono napi_cannot_run_js invece di napi_pending_exception.
+// cannotRunJSVersion is the first Node-API version in which calls that execute JS during
+// environment teardown return napi_cannot_run_js instead of napi_pending_exception.
 const cannotRunJSVersion = 10
 
 func finalize(env sys.Env, data, _ uintptr) {
@@ -32,10 +32,10 @@ func finalize(env sys.Env, data, _ uintptr) {
 	}
 	result := sys.GetNamedProperty(env, global, nt.CStr("setTimeout"), &setTimeout)
 
-	// Il finalizer può girare dalle check callback (come native immediate) se l'event loop è
-	// ancora attivo, e allora restituisce napi_ok, oppure durante lo spegnimento dell'ambiente,
-	// dove restituisce napi_cannot_run_js o napi_pending_exception. Per l'addon non è
-	// deterministico.
+	// The finalizer may run from check callbacks (as a native immediate) if the event loop is
+	// still active, in which case it returns napi_ok, or during environment teardown, where it
+	// returns napi_cannot_run_js or napi_pending_exception. From the addon's perspective this is
+	// non-deterministic.
 	if sys.DeclaredVersion >= cannotRunJSVersion {
 		if !nt.BasicAssert(result == sys.StatusCannotRunJS || result == sys.StatusOK,
 			"result == napi_cannot_run_js || result == napi_ok",
@@ -80,7 +80,7 @@ func createRef(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return cb
 }
 
-// Init è Init del C (EXTERN_C_START … EXTERN_C_END).
+// Init is C's Init (EXTERN_C_START ... EXTERN_C_END).
 func Init(env sys.Env, exports sys.Value) sys.Value {
 	properties := []sys.PropertyDescriptor{
 		nt.DeclareProperty("createRef", createRef),

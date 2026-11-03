@@ -1,5 +1,5 @@
-// Porting di test/js-native-api/test_string/test_null.c: la macro DECLARE_TEST diventa una
-// funzione generica sul tipo di carattere.
+// Port of test/js-native-api/test_string/test_null.c: the DECLARE_TEST macro becomes a
+// generic function over the character type.
 package main
 
 import (
@@ -9,11 +9,11 @@ import (
 
 const invalidArgument = "Invalid argument"
 
-// testStringValue è la stringa "something" del test C.
+// testStringValue is the "something" string from the C test.
 const testStringValue = "something"
 
-// declareTest equivale a DECLARE_TEST(charset, str_arg). Lo status delle chiamate senza
-// controllo è letto subito dopo da AddLastStatus, come nella macro C.
+// declareTest is equivalent to DECLARE_TEST(charset, str_arg). The status of unchecked calls
+// is read immediately after via AddLastStatus, matching the C macro.
 func declareTest[T char](create createAPI[T], strArg *T) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var returnValue, result sys.Value

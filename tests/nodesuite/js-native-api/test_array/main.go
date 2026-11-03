@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_array/test_array.c.
+// Port of test/js-native-api/test_array/test_array.c.
 package main
 
 import (
@@ -124,7 +124,7 @@ func testHasElement(env sys.Env, info sys.CallbackInfo) sys.Value {
 	}
 
 	var hasElement bool
-	// Come in C, l'indice int32 passa a uint32_t senza controlli.
+	// As in C, the int32 index is cast to uint32_t without bounds checks.
 	if !nt.Call(env, sys.HasElement(env, array, uint32(index), &hasElement)) {
 		return nil
 	}
@@ -263,8 +263,8 @@ func newWithLength(env sys.Env, info sys.CallbackInfo) sys.Value {
 	}
 
 	var ret sys.Value
-	// Come la conversione implicita int32_t → size_t del C: 4294967295 arriva come -1 e diventa
-	// SIZE_MAX, che Node-API riduce alla lunghezza massima di un array.
+	// Matches C's implicit int32_t -> size_t conversion: 4294967295 arrives as -1 and becomes
+	// SIZE_MAX, which Node-API clamps to the maximum array length.
 	if !nt.Call(env, sys.CreateArrayWithLength(env, uint(arrayLength), &ret)) {
 		return nil
 	}

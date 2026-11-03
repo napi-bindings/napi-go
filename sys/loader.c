@@ -1,19 +1,20 @@
 /*
- * loader.c — risoluzione dinamica delle funzioni Node-API dal processo host.
+ * loader.c — dynamic resolution of Node-API functions from the host process.
  *
- *  - Unix:    dlsym(RTLD_DEFAULT, ...): le funzioni sono esportate dall'eseguibile node.
- *  - Windows: GetProcAddress(GetModuleHandle(NULL), ...), poi libnode.dll / node.dll per gli host
- *             che incorporano Node come DLL.
+ *  - Unix:    dlsym(RTLD_DEFAULT, ...): symbols are exported by the node executable.
+ *  - Windows: GetProcAddress(GetModuleHandle(NULL), ...), falling back to libnode.dll / node.dll
+ *             for hosts that embed Node as a shared library.
  *
- * Nessuna import library e nessun simbolo indefinito a link-time: il .node non ha dipendenze
- * dichiarate verso node e le funzioni più nuove si rilevano a runtime (sys.Available).
+ * No import library and no undefined symbols at link time: the .node binary has no declared
+ * link dependency on node, and functions from newer Node-API versions are detected at runtime
+ * (sys.Available).
  */
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
 #ifndef _GNU_SOURCE
-#define _GNU_SOURCE /* RTLD_DEFAULT su glibc */
+#define _GNU_SOURCE /* RTLD_DEFAULT on glibc */
 #endif
 #include <dlfcn.h>
 #include <pthread.h>
@@ -41,7 +42,7 @@ static void gn_api_load(void) {
   for (int i = 0; i < GN_API_COUNT; i++) {
     void* p = gn_sym(gn_api_entries[i].name);
     gn_api[i] = p;
-    /* Le funzioni più recenti della versione dichiarata sono facoltative. */
+    /* Functions newer than the declared version are optional. */
     if (p == NULL && gn_api_entries[i].version <= NAPI_VERSION) {
       if (gn_first_missing == NULL) gn_first_missing = gn_api_entries[i].name;
       gn_missing++;
@@ -69,8 +70,8 @@ int gn_api_load_once(const char** first_missing) {
   int ok = pthread_once(&gn_once, gn_api_load) == 0;
 #endif
   if (!ok) {
-    /* La tabella non è stata caricata: il modulo deve fallire invece di girare senza funzioni. */
-    if (first_missing != NULL) *first_missing = "(caricamento della tabella non eseguito)";
+    /* Table initialization did not run: fail module load rather than running with NULL pointers. */
+    if (first_missing != NULL) *first_missing = "(table load did not run)";
     return GN_API_COUNT;
   }
   if (first_missing != NULL) *first_missing = gn_first_missing;

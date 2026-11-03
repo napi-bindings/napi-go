@@ -12,13 +12,13 @@ import (
 	"unsafe"
 )
 
-// Callback è una funzione Go invocabile da JavaScript. CallContext è passato per
-// valore: un puntatore passato a una func value sfuggirebbe sull'heap a ogni chiamata.
+// Callback is a Go function callable from JavaScript. CallContext is passed by
+// value: a pointer passed to a func value would escape to the heap on every call.
 type Callback func(c CallContext) (Value, error)
 
-// CallContext descrive una singola invocazione (equivalente di napi_callback_info /
-// Napi::CallbackInfo). Gli argomenti puntano allo stack C del trampolino: validi solo
-// durante la callback.
+// CallContext describes a single invocation (equivalent of napi_callback_info /
+// Napi::CallbackInfo). Arguments point to the C stack of the trampoline: valid only
+// during the callback.
 type CallContext struct {
 	env  C.napi_env
 	this C.napi_value
@@ -30,18 +30,18 @@ func (c CallContext) Env() Env    { return Env{c.env} }
 func (c CallContext) Len() int    { return c.argc }
 func (c CallContext) This() Value { return Value{c.env, c.this} }
 
-// Arg restituisce l'i-esimo argomento, `undefined` se assente.
+// Arg returns the i-th argument, or `undefined` if absent.
 func (c CallContext) Arg(i int) Value {
 	if i < len(c.argv) {
-		return Value{c.env, c.argv[i]} // Node riempie gli slot inline mancanti con undefined
+		return Value{c.env, c.argv[i]} // Node fills missing inline slots with undefined
 	}
 	return Env{c.env}.Undefined()
 }
 
-// ---- registro delle callback ----
+// ---- callback registry ----
 //
-// Il `data` passato a napi_create_function è un indice (id >= 1) in questo slice,
-// mai un puntatore Go. Lettura lock-free (copy-on-write), scrittura rara.
+// The `data` passed to napi_create_function is an index (id >= 1) into this slice,
+// never a Go pointer. Lock-free reads (copy-on-write), rare writes.
 
 var registry struct {
 	mu      sync.Mutex
@@ -59,7 +59,7 @@ func registerCallback(fn Callback) uintptr {
 	copy(next, cur)
 	next = append(next, fn)
 	registry.entries.Store(&next)
-	return uintptr(len(next)) // id = indice + 1
+	return uintptr(len(next)) // id = index + 1
 }
 
 func lookupCallback(id uintptr) Callback {
@@ -70,9 +70,9 @@ func lookupCallback(id uintptr) Callback {
 	return (*p)[id-1]
 }
 
-// NewFunction crea una funzione JS che invoca fn.
-// (Nello spike il registro è solo in crescita: la Fase 2 aggiungerà il rilascio
-// dello slot tramite finalizer per le funzioni create dinamicamente.)
+// NewFunction creates a JS function that invokes fn.
+// (In the spike the registry is grow-only: Phase 2 will release slots via a
+// finalizer for dynamically created functions.)
 func (e Env) NewFunction(name string, fn Callback) (Value, error) {
 	id := registerCallback(fn)
 	var r C.napi_value
@@ -87,15 +87,15 @@ func goNapiCallback(env C.napi_env, info C.napi_callback_info, id C.uintptr_t,
 
 	fn := lookupCallback(uintptr(id))
 	if fn == nil {
-		Env{env}.Throw(&Error{Code: "GO_NAPI_INTERNAL", Message: "callback non registrata"})
+		Env{env}.Throw(&Error{Code: "GO_NAPI_INTERNAL", Message: "unregistered callback"})
 		return nil
 	}
 	n := int(argc)
 	var args []C.napi_value
 	if n <= C.GN_INLINE_ARGS {
-		args = unsafe.Slice(argv, C.GN_INLINE_ARGS) // vista sullo stack C del trampolino
+		args = unsafe.Slice(argv, C.GN_INLINE_ARGS) // view into the C stack of the trampoline
 	} else {
-		args = make([]C.napi_value, n) // raro: più argomenti del buffer inline
+		args = make([]C.napi_value, n) // rare: more arguments than the inline buffer
 		count := C.size_t(n)
 		if err := check(env, C.gn_napi_get_cb_info(env, info, &count, &args[0], nil, nil)); err != nil {
 			Env{env}.Throw(err)
@@ -110,8 +110,8 @@ func goNapiCallback(env C.napi_env, info C.napi_callback_info, id C.uintptr_t,
 	return v.raw
 }
 
-// recoverToJS impedisce che un panic Go attraversi i frame C (abort del processo):
-// lo trasforma in un Error JS con code "GO_PANIC".
+// recoverToJS prevents a Go panic from crossing C frames (which would abort the process):
+// it converts the panic into a JS Error with code "GO_PANIC".
 func recoverToJS(env C.napi_env, ret *C.napi_value) {
 	if r := recover(); r != nil {
 		throwPanic(env, r)

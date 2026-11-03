@@ -1,5 +1,5 @@
-// Porting di test/js-native-api/test_number/test_null.c: le macro BINDING_FOR_CREATE e
-// BINDING_FOR_GET_VALUE diventano due funzioni generiche sul tipo numerico.
+// Port of test/js-native-api/test_number/test_null.c: the BINDING_FOR_CREATE and
+// BINDING_FOR_GET_VALUE macros become two generic functions over numeric types.
 package main
 
 import (
@@ -11,7 +11,7 @@ type number interface {
 	~float64 | ~int32 | ~uint32 | ~int64
 }
 
-// testValue è il valore usato dalle macro C (lowercase##_t value = 42).
+// testValue is the value used by the C macros (lowercase##_t value = 42).
 const testValue = 42
 
 const invalidArgument = "Invalid argument"
@@ -20,8 +20,8 @@ type createFn[T number] func(env sys.Env, value T, result *sys.Value) sys.Status
 
 type getValueFn[T number] func(env sys.Env, value sys.Value, result *T) sys.Status
 
-// bindingForCreate equivale a BINDING_FOR_CREATE: chiama napi_create_<tipo> con env NULL e con
-// result NULL. Lo status delle chiamate senza controllo è letto subito dopo da AddLastStatus.
+// bindingForCreate is equivalent to BINDING_FOR_CREATE: calls napi_create_<type> with NULL env
+// and NULL result. The status of unchecked calls is read immediately after via AddLastStatus.
 func bindingForCreate[T number](create createFn[T]) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var returnValue, callResult sys.Value
@@ -37,8 +37,8 @@ func bindingForCreate[T number](create createFn[T]) nt.Func {
 	}
 }
 
-// bindingForGetValue equivale a BINDING_FOR_GET_VALUE: chiama napi_get_value_<tipo> con env,
-// value e result NULL a turno.
+// bindingForGetValue is equivalent to BINDING_FOR_GET_VALUE: calls napi_get_value_<type> with
+// NULL env, value, and result in turn.
 func bindingForGetValue[T number](create createFn[T], get getValueFn[T]) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var returnValue, callResult sys.Value

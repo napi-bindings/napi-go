@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_typedarray/test_typedarray_sharedarraybuffer.c.
+// Port of test/js-native-api/test_typedarray/test_typedarray_sharedarraybuffer.c.
 package main
 
 import (

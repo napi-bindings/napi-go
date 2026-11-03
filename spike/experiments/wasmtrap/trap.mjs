@@ -1,5 +1,5 @@
-// Costo di una trap WebAssembly (accesso fuori dai limiti → RuntimeError) con e senza
-// l'addon Go caricato e con il runtime Go sotto carico. Diagnostica per Q6 su Windows.
+// Cost of a WebAssembly trap (out-of-bounds access → RuntimeError) with and without
+// the Go addon loaded and with the Go runtime under load. Diagnostics for Q6 on Windows.
 //   node experiments/wasmtrap/trap.mjs
 import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
@@ -22,14 +22,14 @@ function run(label, n = 2000) {
     if (d > worst) worst = d
   }
   const avg = Number(process.hrtime.bigint() - t0) / 1000 / n
-  console.log(`${label.padEnd(36)} ${caught}/${n} trap  media ${avg.toFixed(1)} µs  peggiore ${(Number(worst) / 1000).toFixed(0)} µs`)
+  console.log(`${label.padEnd(36)} ${caught}/${n} traps  avg ${avg.toFixed(1)} µs  worst ${(Number(worst) / 1000).toFixed(0)} µs`)
 }
 
 console.log(`${process.platform}/${process.arch} node ${process.version} cpu ${availableParallelism()}`)
-run('senza addon')
+run('without addon')
 const b = require('../../build/basic.node')
-run('addon caricato')
+run('addon loaded')
 const burning = b.burnCPU(4000)
-run('addon + burnCPU (Go satura le P)')
+run('addon + burnCPU (Go saturates Ps)')
 await burning
-run('dopo burnCPU')
+run('after burnCPU')

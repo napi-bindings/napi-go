@@ -1,19 +1,19 @@
-// Comando gen genera il Layer 0 di napi-go (pacchetto sys) dagli header Node-API vendorizzati.
+// Command gen generates Layer 0 of napi-go (package sys) from the vendored Node-API headers.
 //
-// Uso, dalla directory sys:
+// Usage, from the sys directory:
 //
-//	go run ./internal/gen          # rigenera i file zz_*
-//	go run ./internal/gen -check   # verifica che i file zz_* siano aggiornati (CI)
+//	go run ./internal/gen          # regenerate zz_* files
+//	go run ./internal/gen -check   # verify that zz_* files are up to date (CI)
 //
-// Legge include/*.h (prototipi, enum) e include/symbols.js (versione minima di ogni funzione) e
-// produce:
+// It reads include/*.h (function prototypes, enums) and include/symbols.js (minimum version for
+// each function) and emits:
 //
-//	zz_api.h, zz_api.c             tabella dei puntatori e wrapper C static inline
-//	zz_api.go                      wrapper Go 1:1, enum Fn, direttive noescape
-//	zz_enums.go                    enum Node-API come tipi Go
-//	zz_nocallback*.go              direttive nocallback, per build tag
+//	zz_api.h, zz_api.c             function pointer table and static inline C wrappers
+//	zz_api.go                      1:1 Go wrappers, Fn enum, noescape directives
+//	zz_enums.go                    Node-API enums as Go types
+//	zz_nocallback*.go              nocallback directives, per build tag
 //
-// Le decisioni non deducibili dagli header sono in policy.go.
+// Curated decisions that cannot be inferred from the headers live in policy.go.
 package main
 
 import (
@@ -27,8 +27,8 @@ import (
 var headerFiles = []string{"js_native_api.h", "node_api.h"}
 
 func main() {
-	dir := flag.String("dir", ".", "directory del pacchetto sys")
-	check := flag.Bool("check", false, "non scrive: esce con errore se i file generati non sono aggiornati")
+	dir := flag.String("dir", ".", "path to the sys package directory")
+	check := flag.Bool("check", false, "do not write files; exit with an error if generated files are out of date")
 	flag.Parse()
 
 	api, err := load(filepath.Join(*dir, "include"))
@@ -45,7 +45,7 @@ func main() {
 		if *check {
 			cur, err := os.ReadFile(path)
 			if err != nil || !bytes.Equal(cur, f.Content) {
-				fmt.Fprintf(os.Stderr, "gen: %s non è aggiornato: eseguire go generate ./sys\n", path)
+				fmt.Fprintf(os.Stderr, "gen: %s is out of date: run go generate ./sys\n", path)
 				stale++
 			}
 			continue
@@ -58,7 +58,7 @@ func main() {
 		os.Exit(1)
 	}
 	if !*check {
-		fmt.Printf("gen: %d funzioni (Node-API 1–%d), %d enum, node-api-headers %s\n",
+		fmt.Printf("gen: %d functions (Node-API 1–%d), %d enums, node-api-headers %s\n",
 			len(api.Funcs), api.MaxVersion, len(api.Enums), headersVersion)
 	}
 }
@@ -68,7 +68,7 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-// load legge gli header e symbols.js e costruisce il modello completo.
+// load reads the headers and symbols.js and constructs the complete API model.
 func load(includeDir string) (API, error) {
 	var funcs []Func
 	var enums []Enum
@@ -105,7 +105,7 @@ func load(includeDir string) (API, error) {
 	return build(funcs, enums, versions, maxVersion)
 }
 
-// build verifica la coerenza tra header, symbols.js e policy e lega i tipi Go.
+// build verifies consistency across headers, symbols.js, and policy, and binds Go types.
 func build(funcs []Func, enums []Enum, versions map[string]int, maxVersion int) (API, error) {
 	if err := assignVersions(funcs, versions); err != nil {
 		return API{}, err
@@ -124,7 +124,7 @@ func build(funcs []Func, enums []Enum, versions map[string]int, maxVersion int) 
 			return API{}, err
 		}
 		if other, dup := goNames[fb.GoName]; dup {
-			return API{}, fmt.Errorf("%s e %s hanno lo stesso nome Go %s", other, f.Name, fb.GoName)
+			return API{}, fmt.Errorf("%s and %s map to the same Go name %s", other, f.Name, fb.GoName)
 		}
 		goNames[fb.GoName] = f.Name
 		api.Funcs = append(api.Funcs, fb)
@@ -134,7 +134,7 @@ func build(funcs []Func, enums []Enum, versions map[string]int, maxVersion int) 
 		for _, m := range e.Members {
 			g := goEnumName(m.CName, enumConfig[e.CName])
 			if other, dup := enumNames[g]; dup {
-				return API{}, fmt.Errorf("%s e %s hanno lo stesso nome Go %s", other, m.CName, g)
+				return API{}, fmt.Errorf("%s and %s map to the same Go name %s", other, m.CName, g)
 			}
 			enumNames[g] = m.CName
 		}

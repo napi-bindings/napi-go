@@ -1,6 +1,6 @@
-// Porting di test/node-api/test_general/test_general.c (NAPI_VERSION 9, vedi napi-go.json).
-// NODE_API_NO_EXTERNAL_BUFFERS_ALLOWED del C toglie solo dichiarazioni dagli header: il file non
-// usa buffer esterni, quindi non ha un equivalente.
+// Port of test/node-api/test_general/test_general.c (NAPI_VERSION 9, see napi-go.json).
+// NODE_API_NO_EXTERNAL_BUFFERS_ALLOWED in C only removes declarations from headers: this file does
+// not use external buffers, so there is no Go equivalent.
 package main
 
 import (
@@ -12,7 +12,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// versionFields è la lunghezza dell'array [major, minor, patch, release].
+// versionFields is the length of the [major, minor, patch, release] array.
 const versionFields = 4
 
 func testGetNodeVersion(env sys.Env, _ sys.CallbackInfo) sys.Value {

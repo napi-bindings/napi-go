@@ -2,28 +2,28 @@
 
 package sys
 
-// KeyCollectionMode corrisponde a napi_key_collection_mode.
+// KeyCollectionMode corresponds to napi_key_collection_mode.
 type KeyCollectionMode int32
 
-// Valori di napi_key_collection_mode.
+// Values of napi_key_collection_mode.
 const (
 	KeyIncludePrototypes KeyCollectionMode = 0 // napi_key_include_prototypes
 	KeyOwnOnly           KeyCollectionMode = 1 // napi_key_own_only
 )
 
-// KeyConversion corrisponde a napi_key_conversion.
+// KeyConversion corresponds to napi_key_conversion.
 type KeyConversion int32
 
-// Valori di napi_key_conversion.
+// Values of napi_key_conversion.
 const (
 	KeyKeepNumbers      KeyConversion = 0 // napi_key_keep_numbers
 	KeyNumbersToStrings KeyConversion = 1 // napi_key_numbers_to_strings
 )
 
-// KeyFilter corrisponde a napi_key_filter.
+// KeyFilter corresponds to napi_key_filter.
 type KeyFilter int32
 
-// Valori di napi_key_filter.
+// Values of napi_key_filter.
 const (
 	KeyAllProperties KeyFilter = 0  // napi_key_all_properties
 	KeyWritable      KeyFilter = 1  // napi_key_writable
@@ -33,10 +33,10 @@ const (
 	KeySkipSymbols   KeyFilter = 16 // napi_key_skip_symbols
 )
 
-// PropertyAttributes corrisponde a napi_property_attributes.
+// PropertyAttributes corresponds to napi_property_attributes.
 type PropertyAttributes int32
 
-// Valori di napi_property_attributes.
+// Values of napi_property_attributes.
 const (
 	PropertyDefault           PropertyAttributes = 0    // napi_default
 	PropertyWritable          PropertyAttributes = 1    // napi_writable
@@ -47,10 +47,10 @@ const (
 	PropertyDefaultJSProperty PropertyAttributes = 7    // napi_default_jsproperty
 )
 
-// Status corrisponde a napi_status.
+// Status corresponds to napi_status.
 type Status int32
 
-// Valori di napi_status.
+// Values of napi_status.
 const (
 	StatusOK                            Status = 0  // napi_ok
 	StatusInvalidArg                    Status = 1  // napi_invalid_arg
@@ -77,33 +77,33 @@ const (
 	StatusNoExternalBuffersAllowed      Status = 22 // napi_no_external_buffers_allowed
 	StatusCannotRunJS                   Status = 23 // napi_cannot_run_js
 
-	// StatusUnavailable: il processo host non esporta la funzione chiamata (versione
-	// di Node.js troppo vecchia). Non è un valore di napi_status.
+	// StatusUnavailable indicates that the host process does not export the called function
+	// (Node.js version is too old). Not a standard napi_status value.
 	StatusUnavailable Status = 1000
 )
 
-// ThreadsafeFunctionCallMode corrisponde a napi_threadsafe_function_call_mode.
+// ThreadsafeFunctionCallMode corresponds to napi_threadsafe_function_call_mode.
 type ThreadsafeFunctionCallMode int32
 
-// Valori di napi_threadsafe_function_call_mode.
+// Values of napi_threadsafe_function_call_mode.
 const (
 	TSFNNonblocking ThreadsafeFunctionCallMode = 0 // napi_tsfn_nonblocking
 	TSFNBlocking    ThreadsafeFunctionCallMode = 1 // napi_tsfn_blocking
 )
 
-// ThreadsafeFunctionReleaseMode corrisponde a napi_threadsafe_function_release_mode.
+// ThreadsafeFunctionReleaseMode corresponds to napi_threadsafe_function_release_mode.
 type ThreadsafeFunctionReleaseMode int32
 
-// Valori di napi_threadsafe_function_release_mode.
+// Values of napi_threadsafe_function_release_mode.
 const (
 	TSFNRelease ThreadsafeFunctionReleaseMode = 0 // napi_tsfn_release
 	TSFNAbort   ThreadsafeFunctionReleaseMode = 1 // napi_tsfn_abort
 )
 
-// TypedArrayType corrisponde a napi_typedarray_type.
+// TypedArrayType corresponds to napi_typedarray_type.
 type TypedArrayType int32
 
-// Valori di napi_typedarray_type.
+// Values of napi_typedarray_type.
 const (
 	Int8Array         TypedArrayType = 0  // napi_int8_array
 	Uint8Array        TypedArrayType = 1  // napi_uint8_array
@@ -119,10 +119,10 @@ const (
 	Float16Array      TypedArrayType = 11 // napi_float16_array
 )
 
-// ValueType corrisponde a napi_valuetype.
+// ValueType corresponds to napi_valuetype.
 type ValueType int32
 
-// Valori di napi_valuetype.
+// Values of napi_valuetype.
 const (
 	TypeUndefined ValueType = 0 // napi_undefined
 	TypeNull      ValueType = 1 // napi_null
@@ -136,7 +136,7 @@ const (
 	TypeBigInt    ValueType = 9 // napi_bigint
 )
 
-// String restituisce il nome C del valore.
+// String returns the C name of the value.
 func (s Status) String() string {
 	switch s {
 	case StatusOK:
@@ -193,7 +193,7 @@ func (s Status) String() string {
 	return "napi_status(" + itoa(int64(s)) + ")"
 }
 
-// String restituisce il nome C del valore.
+// String returns the C name of the value.
 func (v ValueType) String() string {
 	switch v {
 	case TypeUndefined:

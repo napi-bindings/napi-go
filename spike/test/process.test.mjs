@@ -1,5 +1,5 @@
-// Q6: convivenza segnali/processo (trap handler WebAssembly, SIGINT/SIGTERM, child_process,
-// GC di V8 forzato) e ciclo di vita dell'event loop (la TSFN non tiene vivo il processo).
+// Q6: signal/process coexistence (WebAssembly trap handler, SIGINT/SIGTERM, child_process,
+// forced V8 GC) and event loop lifecycle (the TSFN does not keep the process alive).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, execFileSync } from 'node:child_process'
@@ -17,20 +17,20 @@ const wasmBytes = new Uint8Array([
 
 function nodeEval(code, args = []) {
   const r = spawnSync(process.execPath, [...args, '-e', code], { encoding: 'utf8', timeout: 60_000 })
-  if (r.error) throw r.error // spawn fallito o timeout
+  if (r.error) throw r.error // spawn failed or timed out
   return r
 }
 
-// Verifica la correttezza (ogni trap intercettata, nessun crash), non il throughput: quanti
-// accessi entrano in un intervallo di tempo dipende dalla macchina (in CI, runner da 4 vCPU
-// con tutte le P occupate da Go, ne entravano pochissimi). I tempi vanno nella diagnostica.
-test('Q6: trap WebAssembly (SIGSEGV/SEH di V8) mentre il runtime Go fa preemption e GC', { timeout: 120_000 }, async (t) => {
+// Verifies correctness (every trap caught, no crashes), not throughput: how many accesses
+// fit in a time window depends on the machine (in CI, on 4-vCPU runners with all Ps busy
+// in Go, very few fit). Timings are reported in diagnostics.
+test('Q6: WebAssembly traps (V8 SIGSEGV/SEH) while the Go runtime performs preemption and GC', { timeout: 120_000 }, async (t) => {
   const b = load('basic')
   const { instance } = await WebAssembly.instantiate(wasmBytes)
-  const TRAPS = 500            // abbastanza da sovrapporsi a più cicli di GC/preemption Go
-  const OOB_ADDR = 1 << 20     // 1 MiB: oltre l'unica pagina (64 KiB) di memoria wasm → trap
-  const BURN_MS = 1500         // > durata tipica del ciclo; il vecchio test usava 500 ms
-  const burning = b.burnCPU(BURN_MS) // goroutine su tutte le P: preemption (SIGURG/SuspendThread) + GC Go
+  const TRAPS = 500            // enough to overlap with multiple Go GC/preemption cycles
+  const OOB_ADDR = 1 << 20     // 1 MiB: beyond the single page (64 KiB) of wasm memory → trap
+  const BURN_MS = 1500         // > typical loop duration; earlier test used 500 ms
+  const burning = b.burnCPU(BURN_MS) // goroutines on all Ps: preemption (SIGURG/SuspendThread) + Go GC
   let traps = 0
   let worstUs = 0
   const t0 = process.hrtime.bigint()
@@ -39,40 +39,40 @@ test('Q6: trap WebAssembly (SIGSEGV/SEH di V8) mentre il runtime Go fa preemptio
     assert.throws(() => instance.exports.load(OOB_ADDR), WebAssembly.RuntimeError)
     traps++
     worstUs = Math.max(worstUs, Number(process.hrtime.bigint() - s) / 1000)
-    assert.equal(instance.exports.load(0), 0) // l'istanza resta utilizzabile dopo la trap
+    assert.equal(instance.exports.load(0), 0) // instance remains usable after the trap
   }
   const avgUs = Number(process.hrtime.bigint() - t0) / 1000 / TRAPS
-  t.diagnostic(`${traps} trap, media ${avgUs.toFixed(1)} µs, peggiore ${worstUs.toFixed(0)} µs`)
+  t.diagnostic(`${traps} traps, avg ${avgUs.toFixed(1)} µs, worst ${worstUs.toFixed(0)} µs`)
   assert.equal(traps, TRAPS)
-  assert.equal(b.add(1, 2), 3) // il runtime Go risponde ancora
-  assert.equal(await burning, true) // le goroutine terminano regolarmente
+  assert.equal(b.add(1, 2), 3) // Go runtime still responds
+  assert.equal(await burning, true) // goroutines finish cleanly
 })
 
-test('Q6: il processo termina da solo quando non c\'è lavoro (TSFN unref)', () => {
+test('Q6: process exits on its own when idle (TSFN unref)', () => {
   const r = nodeEval(`const b = require(${JSON.stringify(addonPath('basic'))}); b.add(1,2); console.log('ok')`)
   assert.equal(r.status, 0, r.stderr)
   assert.equal(r.stdout.trim(), 'ok')
 })
 
-test('Q6: il processo resta vivo finché ci sono Promise Go pendenti', () => {
+test('Q6: process stays alive while Go Promises are pending', () => {
   const r = nodeEval(`const b = require(${JSON.stringify(addonPath('basic'))});
     b.sleep(300).then(r => console.log('resolved', r.ms))`)
   assert.equal(r.status, 0, r.stderr)
   assert.equal(r.stdout.trim(), 'resolved 300')
 })
 
-test('Q6: process.exit con goroutine in volo non crasha', (t) => {
+test('Q6: process.exit with in-flight goroutines does not crash', (t) => {
   const t0 = Date.now()
   const r = nodeEval(`const b = require(${JSON.stringify(addonPath('basic'))});
     for (let i = 0; i < 1000; i++) b.sleep(5);
     b.burnCPU(1000);
     setTimeout(() => process.exit(7), 20)`)
-  // se l'uscita aspettasse le goroutine, il figlio durerebbe circa quanto burnCPU (1000 ms)
-  t.diagnostic(`durata del processo figlio ${Date.now() - t0} ms`)
+  // if exit waited for goroutines, the child would take roughly burnCPU's duration (1000 ms)
+  t.diagnostic(`child process duration ${Date.now() - t0} ms`)
   assert.equal(r.status, 7, r.stderr)
 })
 
-test('Q6: GC di V8 forzato con oggetti creati da Go e pressione GC Go', () => {
+test('Q6: forced V8 GC with Go-created objects and Go GC pressure', () => {
   const r = nodeEval(`const b = require(${JSON.stringify(addonPath('basic'))});
     (async () => {
       for (let i = 0; i < 50; i++) {
@@ -86,7 +86,7 @@ test('Q6: GC di V8 forzato con oggetti creati da Go e pressione GC Go', () => {
   assert.equal(r.stdout.trim(), 'ok')
 })
 
-test('Q6: child_process (SIGCHLD) funziona con l\'addon caricato', () => {
+test('Q6: child_process (SIGCHLD) works with the addon loaded', () => {
   const b = load('basic')
   b.burnCPU(200)
   for (let i = 0; i < 10; i++) {
@@ -95,15 +95,16 @@ test('Q6: child_process (SIGCHLD) funziona con l\'addon caricato', () => {
   }
 })
 
-// Segnali POSIX nel processo figlio. Il figlio ha una vita limitata (CHILD_LIFETIME_MS): se il
-// segnale non arriva all'handler JS esce con LOST_SIGNAL_EXIT invece di restare appeso. Se dopo
-// HANG_AFTER_MS dal segnale è ancora vivo, il padre ne cattura gli stack dei thread (`sample` su
-// macOS, /proc su Linux) e lo uccide con SIGKILL. Le varianti isolano la causa:
-//  - solo Node / addon caricato / addon + goroutine CPU-bound / addon + handler JS per SIGTERM;
-//  - il figlio stampa __sigInfo (diag.c, C puro): chi gestisce SIGTERM/SIGINT e se sono bloccati,
-//    prima e dopo una chiamata in Go (da Go 1.21 l'M resta legato al thread JS dopo la callback).
-// Osservato su macOS in CI: SIGTERM con l'handler di Node (node::SignalExit) non termina il figlio
-// quando il runtime Go è caricato; SIGINT con handler JS funziona.
+// POSIX signals in the child process. The child has a bounded lifetime (CHILD_LIFETIME_MS): if the
+// signal does not reach the JS handler, it exits with LOST_SIGNAL_EXIT instead of hanging. If it is
+// still alive HANG_AFTER_MS after the signal, the parent captures thread stacks (`sample` on macOS,
+// /proc on Linux) and kills it with SIGKILL. Variants isolate the cause:
+//  - Node only / addon loaded / addon + CPU-bound goroutines / addon + JS handler for SIGTERM;
+//  - the child prints __sigInfo (diag.c, pure C): who handles SIGTERM/SIGINT and whether they are
+//    blocked, before and after a call into Go (since Go 1.21 the M stays bound to the JS thread
+//    after the callback).
+// Observed on macOS in CI: SIGTERM with Node's handler (node::SignalExit) fails to terminate the
+// child when the Go runtime is loaded; SIGINT with a JS handler works.
 const CHILD_LIFETIME_MS = 15_000
 const HANG_AFTER_MS = 5_000
 const LOST_SIGNAL_EXIT = 99
@@ -130,7 +131,7 @@ function captureStacks(pid) {
 function runSignalChild(setup, signal, { jsSigint = true, captureOnHang = true } = {}) {
   const sigintListener = jsSigint
     ? `process.on('SIGINT', () => { console.log('got SIGINT'); process.exit(${SIGINT_EXIT}) });`
-    : '' // SIGINT resta a node::SignalExit (terminazione di default)
+    : '' // SIGINT remains on node::SignalExit (default termination)
   const script = `const os = require('node:os');
     ${setup}
     if (typeof b !== 'undefined') {
@@ -138,7 +139,7 @@ function runSignalChild(setup, signal, { jsSigint = true, captureOnHang = true }
       console.log('${DIAG_PREFIX}' + JSON.stringify({ SIGTERM: b.__sigInfo(S.SIGTERM), SIGINT: b.__sigInfo(S.SIGINT) }));
     }
     ${sigintListener}
-    setTimeout(() => { console.log('segnale non ricevuto'); process.exit(${LOST_SIGNAL_EXIT}) }, ${CHILD_LIFETIME_MS});
+    setTimeout(() => { console.log('signal not received'); process.exit(${LOST_SIGNAL_EXIT}) }, ${CHILD_LIFETIME_MS});
     console.log('ready')`
   return new Promise((resolve, reject) => {
     const c = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -173,69 +174,69 @@ function runSignalChild(setup, signal, { jsSigint = true, captureOnHang = true }
 }
 
 function report(st, r) {
-  st.diagnostic(`code=${r.code} sig=${r.sig} uscita dopo il segnale ${r.exitMs} ms; stderr: ${r.err.trim() || '-'}`)
-  st.diagnostic(`segnali nel figlio: ${r.diag}`)
-  if (r.stacks) st.diagnostic(`figlio bloccato, stack dei thread:\n${r.stacks.split('\n').slice(0, 150).join('\n')}`)
+  st.diagnostic(`code=${r.code} sig=${r.sig} exited ${r.exitMs} ms after signal; stderr: ${r.err.trim() || '-'}`)
+  st.diagnostic(`child signals: ${r.diag}`)
+  if (r.stacks) st.diagnostic(`child hung, thread stacks:\n${r.stacks.split('\n').slice(0, 150).join('\n')}`)
 }
 
 const addonReq = `const b = require(${JSON.stringify(addonPath('basic'))});`
 const signalVariants = [
-  { label: 'solo Node', setup: '' },
-  { label: 'addon caricato', setup: `${addonReq} b.add(1, 1);` },
-  { label: 'addon + goroutine CPU-bound', setup: `${addonReq} b.burnCPU(${CHILD_LIFETIME_MS});` },
+  { label: 'Node only', setup: '' },
+  { label: 'addon loaded', setup: `${addonReq} b.add(1, 1);` },
+  { label: 'addon + CPU-bound goroutines', setup: `${addonReq} b.burnCPU(${CHILD_LIFETIME_MS});` },
 ]
 
-test('Q6: SIGINT gestito da process.on e SIGTERM di default', { skip: isWin && 'segnali POSIX', timeout: 120_000 }, async (t) => {
+test('Q6: SIGINT handled by process.on and default SIGTERM', { skip: isWin && 'POSIX signals', timeout: 120_000 }, async (t) => {
   for (const { label, setup } of signalVariants) {
-    await t.test(`${label}: SIGINT → handler JS`, async (st) => {
+    await t.test(`${label}: SIGINT → JS handler`, async (st) => {
       const r = await runSignalChild(setup, 'SIGINT')
       report(st, r)
-      assert.notEqual(r.code, LOST_SIGNAL_EXIT, 'SIGINT non consegnato all\'handler JS')
-      assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
+      assert.notEqual(r.code, LOST_SIGNAL_EXIT, 'SIGINT not delivered to JS handler')
+      assert.notEqual(r.sig, 'SIGKILL', 'child hung after signal: killed with SIGKILL')
       assert.equal(r.code, SIGINT_EXIT)
       assert.match(r.out, /got SIGINT/)
     })
-    await t.test(`${label}: SIGINT → terminazione di default (senza handler JS)`, async (st) => {
+    await t.test(`${label}: SIGINT → default termination (without JS handler)`, async (st) => {
       const r = await runSignalChild(setup, 'SIGINT', { jsSigint: false })
       report(st, r)
-      assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
+      assert.notEqual(r.sig, 'SIGKILL', 'child hung after signal: killed with SIGKILL')
       assert.equal(r.sig, 'SIGINT')
     })
-    await t.test(`${label}: SIGTERM → terminazione di default`, async (st) => {
+    await t.test(`${label}: SIGTERM → default termination`, async (st) => {
       const r = await runSignalChild(setup, 'SIGTERM')
       report(st, r)
-      assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
+      assert.notEqual(r.sig, 'SIGKILL', 'child hung after signal: killed with SIGKILL')
       assert.equal(r.sig, 'SIGTERM')
     })
   }
-  await t.test('addon caricato: SIGTERM → handler JS', async (st) => {
+  await t.test('addon loaded: SIGTERM → JS handler', async (st) => {
     const setup = `${addonReq} b.add(1, 1); process.on('SIGTERM', () => { console.log('got SIGTERM'); process.exit(${SIGTERM_JS_EXIT}) });`
     const r = await runSignalChild(setup, 'SIGTERM')
     report(st, r)
-    assert.notEqual(r.sig, 'SIGKILL', 'figlio bloccato dopo il segnale: ucciso con SIGKILL')
+    assert.notEqual(r.sig, 'SIGKILL', 'child hung after signal: killed with SIGKILL')
     assert.equal(r.code, SIGTERM_JS_EXIT)
   })
 })
 
-// Regressione del blocco osservato su macOS: il runtime Go (initsig → setsigstack) reinstalla
-// node::SignalExit perdendo SA_RESETHAND, e raise() dentro l'handler lo richiama all'infinito.
-// __sigEmulateDarwinLoss riproduce la perdita su qualsiasi Unix; __sigRepair esegue la correzione
-// di napi/sigfix.c (la stessa chiamata all'avvio del modulo).
-test('Q6: SA_RESETHAND perso su node::SignalExit (macOS) e correzione di napi-go', { skip: isWin && 'segnali POSIX', timeout: 60_000 }, async (t) => {
-  await t.test('senza correzione SIGTERM blocca il processo (riproduce macOS)', async (st) => {
+// Regression test for the hang observed on macOS: the Go runtime (initsig → setsigstack) reinstalls
+// node::SignalExit dropping SA_RESETHAND, and raise() inside the handler re-invokes it endlessly.
+// __sigEmulateDarwinLoss reproduces the loss on any Unix; __sigRepair runs the fix from
+// napi/sigfix.c (the same call made at module startup).
+test('Q6: SA_RESETHAND lost on node::SignalExit (macOS) and napi-go fix', { skip: isWin && 'POSIX signals', timeout: 60_000 }, async (t) => {
+  await t.test('without fix, SIGTERM hangs the process (reproduces macOS)', async (st) => {
     const setup = `${addonReq} b.__sigEmulateDarwinLoss(require('node:os').constants.signals.SIGTERM);`
     const r = await runSignalChild(setup, 'SIGTERM', { captureOnHang: false })
     report(st, r)
-    assert.equal(r.sig, 'SIGKILL', 'la perdita di SA_RESETHAND dovrebbe bloccare il processo')
+    assert.equal(r.sig, 'SIGKILL', 'losing SA_RESETHAND should hang the process')
   })
-  await t.test('con la correzione SIGTERM termina il processo', async (st) => {
+  await t.test('with fix, SIGTERM terminates the process', async (st) => {
     const setup = `${addonReq} b.__sigEmulateDarwinLoss(require('node:os').constants.signals.SIGTERM); b.__sigRepair();`
     const r = await runSignalChild(setup, 'SIGTERM')
     report(st, r)
     assert.equal(r.sig, 'SIGTERM')
-    // Non si verifica info.resethand: su macOS sigaction() non riporta mai SA_RESETHAND in
-    // lettura, anche quando è attivo (vedi experiments/sigflags). Conta il comportamento.
-    assert.notEqual(r.diag, NO_DIAG, 'il figlio non ha stampato la diagnostica dei segnali')
+    // Do not check info.resethand: on macOS sigaction() never reports SA_RESETHAND on
+    // read-back, even when active (see experiments/sigflags). What matters is the behavior.
+    assert.notEqual(r.diag, NO_DIAG, 'child did not print signal diagnostics')
     assert.equal(JSON.parse(r.diag).SIGTERM.repairedByNapiGo, true)
   })
 })

@@ -1,4 +1,4 @@
-// Porting del target myobject di test/js-native-api/6_object_wrap/binding.gyp (myobject.cc).
+// Port of the myobject target in test/js-native-api/6_object_wrap/binding.gyp (myobject.cc).
 package main
 
 import (

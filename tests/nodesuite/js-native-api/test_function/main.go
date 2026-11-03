@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_function/test_function.c.
+// Port of test/js-native-api/test_function/test_function.c.
 package main
 
 import (
@@ -10,8 +10,8 @@ import (
 
 func main() {}
 
-// Dati delle funzioni create più volte: registrati una volta sola in init() (registrarli in una
-// dichiarazione var creerebbe un ciclo di inizializzazione con la funzione stessa).
+// Data for functions created multiple times: registered once in init() (registering them in a
+// var declaration would create an initialization cycle with the function itself).
 var (
 	testCreateFunctionParametersData uintptr
 	testFunctionNameData             uintptr
@@ -23,7 +23,7 @@ func init() {
 	nt.ModuleInit(initModule)
 }
 
-// maxArgs è la capacità di napi_value args[10] in TestCallFunction.
+// maxArgs is the capacity of napi_value args[10] in TestCallFunction.
 const maxArgs = 10
 
 const trackedFunction = "TrackedFunction"
@@ -35,7 +35,7 @@ func testCreateFunctionParameters(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Lo status delle chiamate senza controllo è letto subito dopo da AddLastStatus, come nel C.
+	// The status of unchecked calls is read immediately after via AddLastStatus, matching C.
 	status := sys.CreateFunction(nil, nt.CStr(trackedFunction), sys.AutoLength, sys.CallbackTrampoline,
 		testCreateFunctionParametersData, &result)
 
@@ -78,7 +78,7 @@ func testCallFunction(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// argv = args + 1: con argc == 1 punta comunque dentro args, come in C.
+	// argv = args + 1: when argc == 1 it still points inside args, as in C.
 	argv := &args[1]
 	argc--
 
@@ -99,28 +99,28 @@ func testFunctionName(sys.Env, sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// finalizeFunction riceve come data il napi_ref passato a napi_wrap.
+// finalizeFunction receives the napi_ref passed to napi_wrap as data.
 func finalizeFunction(env sys.Env, data, _ uintptr) {
 	ref := sys.Ref(nt.Pointer(data))
 
-	// Valore undefined di JavaScript.
+	// JavaScript undefined value.
 	var undefined sys.Value
 	if !nt.Call(env, sys.GetUndefined(env, &undefined)) {
 		return
 	}
 
-	// La funzione JavaScript da chiamare.
+	// The JavaScript function to invoke.
 	var jsFunction sys.Value
 	if !nt.Call(env, sys.GetReferenceValue(env, ref, &jsFunction)) {
 		return
 	}
 
-	// La si chiama per segnalare che la funzione generata sta per essere raccolta.
+	// Call it to signal that the generated function is about to be garbage-collected.
 	if !nt.Call(env, sys.CallFunction(env, undefined, jsFunction, 0, nil, nil)) {
 		return
 	}
 
-	// Si distrugge il riferimento persistente alla funzione appena chiamata.
+	// Destroy the persistent reference to the function we just called.
 	if !nt.Call(env, sys.DeleteReference(env, ref)) {
 		return
 	}
@@ -131,7 +131,7 @@ func makeTrackedFunction(env sys.Env, info sys.CallbackInfo) sys.Value {
 	var jsFinalizeCb sys.Value
 	var argType sys.ValueType
 
-	// Funzione che segnala a JavaScript la raccolta della funzione creata qui sotto.
+	// Function that notifies JavaScript when the function created below is garbage-collected.
 	if !nt.Call(env, sys.GetCbInfo(env, info, &argc, &jsFinalizeCb, nil, nil)) {
 		return nil
 	}
@@ -145,20 +145,20 @@ func makeTrackedFunction(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Funzione creata dinamicamente.
+	// Dynamically created function.
 	var result sys.Value
 	if !nt.Call(env, sys.CreateFunction(env, nt.CStr(trackedFunction), sys.AutoLength, sys.CallbackTrampoline,
 		testFunctionNameData, &result)) {
 		return nil
 	}
 
-	// Riferimento forte alla funzione da chiamare quando quella creata viene raccolta.
+	// Strong reference to the function to invoke when the created function is collected.
 	var jsFinalizeCbRef sys.Ref
 	if !nt.Call(env, sys.CreateReference(env, jsFinalizeCb, 1, &jsFinalizeCbRef)) {
 		return nil
 	}
 
-	// Finalizer sulla funzione creata, con il riferimento come data.
+	// Finalizer on the created function, with the reference as data.
 	cb, hint := nt.Finalizer(finalizeFunction, 0)
 	if !nt.Call(env, sys.Wrap(env, result, uintptr(unsafe.Pointer(jsFinalizeCbRef)), cb, hint, nil)) {
 		nt.DiscardFinalizer(hint)
@@ -170,8 +170,8 @@ func makeTrackedFunction(env sys.Env, info sys.CallbackInfo) sys.Value {
 
 func testBadReturnExceptionPending(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	nt.Call(env, sys.ThrowError(env, nt.CStr("throwing exception"), nt.CStr("throwing exception")))
-	// Un addon dovrebbe restituire sempre un napi_value valido, ma con un'eccezione pendente Node
-	// deve ignorare il valore restituito: 0xFFFFFFFFF non è mai un napi_value valido.
+	// An addon should always return a valid napi_value, but when an exception is pending Node
+	// must ignore the return value: 0xFFFFFFFFF is never a valid napi_value.
 	return nt.InvalidValue()
 }
 
@@ -185,7 +185,7 @@ func initModule(env sys.Env, exports sys.Value) sys.Value {
 		testFunctionNameData, &fn2)) {
 		return nil
 	}
-	// Lunghezza 5: il nome diventa "Name_".
+	// Length 5: the name becomes "Name_".
 	if !nt.Call(env, sys.CreateFunction(env, nt.CStr("Name_extra"), 5, sys.CallbackTrampoline,
 		testFunctionNameData, &fn3)) {
 		return nil

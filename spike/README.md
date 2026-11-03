@@ -1,111 +1,111 @@
-# napi-go — Fase 0: spike di fattibilità
+# napi-go — Phase 0: feasibility spike
 
-Prototipo minimo che valida le scelte architetturali del piano (`claude/napi-go-piano-implementazione.md`
-nel Project) prima di scrivere il binding vero. **Non è l'API definitiva.**
+Minimal prototype that validates the architectural choices from the implementation plan (`claude/napi-go-piano-implementazione.md`
+in the Project) before writing the real binding. **This is not the final API.**
 
-## Contenuto
+## Contents
 
 ```
 spike/
-├── napi/                    mini-binding (Layer 0 + Layer 1 + concorrenza)
-│   ├── include/             header Node-API (da Node 22)
-│   ├── gonapi.h             tabella di simboli (X-macro) + wrapper static inline + helper "batch"
-│   ├── loader.c             risoluzione simboli a runtime: dlsym(RTLD_DEFAULT) / GetProcAddress
+├── napi/                    mini-binding (Layer 0 + Layer 1 + concurrency)
+│   ├── include/             Node-API headers (from Node 22)
+│   ├── gonapi.h             symbol table (X-macro) + static inline wrappers + "batch" helpers
+│   ├── loader.c             runtime symbol resolution: dlsym(RTLD_DEFAULT) / GetProcAddress
 │   ├── module.c             NAPI_MODULE_INIT → napi_register_module_v1 + node_api_module_get_api_version_v1
-│   ├── trampoline.c         trampolino unico C→Go, trampolino tipizzato, call_js del dispatcher, cleanup hook
-│   ├── napi.go              Env, Value, errori, stringhe zero-copy, scope
-│   ├── callback.go          registro callback (indice, non puntatore Go), recover dei panic
-│   ├── module.go            Export, stato per env (worker_threads), cleanup
-│   ├── dispatcher.go        una TSFN per env + coda coalescente, Promise da goroutine
-│   └── typed.go             percorso tipizzato: Fn1/Fn2 generici, conversioni in C
-├── addons/basic             addon di test principale
-├── addons/second            secondo addon (secondo runtime Go nello stesso processo)
-├── addons/cref              addon C puro: baseline per il benchmark
-├── experiments/cbcost       costo di una callback C→Go per tipo di thread
-├── scripts/build.mjs        prototipo di `napi-go build`
-├── test/*.test.mjs          suite node:test (Q1–Q8)
-├── test/bench.mjs           benchmark per chiamata
-└── ci/spike.yml             workflow GitHub Actions (da copiare in .github/workflows/)
+│   ├── trampoline.c         single C→Go trampoline, typed trampoline, dispatcher call_js, cleanup hook
+│   ├── napi.go              Env, Value, errors, zero-copy strings, scope
+│   ├── callback.go          callback registry (index, not Go pointer), panic recovery
+│   ├── module.go            Export, per-env state (worker_threads), cleanup
+│   ├── dispatcher.go        one TSFN per env + coalescing queue, Promise from goroutines
+│   └── typed.go             typed path: generic Fn1/Fn2, conversions in C
+├── addons/basic             main test addon
+├── addons/second            second addon (second Go runtime in the same process)
+├── addons/cref              pure C addon: benchmark baseline
+├── experiments/cbcost       cost of a C→Go callback by thread type
+├── scripts/build.mjs        prototype of `napi-go build`
+├── test/*.test.mjs          node:test suite (Q1–Q8)
+├── test/bench.mjs           per-call benchmark
+└── ci/spike.yml             GitHub Actions workflow (to copy into .github/workflows/)
 ```
 
-## Come eseguirlo
+## How to run
 
 ```bash
 cd spike
-node scripts/build.mjs                       # Windows senza gcc: set CC=zig cc
+node scripts/build.mjs                       # Windows without gcc: set CC=zig cc
 node --test --test-reporter=spec test/*.test.mjs
 node test/bench.mjs
 cd experiments/cbcost && go run .
 ```
 
-Requisiti: Go ≥ 1.24 con cgo, Node ≥ 20, un compilatore C (gcc/clang, oppure `zig cc` su Windows).
+Requirements: Go ≥ 1.24 with cgo, Node ≥ 20, a C compiler (gcc/clang, or `zig cc` on Windows).
 
-## Risultati
+## Results
 
-Ambienti provati:
-- **Linux** x64 (Ubuntu 24.04, VM 2 core): Go 1.24.7, Node 22.23.4 e 20.20.0, gcc 13
-- **Windows** x64 (22 thread logici): Go 1.27.1, Node 24.21.0, `zig cc` 0.16
+Tested environments:
+- **Linux** x64 (Ubuntu 24.04, 2-core VM): Go 1.24.7, Node 22.23.4 and 20.20.0, gcc 13
+- **Windows** x64 (22 logical threads): Go 1.27.1, Node 24.21.0, `zig cc` 0.16
 
-macOS e Linux arm64 sono coperti da `ci/spike.yml`. Alpine/musl è stato eseguito in CI: vedi Q7.
+macOS and Linux arm64 are covered by `ci/spike.yml`. Alpine/musl was run in CI: see Q7.
 
-| # | Domanda | Esito | Evidenza |
+| # | Question | Outcome | Evidence |
 |---|---|---|---|
-| Q1 | `c-shared` caricato da `require()` con entry point definito in C | ✅ Linux, Windows | `napi_register_module_v1` e `node_api_module_get_api_version_v1` esportati anche con zig/lld su Windows. Nessuna dipendenza dichiarata dal binario node |
-| Q2 | Risoluzione dinamica dei simboli | ✅ Linux, Windows | 42 simboli obbligatori + 3 opzionali (Node-API 9/10) rilevati a runtime; nessuna import library, nessuno stub |
-| Q3 | Dispatch, argomenti, panic, errori | ✅ | 12+ funzioni senza il bug `static dataCopy`; più di 8 argomenti; panic → `Error` con `code: GO_PANIC` e processo vivo; codici di errore; rientranza Go→JS→Go; **pulito con `GOEXPERIMENT=cgocheck2`** |
-| Q4 | Goroutine → Promise, worker_threads | ✅ | Risoluzione sempre sul thread JS dell'env. 20k Promise concorrenti con coalescenza del dispatcher. 8 worker concorrenti con cleanup degli env; worker terminati con Promise pendenti senza crash |
-| Q5 | **Due runtime Go nello stesso processo** | ✅ Linux, Windows, macOS arm64 · ❌ macOS x64 (limite di Go) | Due addon distinti: chiamate sincrone, async, GC e CPU concorrenti, entrambi caricati in 4 worker. Resta uno scenario non supportato ufficialmente da Go: va tenuto sotto osservazione in CI. **macOS x64:** crash `bad sweepgen in refill`, perché tutti i runtime Go condividono lo slot TLS di `g` (scoperta 8) |
-| Q6 | Segnali e ciclo di vita del processo | ✅ (macOS con la correzione `napi/sigfix.c`) | Più di 1000 trap WebAssembly (SIGSEGV di V8) mentre Go fa preemption e GC. SIGINT/SIGTERM (Linux). `child_process`. `process.exit` con goroutine in volo. `gc()` forzato. Il processo esce da solo (TSFN unref) e resta vivo finché ci sono Promise pendenti. **macOS:** SIGINT/SIGTERM senza listener JS bloccavano il processo al 100% di CPU (`node::SignalExit` → `raise()` → di nuovo `SignalExit`): il runtime Go reinstalla l'handler con `SA_ONSTACK` e perde `SA_RESETHAND`. Corretto in `napi/sigfix.c` (vedi scoperta 6); bug e correzione riprodotti anche su Linux |
-| Q7 | Alpine / musl | ❌ limite di Go | `dlopen` rifiutato da musl: *initial-exec TLS resolves to dynamic definition*. Riprodotto in CI (Go 1.26.10) e in locale con Go 1.24.7 e 1.27.1 (`experiments/musltls`); `LD_PRELOAD` va in segfault (argc/argv nulli all'init). Correzione solo upstream: golang/go#71953, CL 696635 |
-| Q8 | Overhead per chiamata | ✅ misurato | Vedi sotto; due scoperte che cambiano il piano |
+| Q1 | `c-shared` loaded by `require()` with entry point defined in C | ✅ Linux, Windows | `napi_register_module_v1` and `node_api_module_get_api_version_v1` exported even with zig/lld on Windows. No declared dependency on the node binary |
+| Q2 | Dynamic symbol resolution | ✅ Linux, Windows | 42 required symbols + 3 optional (Node-API 9/10) detected at runtime; no import library, no stubs |
+| Q3 | Dispatch, arguments, panics, errors | ✅ | 12+ functions without the `static dataCopy` bug; more than 8 arguments; panic → `Error` with `code: GO_PANIC` and process alive; error codes; Go→JS→Go reentrancy; **clean under `GOEXPERIMENT=cgocheck2`** |
+| Q4 | Goroutine → Promise, worker_threads | ✅ | Resolution always on the env's JS thread. 20k concurrent Promises with dispatcher coalescing. 8 concurrent workers with env cleanup; workers terminated with pending Promises without crashing |
+| Q5 | **Two Go runtimes in the same process** | ✅ Linux, Windows, macOS arm64 · ❌ macOS x64 (Go limitation) | Two distinct addons: synchronous calls, async, concurrent GC and CPU, both loaded across 4 workers. Remains a scenario not officially supported by Go: must be monitored in CI. **macOS x64:** `bad sweepgen in refill` crash, because all Go runtimes share the `g` TLS slot (finding 8) |
+| Q6 | Signals and process lifecycle | ✅ (macOS with the `napi/sigfix.c` fix) | Over 1000 WebAssembly traps (V8 SIGSEGV) while Go performs preemption and GC. SIGINT/SIGTERM (Linux). `child_process`. `process.exit` with in-flight goroutines. Forced `gc()`. Process exits on its own (TSFN unref) and stays alive while Promises are pending. **macOS:** SIGINT/SIGTERM without a JS listener hung the process at 100% CPU (`node::SignalExit` → `raise()` → `SignalExit` again): the Go runtime reinstalls the handler with `SA_ONSTACK` and drops `SA_RESETHAND`. Fixed in `napi/sigfix.c` (see finding 6); bug and fix also reproduced on Linux |
+| Q7 | Alpine / musl | ❌ Go limitation | `dlopen` rejected by musl: *initial-exec TLS resolves to dynamic definition*. Reproduced in CI (Go 1.26.10) and locally with Go 1.24.7 and 1.27.1 (`experiments/musltls`); `LD_PRELOAD` segfaults (null argc/argv at init). Upstream fix only: golang/go#71953, CL 696635 |
+| Q8 | Per-call overhead | ✅ measured | See below; two findings that change the plan |
 
-Ripetizioni: Linux 5 esecuzioni complete (Node 22 ×3, Node 20, cgocheck2), Windows 4 esecuzioni complete. Zero fallimenti. Dimensione: 1,8–2,1 MB per `.node` con `-ldflags=-s -w`.
+Runs: Linux 5 full runs (Node 22 ×3, Node 20, cgocheck2), Windows 4 full runs. Zero failures. Size: 1.8–2.1 MB per `.node` with `-ldflags=-s -w`.
 
-### Benchmark (ns per chiamata, migliore di 5 round da 1M)
+### Benchmark (ns per call, best of 5 rounds of 1M)
 
-| Caso | JS | C puro | Go generico | Go tipizzato |
+| Case | JS | Pure C | Generic Go | Typed Go |
 |---|---:|---:|---:|---:|
 | **Linux / Node 22** | | | | |
-| `noop()` | 0,5 | 12,6 | 120 | — |
-| `add(1.5, 2.5)` | 2,6 | 32,6 | 355 | **131** |
-| `echo(16 B)` | 2,8 | 82 | 350 | **216** |
-| `echo(1 KiB)` | 2,8 | 446 | 1184 | — |
-| Promise da goroutine | | | 5,6–6,5 µs | |
+| `noop()` | 0.5 | 12.6 | 120 | — |
+| `add(1.5, 2.5)` | 2.6 | 32.6 | 355 | **131** |
+| `echo(16 B)` | 2.8 | 82 | 350 | **216** |
+| `echo(1 KiB)` | 2.8 | 446 | 1184 | — |
+| Promise from goroutine | | | 5.6–6.5 µs | |
 | **Windows / Node 24** | | | | |
-| `noop()` | 0,4 | n/d | 1421–1913 | — |
-| `add(1.5, 2.5)` | 4,5 | n/d | 1404–2888 | 1312–2493 |
-| Promise da goroutine | | | 7,9–11,7 µs | |
+| `noop()` | 0.4 | n/a | 1421–1913 | — |
+| `add(1.5, 2.5)` | 4.5 | n/a | 1404–2888 | 1312–2493 |
+| Promise from goroutine | | | 7.9–11.7 µs | |
 
-Allocazioni Go per chiamata: 0 per i numeri; 1 per stringa letta (la stringa Go risultante).
+Go allocations per call: 0 for numbers; 1 per string read (the resulting Go string).
 
-Callback C→Go vuota (`experiments/cbcost`):
+Empty C→Go callback (`experiments/cbcost`):
 
 | | Linux (Go 1.24) | Windows (Go 1.27) |
 |---|---:|---:|
 | Go→C (nop) | 49 | 37 |
-| C→Go da thread Go | 61 | 113 |
-| C→Go da thread creato in C (= main thread di Node) | 87 | **1001** |
+| C→Go from Go thread | 61 | 113 |
+| C→Go from C-created thread (= Node main thread) | 87 | **1001** |
 
-### Scoperte che cambiano il piano
+### Findings that change the plan
 
-1. **Il modello di costo è "1 ingresso + N uscite".** Ogni chiamata Node-API fatta da Go dentro una callback costa ~70 ns (Linux). Con il trampolino tipizzato il C legge gli argomenti primitivi, entra in Go una sola volta e converte il risultato: `add` passa da 355 a 131 ns, cioè ~100 ns sopra il C puro, che è il minimo teorico. **Conseguenza per il Layer 2:** le firme con primitivi (numeri, bool, stringhe) vanno compilate in descrittori convertiti dal C. Già con i generics (`napi.Fn2`) funziona senza codegen; il codegen genererà glue C per firma.
-2. **Su Windows ogni callback C→Go costa ~1 µs**, anche con Go 1.27. Il runtime Go mantiene l'M legato ai thread esterni solo su Unix (Go 1.21, `x_cgo_bindm` con distruttore pthread). In `runtime/cgo/gcc_libinit_windows.c` il meccanismo manca ("No pthreads on Windows, these are always zero"), quindi ogni ingresso dal main thread di Node rifà `needm`/`dropm`. **Conseguenze:**
-   - documentare il costo;
-   - progettare API a grana grossa (batch, async) per i percorsi caldi;
-   - valutare un contributo upstream a Go (binding dell'M con `FlsAlloc` e callback di distruzione).
-3. Il race detector (TSan) non si inizializza dentro un `.node` caricato da Node. La logica concorrente (dispatcher, registri) va testata con `go test -race` usando una TSFN finta.
-4. `-Wl,-z,nodelete` non serve: Go imposta già `NODELETE` sui `c-shared` (ed è comunque fuori dalla allowlist dei flag cgo).
-5. **Alpine/musl non è supportabile con nessuna release di Go attuale (≤ 1.27).** Il runtime Go nei `c-shared` usa TLS initial-exec (`R_X86_64_TPOFF64`) e si aspetta `argc`/`argv` nelle funzioni di init: musl rifiuta il `dlopen` e con `LD_PRELOAD` va in segfault. **Conseguenze:**
-   - musl esce dalle piattaforme supportate della prima release;
-   - il job Alpine resta in CI come sentinella: una sonda `dlopen` dà un warning (job verde, test saltati) se l'errore è quello noto, esegue tutti i test se il caricamento riesce e fa fallire il job per qualsiasi altro esito;
-   - va seguita la proposta golang/go#71953 e la CL 696635, che introducono il modello TLS "general dynamic" e i controlli su `argv`. La CL è provata in CI (variante `go cl696635` del job Alpine, Go compilato dall'ultimo patchset): lì l'errore noto fa fallire il job.
-6. **Su macOS il runtime Go rompe SIGINT/SIGTERM di default di Node.** All'avvio di un `c-shared`, `initsig` → `setsigstack` rilegge ogni handler preesistente e lo reinstalla con `SA_ONSTACK`. Il kernel di macOS applica `SA_RESETHAND` ma non lo riporta in lettura (verificato in CI con `experiments/sigflags`), quindi la reinstallazione lo perde. Node installa `node::SignalExit` con `SA_RESETHAND` e poi fa `raise()`: senza quel flag l'handler si richiama all'infinito (confermato con `sample` in CI: `_sigtramp → SignalExit → raise → _sigtramp …`). **Correzione:** dopo l'avvio del runtime, `napi/sigfix.c` reinstalla `SA_RESETHAND` solo su `node::SignalExit` (riconosciuto con `dladdr`) per SIGINT e SIGTERM. **Correzione verificata in CI su macOS 26 arm64** (Go 1.27.3, Node 22): tutte le varianti SIGINT/SIGTERM passano. Da segnalare upstream a Go: su Darwin `setsigstack` non può fidarsi dei flag riletti.
-7. `#cgo noescape`/`nocallback` (Go 1.24) funzionano: zero allocazioni per i getter/setter numerici e per i buffer di lettura stringa sullo stack.
-8. **Su macOS x64 due addon Go nello stesso processo corrompono la memoria.** Su darwin/amd64 il runtime Go tiene `g` in uno slot TLS fisso, `0x30(GS)`, riservato da Apple a Go (golang/go#23617; `cmd/link` `computeTLSOffset`, `runtime/sys_darwin_amd64.s`). Lo slot è unico per processo, quindi tutti i runtime Go lo condividono. Sugli altri sistemi ogni runtime ha il proprio slot: darwin/arm64 se lo alloca con `pthread_key_create` (`tlsinit`), Linux usa una variabile TLS ELF per modulo, Windows `TlsAlloc`.
-   - **Meccanismo:** l'init di `basic` lascia il suo `g` legato al main thread (`x_cgo_bindm`, Go 1.21). Quando Node entra in `second`, il suo `cgocallback` trova lo slot non nullo e usa `g` e M di `basic` come propri. In CI (macOS 15 x64, Go 1.24.13) una goroutine di `basic` gira con l'M e l'mcache di `second` → `fatal error: bad sweepgen in refill`.
-   - **Verifica deterministica:** `__goTlsSlot()` (solo darwin/amd64, in `napi/diag.c`) legge lo slot. Dopo l'init di `second` lo slot contiene ancora il `g` di `basic`.
-   - **Conseguenze:**
-     - su macOS x64 è supportato un solo addon napi-go per processo;
-     - nella Fase 1 napi-go deve rifiutare con un errore chiaro un secondo runtime, invece di corrompere la memoria;
-     - resta il problema dei segnali: gli handler del secondo runtime ricevono anche i segnali dei thread del primo. Va studiato prima di dichiarare il rifiuto sicuro;
-     - impatto limitato: macOS 26 è l'ultima versione di macOS per i Mac Intel.
+1. **The cost model is "1 entry + N exits".** Every Node-API call made from Go inside a callback costs ~70 ns (Linux). With the typed trampoline, C reads primitive arguments, enters Go only once, and converts the result: `add` drops from 355 to 131 ns, i.e., ~100 ns above pure C, which is the theoretical minimum. **Consequence for Layer 2:** signatures with primitives (numbers, bool, strings) should be compiled into descriptors converted by C. Even with generics (`napi.Fn2`) this works without codegen; codegen will generate C glue per signature.
+2. **On Windows every C→Go callback costs ~1 µs**, even with Go 1.27. The Go runtime keeps the M bound to external threads only on Unix (Go 1.21, `x_cgo_bindm` with pthread destructor). In `runtime/cgo/gcc_libinit_windows.c` the mechanism is missing ("No pthreads on Windows, these are always zero"), so every entry from Node's main thread repeats `needm`/`dropm`. **Consequences:**
+   - document the cost;
+   - design coarse-grained APIs (batch, async) for hot paths;
+   - evaluate an upstream contribution to Go (binding the M with `FlsAlloc` and a destruction callback).
+3. The race detector (TSan) does not initialize inside a `.node` loaded by Node. Concurrent logic (dispatcher, registries) must be tested with `go test -race` using a fake TSFN.
+4. `-Wl,-z,nodelete` is unnecessary: Go already sets `NODELETE` on `c-shared` builds (and it is outside the cgo flag allowlist anyway).
+5. **Alpine/musl cannot be supported with any current Go release (≤ 1.27).** The Go runtime in `c-shared` builds uses initial-exec TLS (`R_X86_64_TPOFF64`) and expects `argc`/`argv` in init functions: musl rejects `dlopen` and segfaults with `LD_PRELOAD`. **Consequences:**
+   - musl is dropped from the supported platforms for the initial release;
+   - the Alpine job remains in CI as a sentinel: a `dlopen` probe emits a warning (green job, tests skipped) if the error matches the known issue, runs all tests if loading succeeds, and fails the job for any other outcome;
+   - track proposal golang/go#71953 and CL 696635, which introduce the "general dynamic" TLS model and `argv` checks. The CL is tested in CI (`go cl696635` variant of the Alpine job, Go built from the latest patchset): there, the known error fails the job.
+6. **On macOS the Go runtime breaks Node's default SIGINT/SIGTERM handling.** At `c-shared` startup, `initsig` → `setsigstack` reads back each pre-existing handler and reinstalls it with `SA_ONSTACK`. The macOS kernel enforces `SA_RESETHAND` when set, but does not report it back when queried (verified in CI with `experiments/sigflags`), so reinstalling drops it. Node installs `node::SignalExit` with `SA_RESETHAND` and then calls `raise()`: without that flag the handler re-invokes itself endlessly (confirmed with `sample` in CI: `_sigtramp → SignalExit → raise → _sigtramp …`). **Fix:** after runtime startup, `napi/sigfix.c` restores `SA_RESETHAND` solely on `node::SignalExit` (identified via `dladdr`) for SIGINT and SIGTERM. **Fix verified in CI on macOS 26 arm64** (Go 1.27.3, Node 22): all SIGINT/SIGTERM variants pass. To be reported upstream to Go: on Darwin `setsigstack` cannot trust read-back flags.
+7. `#cgo noescape`/`nocallback` (Go 1.24) work: zero allocations for numeric getters/setters and stack-allocated string read buffers.
+8. **On macOS x64 two Go addons in the same process corrupt memory.** On darwin/amd64 the Go runtime stores `g` in a fixed TLS slot, `0x30(GS)`, reserved by Apple for Go (golang/go#23617; `cmd/link` `computeTLSOffset`, `runtime/sys_darwin_amd64.s`). The slot is process-wide, so all Go runtimes share it. On other systems each runtime has its own slot: darwin/arm64 allocates one via `pthread_key_create` (`tlsinit`), Linux uses a per-module ELF TLS variable, Windows uses `TlsAlloc`.
+   - **Mechanism:** `basic`'s init leaves its `g` bound to the main thread (`x_cgo_bindm`, Go 1.21). When Node enters `second`, its `cgocallback` finds the slot non-null and uses `basic`'s `g` and M as its own. In CI (macOS 15 x64, Go 1.24.13) a goroutine from `basic` runs with `second`'s M and mcache → `fatal error: bad sweepgen in refill`.
+   - **Deterministic check:** `__goTlsSlot()` (darwin/amd64 only, in `napi/diag.c`) reads the slot. After `second`'s init, the slot still holds `basic`'s `g`.
+   - **Consequences:**
+     - on macOS x64 only one napi-go addon per process is supported;
+     - in Phase 1 napi-go must reject a second runtime with a clear error instead of corrupting memory;
+     - the signal issue remains: the second runtime's handlers also receive signals from the first runtime's threads. This must be investigated before declaring the rejection safe;
+     - limited impact: macOS 26 is the final macOS release for Intel Macs.

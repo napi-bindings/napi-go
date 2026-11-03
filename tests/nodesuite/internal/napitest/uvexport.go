@@ -7,7 +7,7 @@ import "C"
 
 import "unsafe"
 
-// Ingressi Go dei trampolini di uv.c. I puntatori sono memoria C (handle e richieste di libuv).
+// Go entry points for the trampolines in uv.c. Pointers refer to C memory (libuv handles and requests).
 
 //export goNapitestUVCb
 func goNapitestUVCb(handle unsafe.Pointer) { dispatchUVCb(handle) }

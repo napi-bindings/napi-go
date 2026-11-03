@@ -4,12 +4,12 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// Object è un oggetto JS (comprese funzioni, array e gli altri oggetti specializzati). Le
-// operazioni sulle proprietà possono eseguire JS (getter, setter, trap dei Proxy) e quindi
-// restituire ErrPendingException.
+// Object represents a JS object (including functions, arrays, and other specialized objects).
+// Property operations may execute JS (getters, setters, Proxy traps) and therefore may return
+// ErrPendingException.
 type Object struct{ Value }
 
-// NewObject crea un oggetto vuoto ({}).
+// NewObject creates a new empty object ({}).
 func (e Env) NewObject() (Object, error) {
 	var r sys.Value
 	st := sys.CreateObject(e.raw, &r)
@@ -17,7 +17,7 @@ func (e Env) NewObject() (Object, error) {
 	return Object{v}, err
 }
 
-// Get legge o[key].
+// Get reads o[key].
 func (o Object) Get(key string) (Value, error) {
 	k, err := Env{raw: o.env}.propertyKey(key)
 	if err != nil {
@@ -28,7 +28,7 @@ func (o Object) Get(key string) (Value, error) {
 	return Env{raw: o.env}.value(r, st)
 }
 
-// Set scrive o[key] = v.
+// Set writes o[key] = v.
 func (o Object) Set(key string, v Value) error {
 	k, err := Env{raw: o.env}.propertyKey(key)
 	if err != nil {
@@ -37,7 +37,7 @@ func (o Object) Set(key string, v Value) error {
 	return check(o.env, sys.SetProperty(o.env, o.raw, k, v.raw))
 }
 
-// Has valuta key in o (prototipi compresi).
+// Has evaluates key in o (including the prototype chain).
 func (o Object) Has(key string) (bool, error) {
 	k, err := Env{raw: o.env}.propertyKey(key)
 	if err != nil {
@@ -48,7 +48,7 @@ func (o Object) Has(key string) (bool, error) {
 	return b, check(o.env, st)
 }
 
-// HasOwn dice se o ha la proprietà propria key (Object.hasOwn).
+// HasOwn reports whether o has the own property key (Object.hasOwn).
 func (o Object) HasOwn(key string) (bool, error) {
 	k, err := Env{raw: o.env}.propertyKey(key)
 	if err != nil {
@@ -59,7 +59,7 @@ func (o Object) HasOwn(key string) (bool, error) {
 	return b, check(o.env, st)
 }
 
-// Delete valuta delete o[key]; restituisce false se la proprietà non è configurabile.
+// Delete evaluates delete o[key]; returns false if the property is non-configurable.
 func (o Object) Delete(key string) (bool, error) {
 	k, err := Env{raw: o.env}.propertyKey(key)
 	if err != nil {
@@ -70,67 +70,67 @@ func (o Object) Delete(key string) (bool, error) {
 	return b, check(o.env, st)
 }
 
-// GetProperty legge o[key] con una chiave qualsiasi (string, symbol, number).
+// GetProperty reads o[key] using an arbitrary key Value (string, symbol, or number).
 func (o Object) GetProperty(key Value) (Value, error) {
 	var r sys.Value
 	st := sys.GetProperty(o.env, o.raw, key.raw, &r)
 	return Env{raw: o.env}.value(r, st)
 }
 
-// SetProperty scrive o[key] = v con una chiave qualsiasi.
+// SetProperty writes o[key] = v using an arbitrary key Value.
 func (o Object) SetProperty(key, v Value) error {
 	return check(o.env, sys.SetProperty(o.env, o.raw, key.raw, v.raw))
 }
 
-// HasProperty valuta key in o con una chiave qualsiasi.
+// HasProperty evaluates key in o using an arbitrary key Value.
 func (o Object) HasProperty(key Value) (bool, error) {
 	var b bool
 	st := sys.HasProperty(o.env, o.raw, key.raw, &b)
 	return b, check(o.env, st)
 }
 
-// HasOwnProperty dice se o ha la proprietà propria key (string o symbol).
+// HasOwnProperty reports whether o has the own property key (string or symbol).
 func (o Object) HasOwnProperty(key Value) (bool, error) {
 	var b bool
 	st := sys.HasOwnProperty(o.env, o.raw, key.raw, &b)
 	return b, check(o.env, st)
 }
 
-// DeleteProperty valuta delete o[key] con una chiave qualsiasi.
+// DeleteProperty evaluates delete o[key] using an arbitrary key Value.
 func (o Object) DeleteProperty(key Value) (bool, error) {
 	var b bool
 	st := sys.DeleteProperty(o.env, o.raw, key.raw, &b)
 	return b, check(o.env, st)
 }
 
-// GetIndex legge o[i].
+// GetIndex reads o[i].
 func (o Object) GetIndex(i uint32) (Value, error) {
 	var r sys.Value
 	st := sys.GetElement(o.env, o.raw, i, &r)
 	return Env{raw: o.env}.value(r, st)
 }
 
-// SetIndex scrive o[i] = v.
+// SetIndex writes o[i] = v.
 func (o Object) SetIndex(i uint32, v Value) error {
 	return check(o.env, sys.SetElement(o.env, o.raw, i, v.raw))
 }
 
-// HasIndex valuta i in o.
+// HasIndex evaluates i in o.
 func (o Object) HasIndex(i uint32) (bool, error) {
 	var b bool
 	st := sys.HasElement(o.env, o.raw, i, &b)
 	return b, check(o.env, st)
 }
 
-// DeleteIndex valuta delete o[i].
+// DeleteIndex evaluates delete o[i].
 func (o Object) DeleteIndex(i uint32) (bool, error) {
 	var b bool
 	st := sys.DeleteElement(o.env, o.raw, i, &b)
 	return b, check(o.env, st)
 }
 
-// Keys restituisce le chiavi enumerabili di tipo stringa, prototipi compresi, come for...in
-// (napi_get_property_names). Gli indici sono convertiti in stringhe.
+// Keys returns the enumerable string keys of o, including prototypes, like for...in
+// (napi_get_property_names). Array indices are converted to strings.
 func (o Object) Keys() (Array, error) {
 	var r sys.Value
 	st := sys.GetPropertyNames(o.env, o.raw, &r)
@@ -138,7 +138,7 @@ func (o Object) Keys() (Array, error) {
 	return Array{Object{v}}, err
 }
 
-// KeyCollectionMode, KeyFilter e KeyConversion scelgono le chiavi di AllKeys.
+// KeyCollectionMode, KeyFilter, and KeyConversion select which keys are returned by AllKeys.
 type (
 	KeyCollectionMode = sys.KeyCollectionMode
 	KeyFilter         = sys.KeyFilter
@@ -160,8 +160,8 @@ const (
 	KeyNumbersToStrings = sys.KeyNumbersToStrings
 )
 
-// AllKeys restituisce le chiavi scelte da mode, filter (combinabile con |) e conversion
-// (napi_get_all_property_names). Per le chiavi proprie enumerabili, come Object.keys:
+// AllKeys returns the property keys selected by mode, filter (combinable with |), and conversion
+// (napi_get_all_property_names). For own enumerable string keys (equivalent to Object.keys):
 // AllKeys(KeyOwnOnly, KeyEnumerable|KeySkipSymbols, KeyNumbersToStrings).
 func (o Object) AllKeys(mode KeyCollectionMode, filter KeyFilter, conversion KeyConversion) (Array, error) {
 	var r sys.Value
@@ -170,25 +170,25 @@ func (o Object) AllKeys(mode KeyCollectionMode, filter KeyFilter, conversion Key
 	return Array{Object{v}}, err
 }
 
-// Prototype restituisce il prototipo (Object.getPrototypeOf).
+// Prototype returns the prototype of o (Object.getPrototypeOf).
 func (o Object) Prototype() (Value, error) {
 	var r sys.Value
 	st := sys.GetPrototype(o.env, o.raw, &r)
 	return Env{raw: o.env}.value(r, st)
 }
 
-// Freeze applica Object.freeze.
+// Freeze applies Object.freeze to o.
 func (o Object) Freeze() error { return check(o.env, sys.ObjectFreeze(o.env, o.raw)) }
 
-// Seal applica Object.seal.
+// Seal applies Object.seal to o.
 func (o Object) Seal() error { return check(o.env, sys.ObjectSeal(o.env, o.raw)) }
 
 // ---- array ----
 
-// Array è un array JS.
+// Array represents a JS array.
 type Array struct{ Object }
 
-// NewArray crea un array vuoto ([]).
+// NewArray creates a new empty array ([]).
 func (e Env) NewArray() (Array, error) {
 	var r sys.Value
 	st := sys.CreateArray(e.raw, &r)
@@ -196,7 +196,7 @@ func (e Env) NewArray() (Array, error) {
 	return Array{Object{v}}, err
 }
 
-// NewArrayWithLength crea un array di length elementi vuoti (new Array(length)).
+// NewArrayWithLength creates an array of length empty slots (new Array(length)).
 func (e Env) NewArrayWithLength(length int) (Array, error) {
 	if length < 0 {
 		return Array{}, RangeError("", "negative array length")
@@ -207,35 +207,35 @@ func (e Env) NewArrayWithLength(length int) (Array, error) {
 	return Array{Object{v}}, err
 }
 
-// Len restituisce la proprietà length.
+// Len returns the array's length property.
 func (a Array) Len() (uint32, error) {
 	var n uint32
 	st := sys.GetArrayLength(a.env, a.raw, &n)
 	return n, check(a.env, st)
 }
 
-// ---- definizione di proprietà ----
+// ---- property definition ----
 
-// PropertyAttributes sono gli attributi di una proprietà (napi_property_attributes), combinabili
-// con |.
+// PropertyAttributes represents property descriptor flags (napi_property_attributes), combinable
+// with |.
 type PropertyAttributes = sys.PropertyAttributes
 
 const (
-	// Default: non scrivibile, non enumerabile, non configurabile.
+	// Default specifies a non-writable, non-enumerable, non-configurable property.
 	Default      = sys.PropertyDefault
 	Writable     = sys.PropertyWritable
 	Enumerable   = sys.PropertyEnumerable
 	Configurable = sys.PropertyConfigurable
-	// Static: proprietà del costruttore invece che del prototipo (solo DefineClass).
+	// Static defines the property on the constructor rather than the prototype (DefineClass only).
 	Static = sys.PropertyStatic
-	// DefaultMethod: Writable|Configurable, come i metodi delle classi JS.
+	// DefaultMethod is Writable|Configurable, matching standard JS class methods.
 	DefaultMethod = sys.PropertyDefaultMethod
-	// DefaultJSProperty: Writable|Enumerable|Configurable, come un'assegnazione JS.
+	// DefaultJSProperty is Writable|Enumerable|Configurable, matching standard JS property assignment.
 	DefaultJSProperty = sys.PropertyDefaultJSProperty
 )
 
-// Property descrive una proprietà per DefineProperties e DefineClass. Va impostato uno solo tra
-// Method, Getter/Setter e Value. Name è la chiave; per una chiave symbol si usa Key.
+// Property describes a property for DefineProperties and DefineClass. Exactly one of Method,
+// Getter/Setter, or Value must be set. Name is the string key; use Key for a symbol key.
 type Property struct {
 	Name       string
 	Key        Value
@@ -246,8 +246,8 @@ type Property struct {
 	Attributes PropertyAttributes
 }
 
-// DefineProperties definisce le proprietà su o (napi_define_properties). Le callback restano
-// registrate finché o vive.
+// DefineProperties defines properties on o (napi_define_properties). Any callbacks remain
+// registered for as long as o is alive.
 func (o Object) DefineProperties(props ...Property) error {
 	if len(props) == 0 {
 		return nil
@@ -264,8 +264,8 @@ func (o Object) DefineProperties(props ...Property) error {
 	return env.releaseCallbacksWith(o, ids)
 }
 
-// descriptors converte props nei descrittori di Node-API registrando le callback. In caso di
-// errore le callback già registrate vengono rilasciate.
+// descriptors converts props into Node-API property descriptors and registers their callbacks. If
+// an error occurs, any already-registered callbacks are released.
 func (e Env) descriptors(props []Property) ([]sys.PropertyDescriptor, []uintptr, error) {
 	descs := make([]sys.PropertyDescriptor, len(props))
 	var ids []uintptr
@@ -303,8 +303,8 @@ func (e Env) descriptors(props []Property) ([]sys.PropertyDescriptor, []uintptr,
 				id = registerCallback(p.Getter)
 				d.Getter = sys.CallbackTrampoline
 			} else {
-				// Getter e setter condividono il data del descrittore: un'unica callback li
-				// distingue dal numero di argomenti (vedi accessor).
+				// Getter and setter share the descriptor's data field: a single callback
+				// distinguishes between them by argument count (see accessor).
 				id = registerCallback(accessor(p.Getter, p.Setter))
 				d.Setter = sys.CallbackTrampoline
 				if p.Getter != nil {

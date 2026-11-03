@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/4_object_factory/4_object_factory.c.
+// Port of test/js-native-api/4_object_factory/4_object_factory.c.
 package main
 
 import (
@@ -30,7 +30,7 @@ func createObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 }
 
 func initModule(env sys.Env, exports sys.Value) sys.Value {
-	// La lunghezza -1 del C è SIZE_MAX, cioè NAPI_AUTO_LENGTH.
+	// C's length -1 is SIZE_MAX, i.e. NAPI_AUTO_LENGTH.
 	if !nt.Call(env, sys.CreateFunction(env, nt.CStr("exports"), sys.AutoLength, sys.CallbackTrampoline,
 		nt.Register(createObject), &exports)) {
 		return nil

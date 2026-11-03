@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_date/test_date.c.
+// Port of test/js-native-api/test_date/test_date.c.
 package main
 
 import (

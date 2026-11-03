@@ -1,29 +1,29 @@
 # napi-go
 
-Binding Go per [Node-API](https://nodejs.org/api/n-api.html) (N-API): moduli nativi Node.js
-(`.node`) scritti in Go, sul modello di [napi-rs](https://napi.rs).
+Go bindings for [Node-API](https://nodejs.org/api/n-api.html) (N-API): build native Node.js addons
+(`.node`) in Go, modeled after [napi-rs](https://napi.rs).
 
-> **Stato:** in sviluppo. Completati la Fase 0 (spike di fattibilità) e la Fase 1 (Layer 0); in
-> corso la Fase 2 (Layer 1).
+> **Status:** under development. Phase 0 (feasibility spike) and Phase 1 (Layer 0) are complete;
+> Phase 2 (Layer 1) is in progress.
 
-| Percorso | Contenuto |
+| Path | Contents |
 |---|---|
-| [`sys/`](sys/README.md) | Layer 0: binding 1:1 generato di Node-API 1–10 |
-| [`napi/`](napi/README.md) | Layer 1: API Go idiomatica (valori, errori, funzioni, classi, buffer) |
-| `tests/e2e/` | addon di test e suite `node:test` |
-| [`tests/nodesuite/`](tests/nodesuite/README.md) | test `js-native-api` e `node-api` di Node.js portati su `sys` |
-| [`spike/`](spike/README.md) | Fase 0: prototipo e risultati di fattibilità |
-| `.github/workflows/` | CI: `sys.yml` (Layer 0 e 1) e `spike.yml` (Fase 0) |
+| [`sys/`](sys/README.md) | Layer 0: generated 1:1 bindings for Node-API 1–10 |
+| [`napi/`](napi/README.md) | Layer 1: idiomatic Go API (values, errors, functions, classes, buffers) |
+| `tests/e2e/` | test addons and `node:test` suites |
+| [`tests/nodesuite/`](tests/nodesuite/README.md) | Node.js `js-native-api` and `node-api` test suites ported to `sys` |
+| [`spike/`](spike/README.md) | Phase 0: prototype and feasibility results |
+| `.github/workflows/` | CI: `sys.yml` (Layer 0 and 1) and `spike.yml` (Phase 0) |
 
-Requisiti: Go ≥ 1.24 con cgo, un compilatore C (gcc/clang, oppure `zig cc` su Windows),
-Node.js ≥ 22 per i test.
+Requirements: Go ≥ 1.24 with cgo, a C compiler (gcc/clang, or `zig cc` on Windows),
+Node.js ≥ 22 for tests.
 
 ```bash
-go test ./sys/... ./napi/...           # test unitari, senza Node
-node tests/e2e/build.mjs               # Windows senza gcc: set CC=zig cc
+go test ./sys/... ./napi/...           # unit tests, without Node
+node tests/e2e/build.mjs               # Windows without gcc: set CC=zig cc
 node --test tests/e2e/*.test.mjs
-node tests/nodesuite/run.mjs          # suite di Node.js portata su sys
+node tests/nodesuite/run.mjs          # Node.js test suite ported to sys
 ```
 
-Piattaforme: Linux glibc x64/arm64, macOS arm64/x64 (x64: un solo addon Go per processo),
-Windows x64. Alpine/musl non è supportato dalle release attuali di Go.
+Platforms: Linux glibc x64/arm64, macOS arm64/x64 (x64: one Go addon per process),
+Windows x64. Alpine/musl is not supported by current Go releases.

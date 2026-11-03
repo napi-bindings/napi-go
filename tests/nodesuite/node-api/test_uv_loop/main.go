@@ -1,6 +1,6 @@
-// Porting di test/node-api/test_uv_loop/test_uv_loop.cc: un uv_check_t e un uv_idle_t sul loop di
-// Node.js tramite lo shim di libuv di napitest. Il template SetImmediate<T> del C++ diventa una
-// funzione che riceve una closure Go.
+// Port of test/node-api/test_uv_loop/test_uv_loop.cc: a uv_check_t and a uv_idle_t on the Node.js
+// event loop via napitest's libuv shim. The C++ SetImmediate<T> template becomes a function
+// taking a Go closure.
 package main
 
 import (
@@ -14,7 +14,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// dummy è static char dummy: il suo indirizzo è il risultato non nullo della callback.
+// dummy corresponds to static char dummy: its address is the non-null callback result.
 var dummy byte
 
 func setImmediate(env sys.Env, cb func() *byte) unsafe.Pointer {
@@ -24,14 +24,14 @@ func setImmediate(env sys.Env, cb func() *byte) unsafe.Pointer {
 		"napi_get_uv_event_loop(env, &loop) == napi_ok", "can get event loop") {
 		return nil
 	}
-	// I valori di ritorno di libuv non sono controllati, come nel C.
+	// libuv return values are not checked, matching C.
 	nt.UVCheckInit(loop, check)
 	nt.UVCheckStart(check, func(check unsafe.Pointer) {
 		nt.UVClose(check, func(handle unsafe.Pointer) { nt.Free(handle) })
 		nt.CAssert(cb() != nil, "cb() != nullptr")
 	})
 
-	// L'handle idle serve solo a non far bloccare il loop nel poll.
+	// The idle handle only prevents the loop from blocking in poll.
 	idle := nt.NewUVHandle(nt.UVIdle)
 	nt.UVIdleInit(loop, idle)
 	nt.UVIdleStart(idle, func(idle unsafe.Pointer) {

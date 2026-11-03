@@ -8,10 +8,10 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// Status è il codice di ritorno di Node-API (napi_status).
+// Status represents a Node-API return status code (napi_status).
 type Status = sys.Status
 
-// Status principali; l'elenco completo è in sys.
+// Common status codes; the complete list is in package sys.
 const (
 	StatusOK               = sys.StatusOK
 	StatusInvalidArg       = sys.StatusInvalidArg
@@ -28,7 +28,7 @@ const (
 	StatusUnavailable      = sys.StatusUnavailable
 )
 
-// ErrorKind sceglie il costruttore JS con cui un *Error viene lanciato.
+// ErrorKind selects the JS error constructor used when throwing an *Error.
 type ErrorKind uint8
 
 const (
@@ -38,14 +38,14 @@ const (
 	KindSyntaxError                  // SyntaxError (Node-API 9)
 )
 
-// Error è l'errore restituito dalle funzioni di napi.
+// Error is the error type returned by napi functions.
 //
-// Per un fallimento di Node-API Status è diverso da StatusOK e Message è il messaggio di
-// napi_get_last_error_info, copiato subito (Node lo sovrascrive alla chiamata successiva). Un
-// *Error creato dal codice dell'addon (TypeError, RangeError, ...) ha Status StatusOK.
+// For a Node-API failure, Status is not StatusOK and Message is the message from
+// napi_get_last_error_info, copied immediately (Node overwrites it on the next call). An *Error
+// created by addon code (TypeError, RangeError, ...) has Status equal to StatusOK.
 //
-// Quando una callback restituisce un *Error, viene lanciato in JS con il costruttore di Kind,
-// Message come message e Code come code (se non vuoto).
+// When a callback returns an *Error, it is thrown in JS using the Kind constructor, Message as
+// message, and Code as code (if non-empty).
 type Error struct {
 	Status  Status
 	Kind    ErrorKind
@@ -69,8 +69,8 @@ func (e *Error) Error() string {
 	return b.String()
 }
 
-// JSCode restituisce il code dell'errore JS: Code se impostato, altrimenti, per i fallimenti di
-// Node-API, "ERR_NAPI_" seguito dal nome dello status (es. ERR_NAPI_INVALID_ARG).
+// JSCode returns the JS error code: Code if set, or for Node-API failures, "ERR_NAPI_" followed
+// by the uppercase status name (e.g. ERR_NAPI_INVALID_ARG).
 func (e *Error) JSCode() string {
 	if e.Code != "" || e.Status == StatusOK {
 		return e.Code
@@ -82,46 +82,46 @@ func (e *Error) JSCode() string {
 	return "ERR_NAPI_" + strings.ToUpper(name)
 }
 
-// Is rende ErrPendingException confrontabile con errors.Is anche per copie dell'errore.
+// Is makes ErrPendingException match via errors.Is even for copies of the error.
 func (e *Error) Is(target error) bool {
 	t, ok := target.(*Error)
 	return ok && t == ErrPendingException && e.Status == StatusPendingException
 }
 
-// ErrPendingException indica che un'eccezione JS è pendente (lanciata da codice JS chiamato da Go,
-// o da un throw precedente). Una callback che la restituisce lascia propagare l'eccezione così
-// com'è; Env.Catch la intercetta.
+// ErrPendingException indicates that a JS exception is pending (thrown by JS code called from Go,
+// or by an earlier throw). Returning it from a callback lets the exception propagate as-is;
+// Env.Catch intercepts it.
 var ErrPendingException = &Error{Status: StatusPendingException, Message: "a JavaScript exception is pending"}
 
-// TypeError, RangeError e SyntaxError creano errori lanciati in JS con il costruttore
-// corrispondente. code può essere vuoto.
+// TypeError, RangeError, and SyntaxError create errors that are thrown in JS using the
+// corresponding error constructor. code may be empty.
 func TypeError(code, message string) *Error {
 	return &Error{Kind: KindTypeError, Code: code, Message: message}
 }
 
-// RangeError: vedi TypeError.
+// RangeError creates a JS RangeError; see TypeError.
 func RangeError(code, message string) *Error {
 	return &Error{Kind: KindRangeError, Code: code, Message: message}
 }
 
-// SyntaxError: vedi TypeError. Senza Node-API 9 viene lanciato come Error.
+// SyntaxError creates a JS SyntaxError; see TypeError. Without Node-API 9, it is thrown as a plain Error.
 func SyntaxError(code, message string) *Error {
 	return &Error{Kind: KindSyntaxError, Code: code, Message: message}
 }
 
-// Coder è implementata dagli errori che impostano il code dell'errore JS.
+// Coder is implemented by errors that specify a JS error code.
 type Coder interface{ JSCode() string }
 
-// Thrown è un errore che, restituito da una callback, lancia in JS il valore così com'è (anche
-// un valore che non è un Error). Vale solo nella callback in cui il valore è stato creato.
+// Thrown is an error that, when returned from a callback, throws its Value in JS as-is (even if
+// the value is not an Error). It is valid only within the callback where the value was created.
 type Thrown struct{ Value Value }
 
 func (t *Thrown) Error() string { return "napi: JavaScript value thrown" }
 
-// Throw restituisce un errore che lancia v in JS (vedi Thrown).
+// Throw returns an error that throws v in JS (see Thrown).
 func Throw(v Value) error { return &Thrown{Value: v} }
 
-// check converte uno status in error. Il percorso con StatusOK non alloca e non attraversa cgo.
+// check converts a status into an error. The StatusOK fast path does not allocate or cross cgo.
 func check(env sys.Env, st sys.Status) error {
 	if st == sys.StatusOK {
 		return nil
@@ -135,7 +135,7 @@ func statusError(env sys.Env, st sys.Status) error {
 	}
 	msg := ""
 	var info *sys.ExtendedErrorInfo
-	// StatusUnavailable è di napi-go: Node non ha informazioni da aggiungere.
+	// StatusUnavailable originates from napi-go: Node has no extended error info to add.
 	if st != sys.StatusUnavailable && sys.GetLastErrorInfo(env, &info) == sys.StatusOK && info != nil &&
 		info.ErrorCode == st && info.ErrorMessage != nil {
 		msg = goStringFromC(info.ErrorMessage)
@@ -146,7 +146,7 @@ func statusError(env sys.Env, st sys.Status) error {
 	return &Error{Status: st, Kind: statusKind(st), Message: msg}
 }
 
-// statusKind: gli status "valore del tipo sbagliato" diventano TypeError in JS, gli altri Error.
+// statusKind maps "wrong value type" statuses to TypeError in JS, and all other statuses to Error.
 func statusKind(st sys.Status) ErrorKind {
 	switch st {
 	case sys.StatusObjectExpected, sys.StatusStringExpected, sys.StatusNameExpected,
@@ -158,7 +158,7 @@ func statusKind(st sys.Status) ErrorKind {
 	return KindError
 }
 
-// goStringFromC copia una stringa C terminata da NUL.
+// goStringFromC copies a NUL-terminated C string into a Go string.
 func goStringFromC(p *byte) string {
 	if p == nil {
 		return ""
@@ -170,8 +170,8 @@ func goStringFromC(p *byte) string {
 	return string(unsafe.Slice(p, n))
 }
 
-// throwError lancia err in JS secondo le regole di Error, a meno che un'eccezione non sia già
-// pendente (quella resta e si propaga).
+// throwError throws err in JS according to the Error rules, unless an exception is already
+// pending (in which case the existing exception is preserved and allowed to propagate).
 func throwError(env sys.Env, err error) {
 	if errors.Is(err, ErrPendingException) || exceptionPending(env) {
 		return
@@ -194,7 +194,7 @@ func exceptionPending(env sys.Env) bool {
 	return sys.IsExceptionPending(env, &pending) == sys.StatusOK && pending
 }
 
-// newErrorValue crea l'oggetto Error JS che rappresenta err.
+// newErrorValue creates the JS Error object representing err.
 func newErrorValue(env sys.Env, err error) (sys.Value, error) {
 	kind, code, msg := KindError, "", err.Error()
 	var ne *Error
@@ -235,15 +235,15 @@ func createError(env sys.Env, kind ErrorKind, code, msg string) (sys.Value, erro
 	return result, check(env, st)
 }
 
-// reportThrowFailure: se nemmeno il lancio riesce, l'errore resta su stderr come in sys.
+// reportThrowFailure logs to stderr if throwing the exception itself fails, matching sys behavior.
 func reportThrowFailure(st sys.Status, err error) {
 	if st != sys.StatusOK {
 		logf("napi-go: cannot throw %q (%s)\n", err.Error(), st)
 	}
 }
 
-// NewError crea l'oggetto Error JS che rappresenta err, con le stesse regole di una callback che
-// lo restituisce (Kind e Code di *Error, JSCode di Coder).
+// NewError creates the JS Error object representing err, following the same rules as a callback
+// returning err (Kind and Code from *Error, JSCode from Coder).
 func (e Env) NewError(err error) (Object, error) {
 	if err == nil {
 		return Object{}, TypeError("", "NewError: nil error")

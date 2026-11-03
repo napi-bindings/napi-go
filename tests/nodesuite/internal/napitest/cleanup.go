@@ -7,10 +7,10 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// CleanupHookFunc equivale a napi_cleanup_hook.
+// CleanupHookFunc corresponds to napi_cleanup_hook.
 type CleanupHookFunc func(arg uintptr)
 
-// CleanupHook identifica una funzione di cleanup registrata con RegisterCleanupHook.
+// CleanupHook identifies a cleanup function registered with RegisterCleanupHook.
 type CleanupHook uint32
 
 type cleanupHookKey struct {
@@ -20,13 +20,13 @@ type cleanupHookKey struct {
 
 var (
 	cleanupMu     sync.Mutex
-	cleanupHooks  = []CleanupHookFunc{nil} // indice 0 riservato
+	cleanupHooks  = []CleanupHookFunc{nil} // index 0 reserved
 	cleanupTokens = map[cleanupHookKey]uintptr{}
-	cleanupKeys   = []cleanupHookKey{{}} // token → coppia; token 0 riservato
+	cleanupKeys   = []cleanupHookKey{{}} // token → pair; token 0 reserved
 )
 
-// RegisterCleanupHook rende fn utilizzabile come cleanup hook. Va chiamata una volta per
-// funzione, a livello di pacchetto, come Register.
+// RegisterCleanupHook makes fn usable as a cleanup hook. It must be called once per function, at
+// package level, like Register.
 func RegisterCleanupHook(fn CleanupHookFunc) CleanupHook {
 	if fn == nil {
 		panic("napitest: RegisterCleanupHook(nil)")
@@ -37,11 +37,11 @@ func RegisterCleanupHook(fn CleanupHookFunc) CleanupHook {
 	return CleanupHook(len(cleanupHooks) - 1)
 }
 
-// Arg restituisce l'arg da passare a napi_add_env_cleanup_hook / napi_remove_env_cleanup_hook
-// insieme a sys.CleanupHookTrampoline al posto della coppia (fun, arg) del C. Per la stessa
-// coppia restituisce sempre lo stesso valore, perché Node-API identifica un hook da rimuovere
-// confrontando fun e arg. I valori non vengono mai rilasciati: sono pochi e vivono quanto il
-// processo, come le funzioni C.
+// Arg returns the arg to pass to napi_add_env_cleanup_hook / napi_remove_env_cleanup_hook along
+// with sys.CleanupHookTrampoline in place of the C (fun, arg) pair. For the same pair it always
+// returns the same value, because Node-API identifies a hook to remove by comparing fun and arg.
+// Values are never released: there are few of them and they live for the lifetime of the process,
+// like C functions.
 func (h CleanupHook) Arg(arg uintptr) uintptr {
 	key := cleanupHookKey{hook: h, arg: arg}
 	cleanupMu.Lock()
@@ -67,15 +67,15 @@ func dispatchCleanupHook(token uintptr) {
 	fn(key.arg)
 }
 
-// AsyncCleanupHookFunc equivale a napi_async_cleanup_hook.
+// AsyncCleanupHookFunc corresponds to napi_async_cleanup_hook.
 type AsyncCleanupHookFunc func(handle sys.AsyncCleanupHookHandle, arg uintptr)
 
-// AsyncCleanupHook identifica una funzione registrata con RegisterAsyncCleanupHook.
+// AsyncCleanupHook identifies a function registered with RegisterAsyncCleanupHook.
 type AsyncCleanupHook uint32
 
 var (
-	asyncCleanupHooks = []AsyncCleanupHookFunc{nil} // indice 0 riservato
-	asyncCleanupKeys  = []asyncCleanupKey{{}}       // token → coppia; token 0 riservato
+	asyncCleanupHooks = []AsyncCleanupHookFunc{nil} // index 0 reserved
+	asyncCleanupKeys  = []asyncCleanupKey{{}}       // token → pair; token 0 reserved
 )
 
 type asyncCleanupKey struct {
@@ -83,8 +83,8 @@ type asyncCleanupKey struct {
 	arg  uintptr
 }
 
-// RegisterAsyncCleanupHook rende fn utilizzabile come async cleanup hook. Va chiamata una volta
-// per funzione, a livello di pacchetto.
+// RegisterAsyncCleanupHook makes fn usable as an async cleanup hook. It must be called once per
+// function, at package level.
 func RegisterAsyncCleanupHook(fn AsyncCleanupHookFunc) AsyncCleanupHook {
 	if fn == nil {
 		panic("napitest: RegisterAsyncCleanupHook(nil)")
@@ -95,10 +95,10 @@ func RegisterAsyncCleanupHook(fn AsyncCleanupHookFunc) AsyncCleanupHook {
 	return AsyncCleanupHook(len(asyncCleanupHooks) - 1)
 }
 
-// Arg restituisce l'arg da passare a napi_add_async_cleanup_hook insieme a
-// sys.AsyncCleanupHookTrampoline al posto della coppia (hook, arg) del C. Un async cleanup hook
-// si rimuove con il suo handle, quindi ogni chiamata crea un valore nuovo; i valori non vengono
-// rilasciati, come per CleanupHook.Arg.
+// Arg returns the arg to pass to napi_add_async_cleanup_hook along with
+// sys.AsyncCleanupHookTrampoline in place of the C (hook, arg) pair. An async cleanup hook is
+// removed using its handle, so each call allocates a new token; tokens are never released, just
+// like CleanupHook.Arg.
 func (h AsyncCleanupHook) Arg(arg uintptr) uintptr {
 	cleanupMu.Lock()
 	defer cleanupMu.Unlock()

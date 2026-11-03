@@ -1,5 +1,5 @@
-// Command second è un secondo addon napi-go, compilato separatamente: caricarlo
-// insieme a `basic` significa avere DUE runtime Go nello stesso processo Node (Q5).
+// Command second is a second napi-go addon, compiled separately: loading it
+// alongside `basic` results in TWO Go runtimes in the same Node process (Q5).
 package main
 
 import (
@@ -36,7 +36,7 @@ func init() {
 		})
 	})
 	napi.Export("churn", func(c napi.CallContext) (napi.Value, error) {
-		// Alloca molto e forza GC: stressa il secondo runtime mentre l'altro lavora.
+		// Allocates heavily and forces GC: stresses the second runtime while the first works.
 		n, _ := c.Arg(0).Int32()
 		return c.Promise(func(ctx context.Context) (napi.Resolver, error) {
 			var keep [][]byte

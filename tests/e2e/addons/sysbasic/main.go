@@ -1,7 +1,7 @@
-// Addon di test del Layer 0: usa solo il pacchetto sys, come farebbe il Layer 1.
+// Layer 0 test addon: uses only the sys package, just as Layer 1 does.
 //
-// Ogni funzione esportata ha come data il proprio indice in exports; il CallbackHandler di sys
-// lo usa per il dispatch.
+// Each exported function receives its index in `exports` as its callback data; sys's
+// CallbackHandler uses it for dispatch.
 package main
 
 import (
@@ -23,11 +23,11 @@ type export struct {
 	fn   jsFunc
 }
 
-// hintExternal distingue i finalizer degli External creati da makeExternals.
+// hintExternal distinguishes finalizers for Externals created by makeExternals.
 const hintExternal = 1
 
-// addonName cambia con -ldflags=-X per costruire copie distinte dello stesso addon (due runtime
-// Go nello stesso processo).
+// addonName is overridden with -ldflags=-X to build distinct copies of the same addon (two Go
+// runtimes in the same process).
 var addonName = "sysbasic"
 
 var (
@@ -36,8 +36,8 @@ var (
 	finalized   atomic.Int64
 	initedEnvs  atomic.Int64
 	cleanedEnvs atomic.Int64
-	// tsfnErrors conta i fallimenti di Call/ReleaseThreadsafeFunction nelle goroutine, dove non si
-	// può lanciare un'eccezione JS: i test verificano che resti zero.
+	// tsfnErrors counts Call/ReleaseThreadsafeFunction failures inside goroutines, where a JS
+	// exception cannot be thrown: tests verify that it stays zero.
 	tsfnErrors atomic.Int64
 )
 
@@ -120,9 +120,9 @@ func initModule(env sys.Env, obj sys.Value) sys.Value {
 	return obj
 }
 
-// --- helper -----------------------------------------------------------------------------------
+// --- helpers ----------------------------------------------------------------------------------
 
-// must trasforma uno status inatteso in panic: sys lo converte in un Error JS GO_PANIC.
+// must turns an unexpected status into a panic: sys converts it into a GO_PANIC JS Error.
 func must(st sys.Status) {
 	if st != sys.StatusOK {
 		panic(fmt.Sprintf("status %s", st))
@@ -131,14 +131,14 @@ func must(st sys.Status) {
 
 var nul = [1]byte{}
 
-// cstr restituisce s terminata da NUL.
+// cstr returns s NUL-terminated.
 func cstr(s string) *byte {
 	b := make([]byte, len(s)+1)
 	copy(b, s)
 	return &b[0]
 }
 
-// strPtr restituisce un puntatore ai byte di s, valido anche per la stringa vuota.
+// strPtr returns a pointer to the bytes of s, valid even for an empty string.
 func strPtr(s string) *byte {
 	if len(s) == 0 {
 		return &nul[0]
@@ -158,7 +158,7 @@ func goStringC(p *byte) string {
 }
 
 func throwType(env sys.Env, msg string) sys.Value {
-	// Con un'eccezione già pendente resta quella; ogni altro fallimento è un errore dell'addon.
+	// If an exception is already pending, keep it; any other failure is an addon bug.
 	if st := sys.ThrowTypeError(env, nil, cstr(msg)); st != sys.StatusOK && st != sys.StatusPendingException {
 		panic(fmt.Sprintf("napi_throw_type_error: %s", st))
 	}
@@ -211,8 +211,8 @@ func argNum(env sys.Env, args []sys.Value, i int) (float64, bool) {
 	return d, sys.GetValueDouble(env, args[i], &d) == sys.StatusOK
 }
 
-// stackStringMax: le stringhe più corte si leggono in un buffer sullo stack (noescape +
-// nocallback: nessuna allocazione per il buffer).
+// stackStringMax: shorter strings are read into a stack buffer (noescape + nocallback: zero
+// allocations for the buffer).
 const stackStringMax = 64
 
 func argString(env sys.Env, args []sys.Value, i int) (string, bool) {
@@ -234,7 +234,7 @@ func argString(env sys.Env, args []sys.Value, i int) (string, bool) {
 	return string(buf[:written]), true
 }
 
-// --- funzioni esportate -----------------------------------------------------------------------
+// --- exported functions -----------------------------------------------------------------------
 
 func available(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	name, ok := argString(env, args, 0)
@@ -287,13 +287,13 @@ func throwCoded(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	return nil
 }
 
-// lastError provoca un errore Node-API e ne legge le informazioni estese.
+// lastError triggers a Node-API error and reads its extended error info.
 func lastError(env sys.Env, _ sys.Value, _ []sys.Value) sys.Value {
 	var d float64
 	st := sys.GetValueDouble(env, newStr(env, "not a number"), &d)
 	var info *sys.ExtendedErrorInfo
 	must(sys.GetLastErrorInfo(env, &info))
-	// info punta allo stato dell'env: vale solo fino alla prossima chiamata Node-API.
+	// info points into the env's state: valid only until the next Node-API call.
 	infoStatus, message := info.ErrorCode, goStringC(info.ErrorMessage)
 	obj := newObject(env)
 	setStr(env, obj, "status", st.String())
@@ -326,8 +326,8 @@ func checkTag(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	return newBool(env, match)
 }
 
-// defineProps usa PropertyDescriptor in memoria Go: i nomi vanno fissati con runtime.Pinner
-// per le regole di cgo (verificate da GOEXPERIMENT=cgocheck2).
+// defineProps uses PropertyDescriptor in Go memory: the name pointers must be pinned with
+// runtime.Pinner to satisfy cgo rules (verified by GOEXPERIMENT=cgocheck2).
 func defineProps(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	if len(args) < 1 {
 		return throwType(env, "defineProps(obj)")
@@ -401,8 +401,8 @@ func propertyKey(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	return v
 }
 
-// callMe(fn, ...args) chiama fn da Go: verifica la rientranza JS → Go → JS (→ Go) e la
-// propagazione delle eccezioni JS attraverso Go.
+// callMe(fn, ...args) calls fn from Go: tests JS → Go → JS (→ Go) reentrancy and JS exception
+// propagation across Go frames.
 func callMe(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	if len(args) < 1 {
 		return throwType(env, "callMe(fn, ...args)")
@@ -415,12 +415,12 @@ func callMe(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 		argv = &rest[0]
 	}
 	if st := sys.CallFunction(env, global, args[0], uint(len(rest)), argv, &result); st != sys.StatusOK {
-		return nil // eccezione JS pendente: Node la propaga al chiamante
+		return nil // pending JS exception: Node propagates it to the caller
 	}
 	return result
 }
 
-// tsfnCollect(n, cb): una goroutine chiama cb(0..n-1) attraverso una threadsafe function.
+// tsfnCollect(n, cb): a goroutine calls cb(0..n-1) through a threadsafe function.
 func tsfnCollect(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	n, ok := argNum(env, args, 0)
 	if !ok || n < 0 || len(args) < 2 {
@@ -433,7 +433,7 @@ func tsfnCollect(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	go func() {
 		for i := 0; i < count; i++ {
 			if st := sys.CallThreadsafeFunction(tsfn, uintptr(i), sys.TSFNBlocking); st != sys.StatusOK {
-				tsfnErrors.Add(1) // es. StatusClosing: TSFN in chiusura perché l'env è distrutto
+				tsfnErrors.Add(1) // e.g. StatusClosing: TSFN closing because the env was torn down
 				break
 			}
 		}
@@ -446,11 +446,11 @@ func tsfnCollect(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 
 func onCallJS(env sys.Env, cb sys.Value, _, data uintptr) {
 	if env == nil {
-		return // TSFN distrutta con elementi in coda
+		return // TSFN destroyed with items still queued
 	}
 	arg := newNum(env, float64(data))
-	// Un'eccezione lanciata da cb resta pendente e Node la riporta come non gestita: è il
-	// comportamento voluto. Ogni altro status è un errore dell'addon.
+	// An exception thrown by cb stays pending and Node reports it as uncaught: that is the
+	// intended behavior. Any other status is an addon error.
 	if st := sys.CallFunction(env, undefined(env), cb, 1, &arg, nil); st != sys.StatusOK && st != sys.StatusPendingException {
 		panic(fmt.Sprintf("napi_call_function: %s", st))
 	}
@@ -471,7 +471,7 @@ var (
 	jobSeq uintptr
 )
 
-// asyncSum(n): somma 0..n-1 su un thread del pool di libuv, risolve una Promise.
+// asyncSum(n): sums 0..n-1 on a libuv thread-pool worker and resolves a Promise.
 func asyncSum(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	n, ok := argNum(env, args, 0)
 	if !ok || n < 0 {
@@ -517,16 +517,16 @@ func onAsyncComplete(env sys.Env, status sys.Status, id uintptr) {
 	must(sys.ResolveDeferred(env, job.deferred, newNum(env, job.sum)))
 }
 
-// --- allocazioni ------------------------------------------------------------------------------
+// --- allocations ------------------------------------------------------------------------------
 
 const allocIterations = 10_000
 
-// propertyK è il nome "k" terminato da NUL, globale per non allocare nel ciclo misurato.
+// propertyK is the NUL-terminated name "k", kept global to avoid allocating inside the measured loop.
 var propertyK = [...]byte{'k', 0}
 
-// allocsPerCall(obj, str) misura le allocazioni Go per iterazione di un gruppo di chiamate:
-// creazione e lettura di numeri, typeof, lettura di una proprietà (funzione che può eseguire JS,
-// quindi senza nocallback) e lettura di una stringa in un buffer sullo stack.
+// allocsPerCall(obj, str) measures Go allocations per iteration for a group of calls:
+// creating and reading numbers, typeof, reading a property (a function that can execute JS and
+// therefore lacks nocallback), and reading a string into a stack buffer.
 func allocsPerCall(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	if len(args) < 2 {
 		return throwType(env, "allocsPerCall(obj, str)")

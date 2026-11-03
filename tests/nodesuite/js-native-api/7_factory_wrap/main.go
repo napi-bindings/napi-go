@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/7_factory_wrap/7_factory_wrap.cc.
+// Port of test/js-native-api/7_factory_wrap/7_factory_wrap.cc.
 package main
 
 import (

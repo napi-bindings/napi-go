@@ -1,5 +1,5 @@
-// Porting di test/node-api/test_make_callback/binding.c. Il define V8_DEPRECATION_WARNINGS del
-// binding.gyp riguarda solo gli header di V8 e non ha un equivalente.
+// Port of test/node-api/test_make_callback/binding.c. The V8_DEPRECATION_WARNINGS define in
+// binding.gyp only affects V8 headers and has no Go equivalent.
 package main
 
 import (

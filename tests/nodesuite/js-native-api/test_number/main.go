@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_number/test_number.c.
+// Port of test/js-native-api/test_number/test_number.c.
 package main
 
 import (
@@ -10,8 +10,8 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// numberArg legge il primo argomento con le verifiche comuni alle funzioni del test C (stesse
-// asserzioni, stesso ordine).
+// numberArg reads the first argument with the checks shared by the C test functions (same
+// assertions, same order).
 func numberArg(env sys.Env, info sys.CallbackInfo) (sys.Value, bool) {
 	argc := uint(1)
 	var args [1]sys.Value

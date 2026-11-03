@@ -1,7 +1,7 @@
-// Porting di test/js-native-api/test_object/test_object.c.
+// Port of test/js-native-api/test_object/test_object.c.
 //
-// node_api_create_object_with_properties è sperimentale e manca dagli header di sys: si chiama
-// tramite napitest.CreateObjectWithProperties (vedi il commento della funzione).
+// node_api_create_object_with_properties is experimental and omitted from sys headers: it is
+// called via napitest.CreateObjectWithProperties (see the function comment).
 package main
 
 import (
@@ -13,8 +13,8 @@ import (
 
 func main() {}
 
-// testCreateObjectWithPropertiesData si registra una volta sola: la funzione creata in
-// TestCreateObjectWithCustomPrototype si crea a ogni chiamata.
+// testCreateObjectWithPropertiesData is registered only once: the function created in
+// TestCreateObjectWithCustomPrototype is created on every call.
 var testCreateObjectWithPropertiesData uintptr
 
 func init() {
@@ -22,13 +22,13 @@ func init() {
 	nt.ModuleInit(initModule)
 }
 
-// testValue è il dato di napi_wrap; come nel C se ne passa l'indirizzo (una variabile globale non
-// viene spostata dal GC).
+// testValue is the data for napi_wrap; as in C, its address is passed (a global variable is not
+// moved by the GC).
 var testValue int32 = 3
 
 const expectedTestValue = 3
 
-// Dimensioni di char key[256] e limite della lunghezza dei nomi nel test C.
+// Sizes of char key[256] and the key length limit in the C test.
 const (
 	keyBufferSize = 256
 	maxKeyLength  = 255
@@ -42,7 +42,7 @@ const (
 	errWrongArgs            = "Wrong number of arguments"
 )
 
-// args legge fino a len(buf) argomenti, come napi_get_cb_info nel test C.
+// getArgs reads up to len(buf) arguments, matching napi_get_cb_info in the C test.
 func getArgs(env sys.Env, info sys.CallbackInfo, buf []sys.Value) (uint, bool) {
 	argc := uint(len(buf))
 	if !nt.Call(env, sys.GetCbInfo(env, info, &argc, &buf[0], nil, nil)) {
@@ -51,8 +51,8 @@ func getArgs(env sys.Env, info sys.CallbackInfo, buf []sys.Value) (uint, bool) {
 	return argc, true
 }
 
-// expectObject verifica che v sia un oggetto, con il messaggio del test C. expr è il testo C della
-// condizione (il nome della variabile cambia tra le funzioni).
+// expectObject checks that v is an object, with the C test's error message. expr is the C
+// condition text (the variable name varies across functions).
 func expectObject(env sys.Env, v sys.Value, expr string) bool {
 	var t sys.ValueType
 	if !nt.Call(env, sys.Typeof(env, v, &t)) {
@@ -61,7 +61,7 @@ func expectObject(env sys.Env, v sys.Value, expr string) bool {
 	return nt.Assert(env, t == sys.TypeObject, expr+" == napi_object", errObjectExpected)
 }
 
-// expectKey verifica che v sia una stringa o, se allowSymbol, un simbolo.
+// expectKey checks that v is a string or, if allowSymbol is true, a symbol.
 func expectKey(env sys.Env, v sys.Value, name string, allowSymbol bool, message string) bool {
 	var t sys.ValueType
 	if !nt.Call(env, sys.Typeof(env, v, &t)) {
@@ -74,8 +74,8 @@ func expectKey(env sys.Env, v sys.Value, name string, allowSymbol bool, message 
 	return nt.Assert(env, t == sys.TypeString, name+" == napi_string", message)
 }
 
-// readKey copia la stringa v in key, come napi_get_value_string_utf8(…, key, 255, &key_length)
-// seguito da key[255] = 0 e dal controllo sulla lunghezza.
+// readKey copies string v into key, matching napi_get_value_string_utf8(..., key, 255, &key_length)
+// followed by key[255] = 0 and the length check.
 func readKey(env sys.Env, v sys.Value, key *[keyBufferSize]byte) bool {
 	var keyLength uint
 	if !nt.Call(env, sys.GetValueStringUTF8(env, v, &key[0], maxKeyLength, &keyLength)) {
@@ -128,7 +128,7 @@ func getNamed(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return output
 }
 
-// objectArg legge il primo argomento e verifica che sia un oggetto (value_type0 nel C).
+// objectArg reads the first argument and checks that it is an object (value_type0 in C).
 func objectArg(env sys.Env, info sys.CallbackInfo) (sys.Value, bool) {
 	var args [1]sys.Value
 	argc, ok := getArgs(env, info, args[:])
@@ -153,8 +153,8 @@ func getPropertyNames(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return output
 }
 
-// allNames equivale alle funzioni Get*Names del C, che differiscono solo per i parametri di
-// napi_get_all_property_names.
+// allNames corresponds to C's Get*Names functions, which differ only in the parameters passed
+// to napi_get_all_property_names.
 func allNames(mode sys.KeyCollectionMode, filter sys.KeyFilter) nt.Func {
 	return func(env sys.Env, info sys.CallbackInfo) sys.Value {
 		obj, ok := objectArg(env, info)
@@ -247,7 +247,7 @@ func hasNamed(env sys.Env, info sys.CallbackInfo) sys.Value {
 	if !ok || !nt.Assert(env, argc >= 2, "argc >= 2", errWrongArgs) {
 		return nil
 	}
-	// Il C accetta anche un simbolo ma usa il messaggio "string as second".
+	// C also accepts a symbol here, though it uses the "string as second" message.
 	if !expectObject(env, args[0], "value_type0") ||
 		!expectKey(env, args[1], "value_type1", true, errStringSecond) {
 		return nil
@@ -274,7 +274,7 @@ func hasOwn(env sys.Env, info sys.CallbackInfo) sys.Value {
 	if !ok || !nt.Assert(env, argc == 2, "argc == 2", errWrongArgs) {
 		return nil
 	}
-	// Il C non controlla il tipo del secondo argomento (verifica commentata).
+	// C does not check the type of the second argument (the check is commented out).
 	if !expectObject(env, args[0], "valuetype0") {
 		return nil
 	}
@@ -313,7 +313,7 @@ func deleteProp(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return ret
 }
 
-// testNumber è il valore 987654321 della proprietà test_number creata da New.
+// testNumber is the value 987654321 of the test_number property created by New.
 const testNumber = 987654321
 
 func newObject(env sys.Env, _ sys.CallbackInfo) sys.Value {
@@ -418,7 +418,7 @@ func unwrap(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return result
 }
 
-// nullCheck crea object e key come TestSetProperty, TestHasProperty e TestGetProperty.
+// nullCheckSetup creates object and key as in TestSetProperty, TestHasProperty, and TestGetProperty.
 func nullCheckSetup(env sys.Env) (object, key sys.Value, ok bool) {
 	if !nt.Call(env, sys.CreateObject(env, &object)) {
 		return nil, nil, false
@@ -429,8 +429,8 @@ func nullCheckSetup(env sys.Env) (object, key sys.Value, ok bool) {
 	return object, key, true
 }
 
-// Lo status delle chiamate senza controllo nelle tre funzioni seguenti è letto subito dopo da
-// AddLastStatus, come nel C.
+// The status of unchecked calls in the next three functions is read immediately after via
+// AddLastStatus, matching C.
 
 func testSetProperty(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	object, key, ok := nullCheckSetup(env)
@@ -528,7 +528,7 @@ func testSeal(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return object
 }
 
-// typeTags sono i tag a 128 bit del test C.
+// typeTags are the 128-bit tags from the C test.
 var typeTags = [...]sys.TypeTag{
 	{Lower: 0xdaf987b3cc62481a, Upper: 0xb745b0497f299531},
 	{Lower: 0xbb7936c374084d9b, Upper: 0xa9548d0762eeedb9},
@@ -537,9 +537,9 @@ var typeTags = [...]sys.TypeTag{
 	{Lower: 0xa5ed9ce2e4c00c38, Upper: 0xdaf987b3cc62481a},
 }
 
-// validateTypeIndex equivale a VALIDATE_TYPE_INDEX. La macro C lancia il RangeError e prosegue
-// (con un accesso fuori dai limiti) fino alla prima chiamata Node-API che fallisce per l'eccezione
-// pendente; qui si esce subito, con lo stesso effetto osservabile.
+// validateTypeIndex is equivalent to VALIDATE_TYPE_INDEX. The C macro throws the RangeError and
+// continues (with an out-of-bounds access) until the next Node-API call fails due to the pending
+// exception; here we return immediately with the same observable behavior.
 func validateTypeIndex(env sys.Env, typeIndex uint32) bool {
 	if typeIndex >= uint32(len(typeTags)) {
 		nt.Call(env, sys.ThrowRangeError(env, nt.CStr("NODE_API_TEST_INVALID_TYPE_INDEX"), nt.CStr("Invalid type index")))
@@ -548,10 +548,10 @@ func validateTypeIndex(env sys.Env, typeIndex uint32) bool {
 	return true
 }
 
-// inLieuOfNull è il data dell'External: V8 non accetta un External con data NULL.
+// inLieuOfNull is the External data: V8 does not accept an External with NULL data.
 const inLieuOfNull = 1
 
-// typeIndexArg legge l'indice del tag dal primo argomento e lo valida.
+// typeIndexArg reads the tag index from the first argument and validates it.
 func typeIndexArg(env sys.Env, info sys.CallbackInfo) (uint32, bool) {
 	argc := uint(1)
 	var whichType sys.Value
@@ -565,8 +565,8 @@ func typeIndexArg(env sys.Env, info sys.CallbackInfo) (uint32, bool) {
 	return typeIndex, validateTypeIndex(env, typeIndex)
 }
 
-// tagObject applica una copia del tag e poi la azzera: un'implementazione che memorizzasse il
-// puntatore invece del valore fallirebbe il controllo successivo.
+// tagObject applies a copy of the tag and zeroes the copy afterwards: an implementation that
+// stored the pointer instead of the value would fail the subsequent check.
 func tagObject(env sys.Env, instance sys.Value, typeIndex uint32) bool {
 	tag := typeTags[typeIndex]
 	if !nt.Call(env, sys.TypeTagObject(env, instance, &tag)) {
@@ -638,7 +638,7 @@ func checkTypeTag(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return jsResult
 }
 
-// testAnswer è il valore 42 delle proprietà create dai test di create_object_with_properties.
+// testAnswer is the value 42 of properties created by the create_object_with_properties tests.
 const testAnswer = 42
 
 func testCreateObjectWithProperties(env sys.Env, _ sys.CallbackInfo) sys.Value {

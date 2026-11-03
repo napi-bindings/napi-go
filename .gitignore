@@ -14,14 +14,15 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Addon Node.js compilati
+# Compiled Node.js addons
 *.node
 tests/e2e/build/
 
-# Addon della suite Node.js portata (tests/nodesuite)
+# Addons from the ported Node.js test suite (tests/nodesuite)
 tests/nodesuite/**/build/
 tests/nodesuite/.tmp.*/
 
 .cto-toolkit/
 .agents
 .claude
+.vscode/

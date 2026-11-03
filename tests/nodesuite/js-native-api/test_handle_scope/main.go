@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_handle_scope/test_handle_scope.c.
+// Port of test/js-native-api/test_handle_scope/test_handle_scope.c.
 package main
 
 import (
@@ -91,7 +91,7 @@ func newScopeWithException(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// La chiusura di uno scope deve riuscire anche con un'eccezione pendente.
+	// Closing a handle scope should still succeed while an exception is pending.
 	if !nt.Call(env, sys.CloseHandleScope(env, scope)) {
 		return nil
 	}

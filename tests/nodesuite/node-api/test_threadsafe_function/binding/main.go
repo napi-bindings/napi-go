@@ -1,5 +1,5 @@
-// Porting del target binding di test/node-api/test_threadsafe_function/binding.gyp (binding.c).
-// I thread di libuv (uv_thread_create/join) diventano nt.Thread e uv_hrtime nt.HRTime.
+// Port of the binding target from test/node-api/test_threadsafe_function/binding.gyp (binding.c).
+// libuv threads (uv_thread_create/join) become nt.Thread and uv_hrtime becomes nt.HRTime.
 package main
 
 import (
@@ -16,9 +16,8 @@ func init() { nt.ModuleInit(initModule) }
 const (
 	arrayLength  = 10000
 	maxQueueSize = 2
-	// busyInterval e busyDuration: ogni busyInterval valori, con coda illimitata, il thread resta
-	// occupato per busyDuration nanosecondi (200 ms) per dare al thread principale il tempo di
-	// interromperlo.
+	// busyInterval and busyDuration: every busyInterval values, with an unlimited queue, the thread
+	// busy-waits for busyDuration nanoseconds (200 ms) to give the main thread time to abort it.
 	busyInterval = 1000
 	busyDuration = 200000000
 )
@@ -31,13 +30,13 @@ type tsFnHint struct {
 	maxQueueSize   uint32
 }
 
-// Variabili globali come nel C: il GC di Go non le sposta, quindi i loro indirizzi possono fare
-// da data, context e finalize_data della TSFN.
+// Global variables matching C: the Go GC does not move them, so their addresses can serve as
+// data, context, and finalize_data for the TSFN.
 var (
 	uvThreads [2]nt.Thread
 	tsFn      sys.ThreadsafeFunction
 	tsInfo    tsFnHint
-	// ints sono i dati che i thread passano a JS.
+	// ints holds the data passed by threads to JS.
 	ints   [arrayLength]int32
 	altRef sys.Ref
 )
@@ -51,7 +50,7 @@ func secondaryThread(tsFn sys.ThreadsafeFunction) {
 	}
 }
 
-// dataSourceThread è il thread che produce i dati.
+// dataSourceThread is the thread that produces data.
 func dataSourceThread(tsFn sys.ThreadsafeFunction) {
 	var hint uintptr
 	var status sys.Status
@@ -85,8 +84,7 @@ func dataSourceThread(tsFn sys.ThreadsafeFunction) {
 	for index := arrayLength - 1; index > -1 && !queueWasClosing; index-- {
 		status = sys.CallThreadsafeFunction(tsFn, uintptr(unsafe.Pointer(&ints[index])), tsFnInfo.blockOnFull)
 		if tsFnInfo.maxQueueSize == 0 && (index%busyInterval == 0) {
-			// Tiene il thread davvero occupato per 200 ms, così il thread principale ha modo di
-			// interromperlo.
+			// Keep the thread genuinely busy for 200 ms so the main thread has a chance to abort it.
 			for start := nt.HRTime(); nt.HRTime()-start < busyDuration; {
 			}
 		}
@@ -105,13 +103,13 @@ func dataSourceThread(tsFn sys.ThreadsafeFunction) {
 		}
 	}
 
-	// Se la prova non è bloccante, almeno un accodamento deve essere stato rifiutato.
+	// In non-blocking mode, at least one enqueue must have been rejected.
 	if tsFnInfo.blockOnFull == sys.TSFNNonblocking && !queueWasFull {
 		sys.FatalError(nt.CStr("data_source_thread"), sys.AutoLength, nt.CStr("queue was never full"),
 			sys.AutoLength)
 	}
 
-	// Se la prova interrompe la TSFN, la coda deve essere stata in chiusura almeno una volta.
+	// If the test aborts the TSFN, the queue must have entered closing state at least once.
 	if tsFnInfo.abort == sys.TSFNAbort && !queueWasClosing {
 		sys.FatalError(nt.CStr("data_source_thread"), sys.AutoLength, nt.CStr("queue was never closing"),
 			sys.AutoLength)
@@ -123,7 +121,7 @@ func dataSourceThread(tsFn sys.ThreadsafeFunction) {
 	}
 }
 
-// callJS porta i dati in JS.
+// callJS marshals data into JS.
 func callJS(env sys.Env, cb sys.Value, _, data uintptr) {
 	if !(env == nil || cb == nil) {
 		var argv, undefined sys.Value
@@ -139,7 +137,7 @@ func callJS(env sys.Env, cb sys.Value, _, data uintptr) {
 	}
 }
 
-// callRef porta i dati in JS tramite il riferimento alternativo.
+// callRef marshals data into JS via the alternate reference.
 func callRef(env sys.Env, _ sys.Value, _, data uintptr) {
 	if !(env == nil || altRef == nil) {
 		var fn, argv, undefined sys.Value
@@ -158,7 +156,7 @@ func callRef(env sys.Env, _ sys.Value, _, data uintptr) {
 	}
 }
 
-// stopThread fa la pulizia.
+// stopThread performs cleanup.
 func stopThread(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(2)
 	var argv [2]sys.Value
@@ -194,13 +192,13 @@ func stopThread(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// joinTheThreads attende i thread e avvisa JS che ha finito.
+// joinTheThreads waits for the threads and notifies JS upon completion.
 func joinTheThreads(env sys.Env, data, hint uintptr) {
 	theThreads := (*[2]nt.Thread)(nt.Pointer(data))
 	theHint := (*tsFnHint)(nt.Pointer(hint))
 	var jsCb, undefined sys.Value
 
-	// I valori di ritorno non sono controllati, come nel C.
+	// Return values are not checked, matching C.
 	theThreads[0].Join()
 	if theHint.startSecondary {
 		theThreads[1].Join()
@@ -303,7 +301,7 @@ func release(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return nil
 }
 
-// Avvio.
+// Startup.
 
 func startThread(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return startThreadInternal(env, info, callJS, true /* block_on_full */, false /* alt_ref_js_cb */)
@@ -321,7 +319,7 @@ func startThreadNoJsFunc(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return startThreadInternal(env, info, callRef, true /* block_on_full */, true /* alt_ref_js_cb */)
 }
 
-// threadSafeFunctionFinalize riceve come finalize_data il napi_ref della funzione JS.
+// threadSafeFunctionFinalize receives the JS function's napi_ref as finalize_data.
 func threadSafeFunctionFinalize(env sys.Env, finalizeData, _ uintptr) {
 	jsFuncRef := sys.Ref(nt.Pointer(finalizeData))
 	var jsFunc, recv sys.Value
@@ -339,7 +337,7 @@ func threadSafeFunctionFinalize(env sys.Env, finalizeData, _ uintptr) {
 	}
 }
 
-// callIntoModule verifica la chiamata a JavaScript.
+// callIntoModule tests calling into JavaScript.
 func callIntoModule(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(4)
 	var argv [4]sys.Value
@@ -374,7 +372,7 @@ func initModule(env sys.Env, exports sys.Value) sys.Value {
 	}
 
 	var jsArrayLength, jsMaxQueueSize sys.Value
-	// Gli status non sono controllati, come nel C.
+	// Status values are not checked, matching C.
 	sys.CreateUint32(env, arrayLength, &jsArrayLength)
 	sys.CreateUint32(env, maxQueueSize, &jsMaxQueueSize)
 

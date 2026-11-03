@@ -1,7 +1,7 @@
-// Porting di test/js-native-api/test_string/test_string.c.
+// Port of test/js-native-api/test_string/test_string.c.
 //
-// Le funzioni one-byte (char) e two-byte (char16_t) del C condividono qui un'unica
-// implementazione generica su byte | uint16.
+// C's one-byte (char) and two-byte (char16_t) functions share a single generic implementation
+// over byte | uint16 here.
 package main
 
 import (
@@ -23,22 +23,23 @@ const (
 	autoLength
 )
 
-// Dimensioni dei buffer del test C.
+// Buffer sizes from the C test.
 const (
 	stringBufferSize       = 128
 	insufficientBufferSize = 4
 	corruptionBufferSize   = 10
 )
 
-// char è il tipo di carattere: byte per latin1/utf8, uint16 per utf16 (char16_t).
+// char is the character type: byte for latin1/utf8, uint16 for utf16 (char16_t).
 type char interface{ byte | uint16 }
 
 type createAPI[T char] func(env sys.Env, str *T, length uint, result *sys.Value) sys.Status
 
 type getAPI[T char] func(env sys.Env, value sys.Value, buf *T, bufsize uint, result *uint) sys.Status
 
-// validateAndRetrieveSingleStringArg equivale alla funzione C omonima: NODE_API_CHECK_STATUS
-// restituisce lo status, NODE_API_ASSERT_STATUS lancia e restituisce napi_generic_failure.
+// validateAndRetrieveSingleStringArg is equivalent to the C function of the same name:
+// NODE_API_CHECK_STATUS returns the status, NODE_API_ASSERT_STATUS throws and returns
+// napi_generic_failure.
 func validateAndRetrieveSingleStringArg(env sys.Env, info sys.CallbackInfo, arg *sys.Value) sys.Status {
 	argc := uint(1)
 	if st := sys.GetCbInfo(env, info, &argc, arg, nil, nil); st != sys.StatusOK {
@@ -62,8 +63,8 @@ func validateAndRetrieveSingleStringArg(env sys.Env, info sys.CallbackInfo, arg 
 	return sys.StatusOK
 }
 
-// testImpl equivale a TestOneByteImpl e TestTwoByteImpl: rilegge la stringa ricevuta da JS
-// con get e la ricrea con create.
+// testImpl is equivalent to TestOneByteImpl and TestTwoByteImpl: reads the string received
+// from JS via get and recreates it via create.
 func testImpl[T char](get getAPI[T], create createAPI[T], mode lengthType) nt.Func {
 	return func(env sys.Env, info sys.CallbackInfo) sys.Value {
 		var args [1]sys.Value
@@ -91,7 +92,7 @@ func testImpl[T char](get getAPI[T], create createAPI[T], mode lengthType) nt.Fu
 	}
 }
 
-// strlen conta i caratteri prima dello 0 finale (strlen e strlen16 del test C).
+// strlen counts characters before the trailing 0 (strlen and strlen16 in the C test).
 func strlen[T char](s *T) uint {
 	n := uint(0)
 	for p := s; *p != 0; p = (*T)(unsafe.Add(unsafe.Pointer(p), unsafe.Sizeof(*p))) {
@@ -100,12 +101,12 @@ func strlen[T char](s *T) uint {
 	return n
 }
 
-// freeString libera i dati di una stringa esterna, come free_string nel C.
+// freeString frees external string data, matching free_string in C.
 func freeString(_ sys.Env, data, _ uintptr) {
 	nt.FreeAddr(data)
 }
 
-// mallocCopy copia length caratteri di str più lo 0 finale in memoria C.
+// mallocCopy copies length characters of str plus the trailing 0 into C memory.
 func mallocCopy[T char](str *T, length uint) *T {
 	var zero T
 	size := unsafe.Sizeof(zero)
@@ -120,7 +121,7 @@ func mallocCopy[T char](str *T, length uint) *T {
 }
 
 func createExternalLatin1(env sys.Env, str *byte, length uint, result *sys.Value) sys.Status {
-	// Inizializzato a true, il valore che non si vuole.
+	// Initialized to true, the value we do not want.
 	copied := true
 	actual := length
 	if length == sys.AutoLength {
@@ -133,7 +134,7 @@ func createExternalLatin1(env sys.Env, str *byte, length uint, result *sys.Value
 
 	cb, hint := nt.Finalizer(freeString, 0)
 	status := sys.CreateExternalStringLatin1(env, stringCopy, length, cb, hint, result, &copied)
-	// La stringa non deve essere copiata.
+	// The string should not be copied.
 	if copied {
 		return sys.StatusGenericFailure
 	}
@@ -146,7 +147,7 @@ func createExternalLatin1(env sys.Env, str *byte, length uint, result *sys.Value
 }
 
 func createExternalUTF16(env sys.Env, str *uint16, length uint, result *sys.Value) sys.Status {
-	// Inizializzato a true, il valore che non si vuole.
+	// Initialized to true, the value we do not want.
 	copied := true
 	actual := length
 	if length == sys.AutoLength {
@@ -168,8 +169,8 @@ func createExternalUTF16(env sys.Env, str *uint16, length uint, result *sys.Valu
 	return sys.StatusOK
 }
 
-// testInsufficient equivale a TestLatin1Insufficient, TestUtf8Insufficient e
-// TestUtf16Insufficient: buffer di 4 caratteri.
+// testInsufficient is equivalent to TestLatin1Insufficient, TestUtf8Insufficient, and
+// TestUtf16Insufficient: a 4-character buffer.
 func testInsufficient[T char](get getAPI[T], create createAPI[T]) nt.Func {
 	return func(env sys.Env, info sys.CallbackInfo) sys.Value {
 		var args [1]sys.Value
@@ -194,7 +195,7 @@ func testInsufficient[T char](get getAPI[T], create createAPI[T]) nt.Func {
 	}
 }
 
-// lengthOf equivale a Latin1Length, Utf16Length e Utf8Length: buffer NULL, solo la lunghezza.
+// lengthOf is equivalent to Latin1Length, Utf16Length, and Utf8Length: NULL buffer, length only.
 func lengthOf[T char](get getAPI[T]) nt.Func {
 	return func(env sys.Env, info sys.CallbackInfo) sys.Value {
 		var args [1]sys.Value
@@ -216,7 +217,7 @@ func lengthOf[T char](get getAPI[T]) nt.Func {
 	}
 }
 
-// testLarge equivale a TestLargeUtf8, TestLargeLatin1 e TestLargeUtf16: lunghezza INT_MAX + 1.
+// testLarge is equivalent to TestLargeUtf8, TestLargeLatin1, and TestLargeUtf16: length INT_MAX + 1.
 func testLarge[T char](create createAPI[T], empty *T) nt.Func {
 	return func(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		var output sys.Value
@@ -225,7 +226,7 @@ func testLarge[T char](create createAPI[T], empty *T) nt.Func {
 				return nil
 			}
 		} else {
-			// Con size_t a 32 bit non si può superare INT_MAX: si lancia l'errore atteso.
+			// On 32-bit size_t we cannot exceed INT_MAX: throw the expected error directly.
 			if !nt.Call(env, sys.ThrowError(env, nil, nt.CStr("Invalid argument"))) {
 				return nil
 			}

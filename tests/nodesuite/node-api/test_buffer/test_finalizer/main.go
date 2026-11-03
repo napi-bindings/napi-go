@@ -1,5 +1,5 @@
-// Porting del target test_finalizer di test/node-api/test_buffer/binding.gyp (test_finalizer.c):
-// il finalizer di un buffer esterno chiama JS e lancia un'eccezione.
+// Port of the test_finalizer target from test/node-api/test_buffer/binding.gyp (test_finalizer.c):
+// the finalizer of an external buffer calls JS and throws an exception.
 package main
 
 import (
@@ -15,14 +15,14 @@ func init() { nt.ModuleInit(initModule) }
 
 const (
 	theText = "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-	// theTextSize è sizeof(theText): include il NUL finale.
+	// theTextSize is sizeof(theText): includes the trailing NUL.
 	theTextSize = uint(len(theText) + 1)
 )
 
-// theTextC è il const char theText[] del C: memoria C condivisa e mai liberata.
+// theTextC is C's const char theText[]: shared C memory that is never freed.
 func theTextC() *byte { return nt.CStr(theText) }
 
-// malignDeleter riceve come hint il napi_ref della funzione JS.
+// malignDeleter receives the JS function's napi_ref as its hint.
 func malignDeleter(env sys.Env, data, finalizeHint uintptr) {
 	if !nt.Assert(env, data != 0 && nt.GoString((*byte)(nt.Pointer(data))) == theText,
 		"data != NULL && strcmp(data, theText) == 0", "invalid data") {

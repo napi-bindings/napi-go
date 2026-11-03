@@ -1,6 +1,6 @@
-// Porting di test/js-native-api/7_factory_wrap/myobject.cc e myobject.h. La classe C++ MyObject
-// diventa la struct myObject; il puntatore passato a napi_wrap è un cgo.Handle, cancellato dal
-// Destructor come la delete del C.
+// Port of test/js-native-api/7_factory_wrap/myobject.cc and myobject.h. The C++ MyObject class
+// becomes the myObject struct; the pointer passed to napi_wrap is a cgo.Handle, deleted by the
+// Destructor like C++ delete.
 package main
 
 import (
@@ -19,18 +19,18 @@ type myObject struct {
 
 var (
 	finalizeCount int32
-	// constructor è MyObject::constructor.
+	// constructor is MyObject::constructor.
 	constructor sys.Ref
-	// newData è il data del costruttore: si registra una volta sola.
+	// newData is the constructor data: registered only once.
 	newData = nt.Register(newMyObject)
 )
 
-// release equivale a ~MyObject: lo status non è controllato, come nel C.
+// release is equivalent to ~MyObject: status is not checked, matching C.
 func (o *myObject) release() {
 	sys.DeleteReference(o.env, o.wrapper)
 }
 
-// destructor è MyObject::Destructor.
+// destructor is MyObject::Destructor.
 func destructor(_ sys.Env, nativeObject, _ uintptr) {
 	finalizeCount++
 	h := cgo.Handle(nativeObject)
@@ -47,7 +47,7 @@ func getFinalizeCount(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return result
 }
 
-// initClass è MyObject::Init.
+// initClass is MyObject::Init.
 func initClass(env sys.Env) sys.Status {
 	properties := []sys.PropertyDescriptor{
 		nt.DeclareProperty("plusOne", plusOne),
@@ -68,7 +68,7 @@ func initClass(env sys.Env) sys.Status {
 	return sys.StatusOK
 }
 
-// newMyObject è MyObject::New.
+// newMyObject is MyObject::New.
 func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 	argc := uint(1)
 	var args [1]sys.Value
@@ -103,7 +103,7 @@ func newMyObject(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return this
 }
 
-// newInstance è MyObject::NewInstance.
+// newInstance is MyObject::NewInstance.
 func newInstance(env sys.Env, arg sys.Value, instance *sys.Value) sys.Status {
 	const argc = 1
 	argv := [argc]sys.Value{arg}

@@ -1,52 +1,55 @@
 package main
 
-// Questo file contiene le decisioni curate a mano: non si possono dedurre dagli header.
-// Ogni nome viene verificato dal generatore: un nome che non esiste negli header è un errore.
+// This file contains hand-curated policy decisions that cannot be inferred from the C headers.
+// Every function and enum name is validated by the generator: referencing a name absent from the
+// headers is an error.
 
-// headersVersion è la versione del pacchetto npm node-api-headers vendorizzato in include/.
+// headersVersion is the version of the npm package node-api-headers vendored in include/.
 const headersVersion = "1.9.0"
 
-// excluded sono funzioni dichiarate negli header ma non esposte da sys.
+// excluded lists functions declared in the headers that are intentionally omitted from sys.
 var excluded = map[string]string{
-	// Registrazione deprecata: napi-go esporta napi_register_module_v1 (vedi module.c).
-	"napi_module_register": "registrazione deprecata, sostituita da napi_register_module_v1",
+	// Deprecated module registration: napi-go exports napi_register_module_v1 (see module.c).
+	"napi_module_register": "deprecated registration mechanism, superseded by napi_register_module_v1",
 }
 
-// Classificazione dei parametri puntatore non-const. Per default un `T*` non-const verso un tipo
-// scalare è un'uscita singola, restituita per valore dal wrapper C (nessun puntatore Go passa a C).
-// Le eccezioni sono array scritti da Node-API o parametri letti e scritti.
+// Classification of non-const pointer parameters. By default, a non-const `T*` pointing to a
+// scalar type is treated as a single output parameter and returned by value from the C wrapper
+// (so no Go pointer crosses cgo). Exceptions are caller-allocated arrays filled by Node-API or
+// read-write (in/out) parameters.
 const (
-	paramInOut = "inout" // letto e scritto: passato come puntatore
-	paramArray = "array" // buffer di più elementi: passato come puntatore
+	paramInOut = "inout" // read and written: passed as a pointer
+	paramArray = "array" // multi-element buffer: passed as a pointer
 )
 
 var paramOverrides = map[string]map[string]string{
 	"napi_get_cb_info": {
-		"argc": paramInOut, // in: capacità di argv, out: numero reale di argomenti
+		"argc": paramInOut, // in: capacity of argv, out: actual argument count
 		"argv": paramArray,
 	},
 	"napi_get_value_bigint_words": {
-		"word_count": paramInOut, // in: capacità di words, out: parole necessarie
+		"word_count": paramInOut, // in: capacity of words, out: required word count
 		"words":      paramArray,
 	},
 }
 
-// noCallback: funzioni che non eseguono mai JavaScript e quindi non rientrano mai in Go durante la
-// chiamata. Insieme a noescape permettono a cgo di non spostare sullo heap i buffer passati.
-// Se una di queste funzioni rientrasse in Go, il runtime termina il processo con un errore
-// esplicito: la classificazione è verificata dai test e2e.
+// noCallback lists functions that never execute JavaScript and therefore never re-enter Go during
+// the call. Combined with noescape, this allows cgo to keep passed buffers on the stack.
+// If any of these functions were to re-enter Go, the Go runtime would terminate the process with
+// an explicit fatal error; this classification is verified by the e2e test suite.
 //
-// Vale solo se Node esegue i finalizer in modo differito (moduli che dichiarano una versione
-// Node-API ≤ 10). Con napi_go_experimental i finalizer "basic" possono essere eseguiti in modo
-// sincrono durante il GC: in quel caso si usa solo noAlloc.
+// This holds only when Node defers finalizers (modules declaring a Node-API version ≤ 10).
+// With napi_go_experimental, "basic" finalizers may run synchronously during garbage collection,
+// in which case only noAlloc is marked nocallback.
 //
-// Escluse di proposito, perché possono eseguire JS (getter, setter, trap dei Proxy, valueOf,
-// thenable, microtask, handler di eccezioni): get/set/has/delete di proprietà ed elementi,
+// Intentionally excluded because they may execute JS (getters, setters, Proxy traps, valueOf,
+// thenables, microtasks, uncaught-exception handlers): property and element get/set/has/delete,
 // get_property_names, get_all_property_names, get_prototype, coerce_to_*, instanceof,
 // define_properties, object_freeze/seal, call_function, new_instance, make_callback, run_script,
 // resolve_deferred, reject_deferred, fatal_exception, close_callback_scope.
-// Escluse anche set_instance_data (comportamento sul dato precedente non documentato) e
-// node_api_create_external_string_* (se Node copia la stringa può chiamare subito il finalizer).
+// Also excluded: set_instance_data (behavior when replacing existing instance data is undocumented)
+// and node_api_create_external_string_* (Node may invoke the finalizer immediately if it copies
+// the string instead of adopting the external buffer).
 var noCallback = setOf(
 	"napi_get_last_error_info",
 	"napi_get_undefined", "napi_get_null", "napi_get_global", "napi_get_boolean",
@@ -100,8 +103,8 @@ var noCallback = setOf(
 	"node_api_get_module_file_name",
 )
 
-// noAlloc: sottoinsieme di noCallback che non alloca sullo heap di V8, quindi non può avviare un GC
-// (e finalizer sincroni) nemmeno con napi_go_experimental.
+// noAlloc is the subset of noCallback that never allocates on the V8 heap, and therefore cannot
+// trigger garbage collection (or synchronous finalizers) even under napi_go_experimental.
 var noAlloc = setOf(
 	"napi_get_last_error_info",
 	"napi_get_undefined", "napi_get_null", "napi_get_global", "napi_get_boolean",
@@ -118,16 +121,16 @@ var noAlloc = setOf(
 	"node_api_get_module_file_name",
 )
 
-// escapes: funzioni che conservano un puntatore ricevuto oltre la durata della chiamata. Non
-// ricevono la direttiva noescape. I dati opachi (void* data, hint, context, ...) sono già
-// esposti come uintptr e non contano: qui restano solo i buffer.
+// escapes lists functions that retain a passed pointer beyond the duration of the call. They do
+// not receive a noescape directive. Opaque data parameters (void* data, hint, context, ...) are
+// already exposed as uintptr and do not count here: only buffer pointers remain.
 var escapes = setOf(
-	"node_api_create_external_string_latin1", // conserva str finché la stringa JS vive
+	"node_api_create_external_string_latin1", // retains str for the lifetime of the JS string
 	"node_api_create_external_string_utf16",
 )
 
-// mirrors associa le struct C ai tipi Go specchio scritti a mano in ../../types.go (con controlli
-// di layout a tempo di compilazione).
+// mirrors maps C struct types to their hand-written mirror Go types in ../../types.go (verified
+// by compile-time layout assertions).
 var mirrors = map[string]string{
 	"napi_property_descriptor": "PropertyDescriptor",
 	"napi_extended_error_info": "ExtendedErrorInfo",
@@ -135,8 +138,8 @@ var mirrors = map[string]string{
 	"napi_node_version":        "NodeVersion",
 }
 
-// enumConfig dà il nome Go di ogni enum e come derivare i nomi delle costanti:
-// si toglie strip dal nome C e si antepone prefix.
+// enumConfig specifies the Go type name for each C enum and how to derive its constant names:
+// strip is removed from the C constant name and prefix is prepended.
 type enumNaming struct {
 	goType string
 	strip  string
@@ -155,7 +158,7 @@ var enumConfig = map[string]enumNaming{
 	"napi_threadsafe_function_call_mode":    {"ThreadsafeFunctionCallMode", "napi_tsfn_", "TSFN"},
 }
 
-// initialisms: parti dei nomi C da scrivere con una grafia diversa dal semplice Title case.
+// initialisms maps snake_case word segments from C names to their idiomatic Go capitalization.
 var initialisms = map[string]string{
 	"ok":          "OK",
 	"js":          "JS",

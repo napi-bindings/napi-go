@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_cleanup_hook/binding.c.
+// Port of test/node-api/test_cleanup_hook/binding.c.
 package main
 
 import (
@@ -16,7 +16,7 @@ func init() { nt.ModuleInit(initModule) }
 
 var (
 	cleanupHookCount int32
-	// secret e wrongSecret sono variabili globali come nel C: il loro indirizzo fa da arg.
+	// secret and wrongSecret are global variables matching C: their addresses serve as arg.
 	secret      int32 = 42
 	wrongSecret int32 = 17
 	cleanupHook       = nt.RegisterCleanupHook(cleanup)
@@ -26,14 +26,14 @@ const refSize = uint(unsafe.Sizeof(sys.Ref(nil)))
 
 func cleanup(arg uintptr) {
 	cleanupHookCount++
-	// Come il printf del C: lo script padre legge stdout.
+	// Matches C's printf: the parent script reads stdout.
 	if _, err := fmt.Fprintf(os.Stdout, "cleanup(%d)\n", *(*int32)(nt.Pointer(arg))); err != nil {
 		fmt.Fprintf(os.Stderr, "napitest: cannot write to stdout: %v\n", err)
 	}
 }
 
 func objectFinalizer(env sys.Env, data, _ uintptr) {
-	// La cleanup è chiamata una volta sola.
+	// cleanup is called only once.
 	nt.CAssert(cleanupHookCount == 1, "cleanup_hook_count == 1")
 	ref := (*sys.Ref)(nt.Pointer(data))
 	if !nt.Call(env, sys.DeleteReference(env, *ref)) {
@@ -53,20 +53,20 @@ func createObjectWrap(env sys.Env) {
 		nt.DiscardFinalizer(hint)
 		return
 	}
-	// Un riferimento forte, così il finalizer viene chiamato allo spegnimento.
+	// Strong reference so the finalizer is called at shutdown.
 	if !nt.Call(env, sys.ReferenceRef(env, *ref, nil)) {
 		return
 	}
 }
 
 func initModule(env sys.Env, _ sys.Value) sys.Value {
-	// Wrap creato prima dei cleanup hook.
+	// Wrap created before the cleanup hooks.
 	createObjectWrap(env)
-	// Gli status non sono controllati, come nel C.
+	// Status values are not checked, matching C.
 	sys.AddEnvCleanupHook(env, sys.CleanupHookTrampoline, cleanupHook.Arg(uintptr(unsafe.Pointer(&wrongSecret))))
 	sys.AddEnvCleanupHook(env, sys.CleanupHookTrampoline, cleanupHook.Arg(uintptr(unsafe.Pointer(&secret))))
 	sys.RemoveEnvCleanupHook(env, sys.CleanupHookTrampoline, cleanupHook.Arg(uintptr(unsafe.Pointer(&wrongSecret))))
-	// Wrap creato dopo i cleanup hook.
+	// Wrap created after the cleanup hooks.
 	createObjectWrap(env)
 	return nil
 }

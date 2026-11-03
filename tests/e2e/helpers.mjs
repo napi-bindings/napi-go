@@ -10,34 +10,34 @@ export const load = (name) => require(addonPath(name))
 
 export const isWin = process.platform === 'win32'
 export const isDarwinX64 = process.platform === 'darwin' && process.arch === 'x64'
-// Versione Node-API supportata dal Node che esegue i test.
+// Node-API version supported by the Node binary running the tests.
 export const hostNapiVersion = Number(process.versions.napi)
 
 const CHILD_TIMEOUT_MS = 60_000
 
-// nodeEval esegue codice in un processo Node separato e ne restituisce l'esito. Allo scadere di
-// timeout il figlio riceve SIGKILL: un processo bloccato può non reagire a SIGTERM.
+// nodeEval runs code in a separate Node process and returns its result. When the timeout expires,
+// the child receives SIGKILL because a wedged process may ignore SIGTERM.
 export function nodeEval (code, { nodeArgs = [], timeout = CHILD_TIMEOUT_MS } = {}) {
   const r = spawnSync(process.execPath, [...nodeArgs, '-e', code], { encoding: 'utf8', timeout, killSignal: 'SIGKILL' })
   if (r.error) throw r.error
   return r
 }
 
-// lastJSONLine estrae l'ultima riga JSON dello stdout di un figlio.
+// lastJSONLine extracts the last JSON line from a child process's stdout.
 export function lastJSONLine (r) {
   const line = (r.stdout || '').trim().split('\n').filter(Boolean).pop()
   if (!line) {
-    throw new Error(`il figlio non ha prodotto output: code=${r.status} sig=${r.signal} stderr=${r.stderr}`)
+    throw new Error(`child produced no output: code=${r.status} sig=${r.signal} stderr=${r.stderr}`)
   }
   return JSON.parse(line)
 }
 
 const READY = 'ready'
-// Codice di uscita del figlio se il segnale non lo termina prima della fine della sua vita.
+// Exit code used by the child if the signal does not terminate it before its lifetime expires.
 const LOST_SIGNAL_EXIT = 99
 
-// signalChild avvia un figlio che carica l'addon, aspetta che sia pronto, gli invia signal e
-// restituisce come è terminato. Se non termina entro hangMs viene ucciso con SIGKILL.
+// signalChild spawns a child that loads the addon, waits until it is ready, sends `signal`, and
+// returns how it exited. If it does not exit within hangMs, it is killed with SIGKILL.
 export function signalChild (setup, signal, { hangMs, lifetimeMs }) {
   return new Promise((resolve, reject) => {
     const script = `${setup}; process.stdout.write('${READY}\\n'); setTimeout(() => process.exit(${LOST_SIGNAL_EXIT}), ${lifetimeMs})`

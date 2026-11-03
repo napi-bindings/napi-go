@@ -5,21 +5,21 @@ import (
 	"sync/atomic"
 )
 
-// table associa id numerici a valori Go. Gli id sono ciò che passa a Node-API al posto dei
-// puntatori Go (data delle callback, native object di napi_wrap, hint dei finalizer, arg dei
-// cleanup hook): le regole di cgo vietano di affidare a C puntatori Go.
+// table maps numeric IDs to Go values. IDs are passed to Node-API in place of Go pointers
+// (callback data, napi_wrap native objects, finalizer hints, cleanup hook arguments), since cgo
+// rules forbid passing Go pointers to C.
 //
-// La lettura (get) è senza lock: una directory di segmenti a dimensione fissa, sostituita per
-// copia solo quando serve un nuovo segmento, e slot letti con load atomici. Scrittura (add,
-// remove) sotto mutex. Gli id liberati vengono riusati: un id va rimosso solo quando C non può più
-// usarlo (nel finalizer dell'oggetto JS che lo conserva).
+// Reads (get) are lock-free: a directory of fixed-size segments, replaced by copy only when a new
+// segment is needed, with slots read via atomic loads. Writes (add, remove) are serialized under a
+// mutex. Freed IDs are reused: an ID must only be removed once C can no longer reference it (in
+// the finalizer of the JS object holding it).
 //
-// L'id 0 non è mai assegnato: per Node-API un data/hint nullo resta distinguibile.
+// ID 0 is never assigned, so a zero data/hint in Node-API remains distinguishable.
 type table[T any] struct {
 	mu   sync.Mutex
 	dir  atomic.Pointer[[]*segment[T]]
-	free []uintptr // id liberati, riusati in ordine LIFO
-	next uintptr   // prossimo id mai assegnato
+	free []uintptr // freed IDs, reused in LIFO order
+	next uintptr   // highest ID ever assigned
 	live atomic.Int64
 }
 
@@ -31,7 +31,7 @@ const (
 
 type segment[T any] [segmentSize]atomic.Pointer[T]
 
-// add memorizza v e restituisce il suo id (≥ 1).
+// add stores v and returns its ID (≥ 1).
 func (t *table[T]) add(v *T) uintptr {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -60,7 +60,7 @@ func (t *table[T]) add(v *T) uintptr {
 	return id
 }
 
-// get restituisce il valore associato a id, nil se l'id non è assegnato.
+// get returns the value associated with id, or nil if id is not assigned.
 func (t *table[T]) get(id uintptr) *T {
 	if id == 0 {
 		return nil
@@ -76,7 +76,7 @@ func (t *table[T]) get(id uintptr) *T {
 	return (*p)[seg][slot].Load()
 }
 
-// remove libera id e restituisce il valore che conteneva (nil se l'id non era assegnato).
+// remove frees id and returns the value it held (or nil if id was not assigned).
 func (t *table[T]) remove(id uintptr) *T {
 	if id == 0 {
 		return nil
@@ -100,7 +100,7 @@ func (t *table[T]) remove(id uintptr) *T {
 	return v
 }
 
-// len restituisce il numero di id assegnati.
+// len returns the number of currently assigned IDs.
 func (t *table[T]) len() int { return int(t.live.Load()) }
 
 func split(id uintptr) (seg, slot uintptr) {

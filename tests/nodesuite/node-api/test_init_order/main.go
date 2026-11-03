@@ -1,7 +1,7 @@
-// Porting di test/node-api/test_init_order/test_init_order.cc. L'inizializzazione dinamica delle
-// variabili statiche C++ diventa l'inizializzazione delle variabili di pacchetto Go, che il
-// runtime completa prima che Node.js chiami il modulo: lo script verifica che i valori siano già
-// pronti quando gira Init.
+// Port of test/node-api/test_init_order/test_init_order.cc. Dynamic initialization of C++ static
+// variables becomes initialization of Go package-level variables, which the runtime completes
+// before Node.js invokes the module: the script verifies that the values are already initialized
+// when Init runs.
 package main
 
 import (
@@ -15,14 +15,14 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// initialValue e initialString sono i valori di MyClass::valueHolder e MyClass::testString.
+// initialValue and initialString are the values of MyClass::valueHolder and MyClass::testString.
 const (
 	initialValue  = 42
 	initialString = 123
 )
 
-// Come i membri statici di MyClass: inizializzati da codice eseguito a runtime (non costanti),
-// così l'ordine di inizializzazione conta davvero.
+// Like the static members of MyClass: initialized by code executed at runtime (not constants),
+// so initialization order actually matters.
 var (
 	valueHolder = newInt(initialValue)
 	testString  = strconv.Itoa(initialString)

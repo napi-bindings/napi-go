@@ -1,5 +1,5 @@
-// Porting di test/node-api/test_callback_scope/binding.c. uv_queue_work passa per lo shim di
-// libuv di napitest.
+// Port of test/node-api/test_callback_scope/binding.c. uv_queue_work goes through napitest's
+// libuv shim.
 package main
 
 import (
@@ -13,7 +13,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// runInCallbackScopeArgc è il numero di argomenti atteso da runInCallbackScope.
+// runInCallbackScopeArgc is the number of arguments expected by runInCallbackScope.
 const runInCallbackScopeArgc = 3
 
 func runInCallbackScope(env sys.Env, info sys.CallbackInfo) sys.Value {
@@ -65,8 +65,8 @@ func runInCallbackScope(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Un'eccezione pendente dopo la chiamata va bene: niente nt.Call, perché lo scope va chiuso
-	// comunque.
+	// A pending exception after the call is fine: do not use nt.Call because the scope must be
+	// closed regardless.
 	var result sys.Value
 	functionCallResult := sys.CallFunction(env, args[0], args[2], 0, nil, &result)
 	if functionCallResult != sys.StatusOK {
@@ -153,7 +153,7 @@ func testResolveAsync(env sys.Env, _ sys.CallbackInfo) sys.Value {
 		}
 
 		req := nt.NewUVReq(nt.UVWork)
-		// Il valore di ritorno non è controllato, come nel C.
+		// The return value is not checked, matching C.
 		nt.UVQueueWork(loop, req, noopWork, callback)
 	}
 

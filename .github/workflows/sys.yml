@@ -1,12 +1,12 @@
-# Layer 0 (pacchetto sys) e Layer 1 (pacchetto napi): generatore, test unitari Go e test
-# end-to-end con Node.js.
+# Layer 0 (package sys) and Layer 1 (package napi): code generator, Go unit tests, and
+# end-to-end tests with Node.js.
 #
-#   generate    file generati aggiornati, gofmt, go vet e go test con ogni build tag di versione,
-#               go test -race del pacchetto napi
-#   e2e         addon di test + node:test su Linux x64/arm64, macOS arm64/x64, Windows (gcc),
-#               poi i test della suite di Node.js portati su sys (tests/nodesuite)
-#   cgocheck2   e2e e nodesuite con GOEXPERIMENT=cgocheck2 (regole sui puntatori di cgo)
-#   windows-zig e2e e nodesuite su Windows compilando con zig cc
+#   generate    up-to-date generated files, gofmt, go vet, and go test across all version build tags,
+#               plus go test -race on package napi
+#   e2e         test addons + node:test on Linux x64/arm64, macOS arm64/x64, Windows (gcc),
+#               followed by the Node.js test suite ported to sys (tests/nodesuite)
+#   cgocheck2   e2e and nodesuite with GOEXPERIMENT=cgocheck2 (cgo pointer checks)
+#   windows-zig e2e and nodesuite on Windows built with zig cc
 name: sys
 
 on:
@@ -19,7 +19,7 @@ on:
 permissions:
   contents: read
 
-# Un nuovo push sullo stesso ramo annulla il run precedente ancora in corso.
+# A new push on the same ref cancels the previous in-progress run.
 concurrency:
   group: sys-${{ github.ref }}
   cancel-in-progress: true
@@ -30,7 +30,7 @@ defaults:
 
 jobs:
   generate:
-    name: generatore e test unitari
+    name: generator and unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -38,18 +38,18 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
-      - name: File generati aggiornati
+      - name: Generated files up to date
         working-directory: sys
         run: go run ./internal/gen -check
       - name: gofmt
         run: test -z "$(gofmt -l sys napi tests)" || (gofmt -l sys napi tests && exit 1)
-      - name: go vet (tutti i build tag di versione)
+      - name: go vet (all version build tags)
         run: |
           for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             echo "== tags: ${tags:-default}"
             go vet -tags "$tags" ./sys/... ./napi/... ./tests/...
           done
-      - name: go test (tutti i build tag di versione)
+      - name: go test (all version build tags)
         run: |
           for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             go test -count=1 -tags "$tags" ./sys/... ./napi/...
@@ -83,13 +83,13 @@ jobs:
         run: go version && node --version && node -p "'Node-API ' + process.versions.napi"
       - name: go test ./sys ./napi
         run: go test -count=1 ./sys/... ./napi/...
-      - name: Build addon e2e
+      - name: Build e2e addons
         env:
           CGO_ENABLED: '1'
         run: node tests/e2e/build.mjs
-      - name: Test e2e
+      - name: E2E tests
         run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
-      - name: Suite Node.js (js-native-api, node-api)
+      - name: Node.js test suite (js-native-api, node-api)
         env:
           CGO_ENABLED: '1'
         run: node tests/nodesuite/run.mjs

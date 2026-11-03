@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_instance_data/test_ref_then_set.c (target test_ref_then_set, con addon.c).
+// Port of test/node-api/test_instance_data/test_ref_then_set.c (test_ref_then_set target, with addon.c).
 package main
 
 import (
@@ -11,7 +11,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// initModule equivale al corpo di NAPI_MODULE_INIT().
+// initModule corresponds to the body of NAPI_MODULE_INIT().
 func initModule(env sys.Env, exports sys.Value) sys.Value {
 	return addon.New(env, exports, true)
 }

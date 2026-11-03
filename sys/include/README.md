@@ -1,12 +1,12 @@
-# Header Node-API vendorizzati
+# Vendored Node-API Headers
 
-Copia non modificata di `include/*.h` e `symbols.js` dal pacchetto npm
-[`node-api-headers`](https://github.com/nodejs/node-api-headers) **1.9.0** (licenza MIT, vedi `LICENSE`).
+Unmodified copy of `include/*.h` and `symbols.js` from the npm package
+[`node-api-headers`](https://github.com/nodejs/node-api-headers) **1.9.0** (MIT license, see `LICENSE`).
 
-- Gli header servono solo per i **tipi**: le funzioni vengono chiamate tramite la tabella di puntatori
-  generata (`../zz_api.h`), risolta a runtime dal processo host.
-- `symbols.js` dà la versione Node-API minima di ogni funzione.
-- Il pacchetto non contiene API sperimentali (`NAPI_EXPERIMENTAL`).
+- The headers are used for **types** only: functions are called through the generated function
+  pointer table (`../zz_api.h`), resolved at runtime from the host process.
+- `symbols.js` provides the minimum Node-API version for each function.
+- The package does not include experimental APIs (`NAPI_EXPERIMENTAL`).
 
-Per aggiornare: sostituire i file con quelli di una nuova versione del pacchetto, aggiornare la
-versione qui sopra e in `internal/gen` (`headersVersion`), poi `go generate ./sys`.
+To update: replace these files with those from a newer version of the package, update the
+version number above and in `internal/gen` (`headersVersion`), then run `go generate ./sys`.

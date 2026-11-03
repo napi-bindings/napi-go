@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_fatal/test_fatal.c. uv_thread_create diventa nt.Thread.
+// Port of test/node-api/test_fatal/test_fatal.c. uv_thread_create becomes nt.Thread.
 package main
 
 import (
@@ -10,8 +10,8 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// Lunghezze esplicite di TestStringLength: troncano "test_fatal::TestStringLength" a
-// "test_fatal::Test" e "fatal message" resta intero.
+// Explicit lengths for TestStringLength: truncate "test_fatal::TestStringLength" to
+// "test_fatal::Test" while keeping "fatal message" intact.
 const (
 	testStringLengthLocationLen = 16
 	testStringLengthMessageLen  = 13

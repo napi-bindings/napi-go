@@ -1,9 +1,9 @@
 /*
- * trampoline.c — unici punti di ingresso C → Go oltre all'entry point del modulo.
+ * trampoline.c — sole C → Go entry points besides the module entry point.
  *
- * Node-API riceve sempre questi puntatori a funzione; i dati associati (data, hint, context, arg)
- * arrivano a Go come uintptr: non sono mai puntatori Go. Ogni trampolino passa per la guardia
- * gn_enter/gn_leave (attiva solo su macOS x64).
+ * Node-API always receives these C function pointers; associated payloads (data, hint, context, arg)
+ * arrive in Go as uintptr and are never Go pointers. Every trampoline passes through the
+ * gn_enter/gn_leave guard (active only on macOS x64).
  */
 #include <stdio.h>
 #include "internal.h"
@@ -14,7 +14,7 @@ static const char gn_foreign_message[] =
     "napi-go: another Go runtime owns this thread; on macOS x64 only one Go addon can be loaded "
     "per process";
 
-/* Dove non si può lanciare un'eccezione si scrive su stderr, una volta sola per processo. */
+/* Where throwing a JS exception is not possible, log to stderr once per process. */
 static void gn_report_foreign_runtime(const char* where) {
   static volatile int reported = 0;
   if (reported) return;
@@ -23,14 +23,14 @@ static void gn_report_foreign_runtime(const char* where) {
 }
 
 void gn_throw_foreign_runtime(napi_env env) {
-  /* Se il lancio fallisce (es. eccezione già pendente) resta almeno il messaggio su stderr. */
+  /* If throwing fails (e.g. an exception is already pending), at least log the message to stderr. */
   if (gn_napi_throw_error(env, gn_foreign_code, gn_foreign_message) != napi_ok) {
     gn_report_foreign_runtime("throw");
   }
 }
 
-/* Callback di ogni funzione JS creata da napi-go: legge argomenti, this e data in C, così che
-   l'ingresso in Go sia uno solo. Gli slot argv oltre argc sono riempiti da Node con undefined. */
+/* Callback for every JS function created by napi-go: reads arguments, this, and data in C so that
+   entering Go requires only a single cgo transition. Node fills argv slots beyond argc with undefined. */
 napi_value gn_callback(napi_env env, napi_callback_info info) {
   size_t argc = GN_INLINE_ARGS;
   napi_value argv[GN_INLINE_ARGS];
@@ -54,7 +54,7 @@ void gn_finalize(napi_env env, void* data, void* hint) {
   gn_leave();
 }
 
-/* env e js_callback sono NULL quando la TSFN viene distrutta con elementi ancora in coda. */
+/* env and js_callback are NULL when the TSFN is being torn down with items still queued. */
 void gn_call_js(napi_env env, napi_value js_callback, void* context, void* data) {
   if (!gn_enter()) {
     if (env != NULL) gn_throw_foreign_runtime(env);
@@ -64,7 +64,7 @@ void gn_call_js(napi_env env, napi_value js_callback, void* context, void* data)
   gn_leave();
 }
 
-/* Gira su un thread del pool di libuv: env non va usato per chiamate Node-API. */
+/* Runs on a libuv worker pool thread: env must not be used for Node-API calls. */
 void gn_async_execute(napi_env env, void* data) {
   if (!gn_enter()) {
     gn_report_foreign_runtime("async work");

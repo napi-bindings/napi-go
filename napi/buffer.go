@@ -7,17 +7,17 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// I []byte restituiti da Bytes, NewBuffer, NewArrayBuffer e Info puntano alla memoria di V8 senza
-// copie. Valgono finché l'oggetto JS è vivo (nella callback corrente, o finché una Ref lo tiene)
-// e l'ArrayBuffer non viene detached: non vanno conservati né passati a una goroutine senza
-// copiarli.
+// The []byte slices returned by Bytes, NewBuffer, NewArrayBuffer, and Info point directly to V8
+// memory without copying. They remain valid as long as the JS object is alive (during the current
+// callback, or while held by a Ref) and the ArrayBuffer is not detached: do not retain them or
+// pass them to a goroutine without copying first.
 
 // ---- Buffer ----
 
-// Buffer è un Buffer di Node.js (sottoclasse di Uint8Array).
+// Buffer represents a Node.js Buffer (a subclass of Uint8Array).
 type Buffer struct{ Object }
 
-// NewBuffer crea un Buffer di size byte (azzerati) e restituisce la sua memoria.
+// NewBuffer creates a zero-initialized Buffer of size bytes and returns its underlying memory.
 func (e Env) NewBuffer(size int) (Buffer, []byte, error) {
 	if size < 0 {
 		return Buffer{}, nil, RangeError("", "negative buffer size")
@@ -32,7 +32,7 @@ func (e Env) NewBuffer(size int) (Buffer, []byte, error) {
 	return Buffer{Object{v}}, unsafe.Slice((*byte)(data), size), nil
 }
 
-// NewBufferCopy crea un Buffer con una copia di b.
+// NewBufferCopy creates a Buffer initialized with a copy of b.
 func (e Env) NewBufferCopy(b []byte) (Buffer, error) {
 	var r sys.Value
 	st := sys.CreateBufferCopy(e.raw, uint(len(b)), unsafe.Pointer(unsafe.SliceData(b)), nil, &r)
@@ -40,11 +40,11 @@ func (e Env) NewBufferCopy(b []byte) (Buffer, error) {
 	return Buffer{Object{v}}, err
 }
 
-// NewExternalBuffer crea un Buffer che usa b senza copiarlo: b viene fissato in memoria
-// (runtime.Pinner) finché il Buffer vive, poi fin (se non nil) viene chiamata. Dove i buffer esterni
-// non sono ammessi (sandbox di V8, alcune build di Electron) b viene copiato e fin chiamata subito.
-// Se la creazione fallisce fin non viene chiamata e b resta del chiamante. Il codice Go non deve
-// modificare b mentre JS lo usa.
+// NewExternalBuffer creates a Buffer backed by b without copying: b is pinned in memory
+// (runtime.Pinner) for the lifetime of the Buffer, after which fin (if non-nil) is called. In
+// environments where external buffers are not allowed (V8 sandbox, some Electron builds), b is
+// copied and fin is called immediately. If creation fails, fin is not called and b remains owned
+// by the caller. Go code must not modify b while JS is using it.
 func (e Env) NewExternalBuffer(b []byte, fin func(env Env)) (Buffer, error) {
 	if len(b) == 0 {
 		if fin != nil {
@@ -73,7 +73,7 @@ func (e Env) NewExternalBuffer(b []byte, fin func(env Env)) (Buffer, error) {
 	return Buffer{Object{v}}, nil
 }
 
-// pinBytes fissa b e registra l'handle che lo sblocca (e chiama fin) al finalizer.
+// pinBytes pins b and registers a handle that unpins it (and calls fin) when finalized.
 func pinBytes(b []byte, fin func(env Env)) (uintptr, *runtime.Pinner) {
 	pinner := new(runtime.Pinner)
 	pinner.Pin(&b[0])
@@ -86,7 +86,7 @@ func pinBytes(b []byte, fin func(env Env)) (uintptr, *runtime.Pinner) {
 	return id, pinner
 }
 
-// Bytes restituisce la memoria del Buffer (vedi la nota all'inizio del file).
+// Bytes returns the underlying memory of the Buffer (see the note at the top of the file).
 func (b Buffer) Bytes() ([]byte, error) {
 	var data unsafe.Pointer
 	var n uint
@@ -98,10 +98,10 @@ func (b Buffer) Bytes() ([]byte, error) {
 
 // ---- ArrayBuffer ----
 
-// ArrayBuffer è un ArrayBuffer JS.
+// ArrayBuffer represents a JS ArrayBuffer.
 type ArrayBuffer struct{ Object }
 
-// NewArrayBuffer crea un ArrayBuffer di size byte (azzerati) e restituisce la sua memoria.
+// NewArrayBuffer creates a zero-initialized ArrayBuffer of size bytes and returns its underlying memory.
 func (e Env) NewArrayBuffer(size int) (ArrayBuffer, []byte, error) {
 	if size < 0 {
 		return ArrayBuffer{}, nil, RangeError("", "negative ArrayBuffer size")
@@ -116,8 +116,8 @@ func (e Env) NewArrayBuffer(size int) (ArrayBuffer, []byte, error) {
 	return ArrayBuffer{Object{v}}, unsafe.Slice((*byte)(data), size), nil
 }
 
-// NewExternalArrayBuffer crea un ArrayBuffer che usa b senza copiarlo, con le stesse regole di
-// NewExternalBuffer (copia dove i buffer esterni non sono ammessi).
+// NewExternalArrayBuffer creates an ArrayBuffer backed by b without copying, following the same
+// rules as NewExternalBuffer (falling back to a copy where external buffers are not allowed).
 func (e Env) NewExternalArrayBuffer(b []byte, fin func(env Env)) (ArrayBuffer, error) {
 	if len(b) == 0 {
 		if fin != nil {
@@ -150,7 +150,7 @@ func (e Env) NewExternalArrayBuffer(b []byte, fin func(env Env)) (ArrayBuffer, e
 	return ArrayBuffer{Object{v}}, nil
 }
 
-// Bytes restituisce la memoria dell'ArrayBuffer (vuota se detached).
+// Bytes returns the underlying memory of the ArrayBuffer (empty if detached).
 func (a ArrayBuffer) Bytes() ([]byte, error) {
 	var data unsafe.Pointer
 	var n uint
@@ -160,11 +160,12 @@ func (a ArrayBuffer) Bytes() ([]byte, error) {
 	return unsafe.Slice((*byte)(data), n), nil
 }
 
-// Detach stacca la memoria dall'ArrayBuffer (ArrayBuffer.prototype.transfer senza copia): la sua
-// lunghezza diventa 0 e i []byte ottenuti prima non vanno più usati.
+// Detach detaches the underlying memory from the ArrayBuffer (like ArrayBuffer.prototype.transfer
+// without copying): its byte length becomes 0 and any previously obtained []byte slice must no
+// longer be used.
 func (a ArrayBuffer) Detach() error { return check(a.env, sys.DetachArrayBuffer(a.env, a.raw)) }
 
-// IsDetached dice se l'ArrayBuffer è stato staccato.
+// IsDetached reports whether the ArrayBuffer has been detached.
 func (a ArrayBuffer) IsDetached() (bool, error) {
 	var b bool
 	st := sys.IsDetachedArrayBuffer(a.env, a.raw, &b)
@@ -173,7 +174,7 @@ func (a ArrayBuffer) IsDetached() (bool, error) {
 
 // ---- TypedArray ----
 
-// TypedArrayType è il tipo degli elementi di un TypedArray.
+// TypedArrayType represents the element type of a TypedArray.
 type TypedArrayType = sys.TypedArrayType
 
 const (
@@ -188,11 +189,11 @@ const (
 	Float64Array      = sys.Float64Array
 	BigInt64Array     = sys.Bigint64Array
 	BigUint64Array    = sys.BigUint64Array
-	// Float16Array richiede un Node.js che lo supporti in Node-API.
+	// Float16Array requires a Node.js version with Float16Array support in Node-API.
 	Float16Array = sys.Float16Array
 )
 
-// ElementSize restituisce la dimensione in byte di un elemento (0 per un tipo sconosciuto).
+// ElementSize returns the size in bytes of a single element (0 for an unknown type).
 func ElementSize(t TypedArrayType) int {
 	switch t {
 	case Int8Array, Uint8Array, Uint8ClampedArray:
@@ -207,11 +208,11 @@ func ElementSize(t TypedArrayType) int {
 	return 0
 }
 
-// TypedArray è un TypedArray JS.
+// TypedArray represents a JS TypedArray.
 type TypedArray struct{ Object }
 
-// NewTypedArray crea un TypedArray di length elementi su buf a partire da byteOffset (allineato
-// alla dimensione degli elementi).
+// NewTypedArray creates a TypedArray of length elements over buf starting at byteOffset (which
+// must be aligned to the element size).
 func (e Env) NewTypedArray(t TypedArrayType, buf ArrayBuffer, byteOffset, length int) (TypedArray, error) {
 	if byteOffset < 0 || length < 0 {
 		return TypedArray{}, RangeError("", "negative TypedArray offset or length")
@@ -222,8 +223,8 @@ func (e Env) NewTypedArray(t TypedArrayType, buf ArrayBuffer, byteOffset, length
 	return TypedArray{Object{v}}, err
 }
 
-// TypedArrayInfo descrive un TypedArray. Data copre gli elementi (Length * ElementSize(Type)
-// byte) con le regole di validità della nota all'inizio del file.
+// TypedArrayInfo describes a TypedArray. Data spans the elements (Length * ElementSize(Type)
+// bytes) and is subject to the lifetime rules described at the top of the file.
 type TypedArrayInfo struct {
 	Type       TypedArrayType
 	Length     int
@@ -232,7 +233,7 @@ type TypedArrayInfo struct {
 	Buffer     ArrayBuffer
 }
 
-// Info restituisce tipo, lunghezza, memoria e ArrayBuffer del TypedArray.
+// Info returns the element type, length, underlying memory, and ArrayBuffer of the TypedArray.
 func (t TypedArray) Info() (TypedArrayInfo, error) {
 	var typ sys.TypedArrayType
 	var n, off uint
@@ -250,10 +251,10 @@ func (t TypedArray) Info() (TypedArrayInfo, error) {
 
 // ---- DataView ----
 
-// DataView è un DataView JS.
+// DataView represents a JS DataView.
 type DataView struct{ Object }
 
-// NewDataView crea un DataView di byteLength byte su buf a partire da byteOffset.
+// NewDataView creates a DataView of byteLength bytes over buf starting at byteOffset.
 func (e Env) NewDataView(buf ArrayBuffer, byteOffset, byteLength int) (DataView, error) {
 	if byteOffset < 0 || byteLength < 0 {
 		return DataView{}, RangeError("", "negative DataView offset or length")
@@ -264,14 +265,14 @@ func (e Env) NewDataView(buf ArrayBuffer, byteOffset, byteLength int) (DataView,
 	return DataView{Object{v}}, err
 }
 
-// DataViewInfo descrive un DataView.
+// DataViewInfo describes a DataView.
 type DataViewInfo struct {
 	ByteOffset int
 	Data       []byte
 	Buffer     ArrayBuffer
 }
 
-// Info restituisce memoria, offset e ArrayBuffer del DataView.
+// Info returns the underlying memory, byte offset, and ArrayBuffer of the DataView.
 func (d DataView) Info() (DataViewInfo, error) {
 	var n, off uint
 	var data unsafe.Pointer

@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_properties/test_properties.c (#define NAPI_VERSION 9 →
+// Port of test/js-native-api/test_properties/test_properties.c (#define NAPI_VERSION 9 ->
 // napi-go.json).
 package main
 
@@ -13,7 +13,7 @@ func init() { nt.ModuleInit(initModule) }
 
 var value = 1.0
 
-// nameBufferSize è la dimensione di char buffer[128] in HasNamedProperty.
+// nameBufferSize is the size of char buffer[128] in HasNamedProperty.
 const nameBufferSize = 128
 
 func getValue(env sys.Env, info sys.CallbackInfo) sys.Value {
@@ -69,7 +69,7 @@ func hasNamedProperty(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 
-	// Nome della proprietà da controllare.
+	// Extract the name of the property to check.
 	var buffer [nameBufferSize]byte
 	var copied uint
 	if !nt.Call(env, sys.GetValueStringUTF8(env, args[1], &buffer[0], uint(len(buffer)), &copied)) {
@@ -87,7 +87,7 @@ func hasNamedProperty(env sys.Env, info sys.CallbackInfo) sys.Value {
 	return result
 }
 
-// keyed equivale a { NULL, name, 0, 0, 0, value, attributes, 0 }: proprietà con chiave napi_value.
+// keyed is equivalent to { NULL, name, 0, 0, 0, value, attributes, 0 }: a property with a napi_value key.
 func keyed(name, value sys.Value, attributes sys.PropertyAttributes) sys.PropertyDescriptor {
 	return sys.PropertyDescriptor{Name: name, Value: value, Attributes: attributes}
 }

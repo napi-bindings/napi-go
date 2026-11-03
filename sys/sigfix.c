@@ -1,24 +1,25 @@
 /*
- * sigfix.c — ripristina SA_RESETHAND sugli handler di Node dopo l'avvio del runtime Go.
+ * sigfix.c — restores SA_RESETHAND on Node's signal handlers after Go runtime startup.
  *
- * Problema (osservato su macOS, Go 1.24–1.27, Node 22/24): all'avvio di un c-shared il runtime
- * Go esegue initsig → setsigstack(i) per ogni handler preesistente che non gestisce: rilegge
- * l'handler con sigaction e lo reinstalla con flags | SA_ONSTACK. Il kernel di macOS applica
- * SA_RESETHAND ma non lo riporta in lettura (verificato in CI con experiments/sigflags), quindi
- * la reinstallazione lo perde. Node installa node::SignalExit per SIGINT e SIGTERM proprio con
- * SA_RESETHAND, ripristina il terminale e poi fa raise(signo) contando sul ritorno a SIG_DFL:
- * senza SA_RESETHAND l'handler si richiama all'infinito e il processo resta al 100% di CPU
- * invece di terminare (SIGTERM/SIGINT senza listener JS).
+ * Problem (observed on macOS, Go 1.24–1.27, Node 22/24): when a c-shared Go runtime starts,
+ * it runs initsig → setsigstack(i) for every pre-existing signal handler it does not own: it
+ * reads the current handler via sigaction and reinstalls it with flags | SA_ONSTACK. The macOS
+ * kernel enforces SA_RESETHAND when set, but clears it when reporting the current sigaction
+ * (verified in CI with experiments/sigflags), so reinstalling the handler loses SA_RESETHAND.
+ * Node installs node::SignalExit for SIGINT and SIGTERM with SA_RESETHAND, resets the terminal,
+ * and then calls raise(signo) expecting the signal disposition to have reset to SIG_DFL:
+ * without SA_RESETHAND the handler re-invokes itself infinitely and the process spins at 100%
+ * CPU instead of terminating (when SIGTERM/SIGINT has no JS listener).
  *
- * Correzione: per SIGINT e SIGTERM, se l'handler installato è node::SignalExit dell'eseguibile
- * principale e la lettura non mostra SA_RESETHAND, lo reinstalliamo con SA_RESETHAND (mantenendo SA_ONSTACK,
- * che serve a Go per i segnali consegnati sui suoi thread). Tocchiamo solo l'handler di cui
- * conosciamo i flag originali (node::RegisterSignalHandler(..., reset_handler = true)).
- * Su Linux la lettura riporta SA_RESETHAND e non cambia nulla; su macOS la lettura non lo
- * riporta mai, quindi la reinstallazione avviene sempre: è idempotente e innocua.
+ * Fix: for SIGINT and SIGTERM, if the installed handler is the main executable's
+ * node::SignalExit and the queried flags lack SA_RESETHAND, reinstall it with SA_RESETHAND
+ * (preserving SA_ONSTACK, which Go requires for signals delivered on its threads). We only touch
+ * the handler whose original flags we know (node::RegisterSignalHandler(..., reset_handler = true)).
+ * On Linux sigaction reports SA_RESETHAND so this is a no-op; on macOS sigaction never reports it,
+ * so the reinstallation always runs, which is idempotent and harmless.
  */
 #if !defined(_WIN32) && !defined(_GNU_SOURCE)
-#define _GNU_SOURCE /* dladdr/Dl_info su glibc: va definito prima di qualsiasi include */
+#define _GNU_SOURCE /* dladdr/Dl_info on glibc: must be defined before any include */
 #endif
 #include "internal.h"
 
@@ -31,7 +32,7 @@ static int is_node_signal_exit(void* fn) {
   Dl_info di;
   memset(&di, 0, sizeof di);
   if (dladdr(fn, &di) == 0 || di.dli_sname == NULL) return 0;
-  /* Itanium mangling: _ZN4node10SignalExitEi... (siginfo_t su Linux, __siginfo su macOS). */
+  /* Itanium mangling: _ZN4node10SignalExitEi... (siginfo_t on Linux, __siginfo on macOS). */
   return strncmp(di.dli_sname, "_ZN4node10SignalExitE", 21) == 0;
 }
 
@@ -44,7 +45,7 @@ static void repair_one(int signo) {
   if (sa.sa_flags & SA_RESETHAND) return;
   if (!is_node_signal_exit(fn)) return;
   sa.sa_flags |= SA_RESETHAND | SA_ONSTACK;
-  (void)sigaction(signo, &sa, NULL); /* se fallisce resta il comportamento di prima */
+  (void)sigaction(signo, &sa, NULL); /* if this fails, keep the existing disposition */
 }
 
 void gn_repair_node_signal_handlers(void) {

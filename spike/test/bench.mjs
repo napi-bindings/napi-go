@@ -1,4 +1,4 @@
-// Q8: costo per chiamata JS → nativo. Confronta funzione JS, addon C puro (cref) e addon Go.
+// Q8: per-call cost JS → native. Compares a JS function, pure C addon (cref), and Go addon.
 //   node test/bench.mjs [--json]
 import { existsSync } from 'node:fs'
 import { load, addonPath } from './helpers.mjs'
@@ -7,7 +7,7 @@ const go = load('basic')
 const c = existsSync(addonPath('cref')) ? load('cref') : null
 const js = { noop() {}, add: (a, b) => a + b, echo: (s) => s }
 
-const short = 'hello napi-go!!!' // 16 byte
+const short = 'hello napi-go!!!' // 16 bytes
 const kb = 'x'.repeat(1024)
 const cases = [
   ['noop()', (m) => () => m.noop()],
@@ -42,7 +42,7 @@ for (const [name, mk] of cases) {
   rows.push(row)
 }
 
-// Throughput Promise: N sleep(0) concorrenti.
+// Promise throughput: N concurrent sleep(0) calls.
 const N = 100_000
 const t0 = performance.now()
 await Promise.all(Array.from({ length: N }, () => go.sleep(0)))
@@ -51,7 +51,7 @@ const promiseUs = ((performance.now() - t0) * 1000) / N
 if (process.argv.includes('--json')) {
   console.log(JSON.stringify({ node: process.version, platform: `${process.platform}/${process.arch}`, rows, promiseUs }))
 } else {
-  console.log(`Node ${process.version} ${process.platform}/${process.arch} — ns per chiamata (migliore di 5 round da ${ITERS})`)
+  console.log(`Node ${process.version} ${process.platform}/${process.arch} — ns per call (best of 5 rounds of ${ITERS})`)
   console.table(rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === 'number' ? +v.toFixed(k === 'goAllocsPerCall' ? 3 : 1) : v]))))
-  console.log(`Promise Go (sleep(0)) x${N}: ${promiseUs.toFixed(2)} µs/promise`)
+  console.log(`Go Promise (sleep(0)) x${N}: ${promiseUs.toFixed(2)} µs/promise`)
 }

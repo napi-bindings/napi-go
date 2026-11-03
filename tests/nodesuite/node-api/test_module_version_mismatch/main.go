@@ -1,7 +1,7 @@
-// Porting di test/node-api/test_module_version_mismatch/test_module_version_mismatch.c: il
-// binding.gyp dichiara NAPI_VERSION=2147483646, che il runner traduce nel build tag
-// napi_go_test_version_mismatch di sys. Node.js deve rifiutare il modulo prima di chiamare l'init,
-// con un errore che require() può catturare.
+// Port of test/node-api/test_module_version_mismatch/test_module_version_mismatch.c:
+// binding.gyp declares NAPI_VERSION=2147483646, which the runner translates into the
+// napi_go_test_version_mismatch build tag for sys. Node.js must reject the module before calling
+// init, with an error that require() can catch.
 package main
 
 import (
@@ -13,7 +13,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// initModule equivale al corpo di NAPI_MODULE_INIT(): Node.js non dovrebbe mai chiamarlo.
+// initModule corresponds to the body of NAPI_MODULE_INIT(): Node.js should never call it.
 func initModule(_ sys.Env, exports sys.Value) sys.Value {
 	return exports
 }

@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_exception/test_exception.c.
+// Port of test/node-api/test_exception/test_exception.c.
 package main
 
 import (
@@ -12,8 +12,8 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// bufferData è static char buffer_data[12]: una variabile globale, che il GC di Go non sposta,
-// può fare da memoria di un buffer esterno come nel C.
+// bufferData corresponds to static char buffer_data[12]: a global variable, which the Go GC does
+// not move, can back an external buffer just as in C.
 var bufferData [12]byte
 
 func finalizer(env sys.Env, _, _ uintptr) {

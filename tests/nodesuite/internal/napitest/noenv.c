@@ -1,4 +1,4 @@
-/* Trampolino C → Go per node_api_noenv_finalize (vedi noenv.go e experimental.go). */
+/* C → Go trampoline for node_api_noenv_finalize (see noenv.go and experimental.go). */
 #include <stdint.h>
 #include "_cgo_export.h"
 

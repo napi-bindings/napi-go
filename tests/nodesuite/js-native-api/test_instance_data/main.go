@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_instance_data/test_instance_data.c.
+// Port of test/js-native-api/test_instance_data/test_instance_data.c.
 package main
 
 import (
@@ -14,7 +14,7 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// addonData è la struct AddonData del C, allocata in memoria C come instance data.
+// addonData is C's AddonData struct, allocated in C memory as instance data.
 type addonData struct {
 	value   uint
 	print   bool
@@ -24,11 +24,11 @@ type addonData struct {
 const (
 	addonDataSize = uint(unsafe.Sizeof(addonData{}))
 	initialValue  = 41
-	// deleteMessage è la riga che lo script padre si aspetta su stdout.
+	// deleteMessage is the line the parent script expects on stdout.
 	deleteMessage = "deleting addon data"
 )
 
-// getAddonData equivale a napi_get_instance_data(env, (void**)&data).
+// getAddonData is equivalent to napi_get_instance_data(env, (void**)&data).
 func getAddonData(env sys.Env) (*addonData, bool) {
 	var data unsafe.Pointer
 	if !nt.Call(env, sys.GetInstanceData(env, &data)) {
@@ -53,7 +53,7 @@ func increment(env sys.Env, _ sys.CallbackInfo) sys.Value {
 func deleteAddonData(env sys.Env, rawData, _ uintptr) {
 	data := (*addonData)(nt.Pointer(rawData))
 	if data.print {
-		// Come il printf del C: lo script padre legge la prima riga di stdout.
+		// Matches C's printf: the parent script reads the first line of stdout.
 		if _, err := fmt.Fprintln(os.Stdout, deleteMessage); err != nil {
 			fmt.Fprintf(os.Stderr, "napitest: cannot write to stdout: %v\n", err)
 		}
@@ -126,8 +126,8 @@ func objectWithFinalizer(env sys.Env, info sys.CallbackInfo) sys.Value {
 }
 
 func initModule(env sys.Env, exports sys.Value) sys.Value {
-	// Il C non controlla il risultato di malloc; qui un'allocazione fallita lancia un errore
-	// invece di scrivere su NULL.
+	// C does not check the result of malloc; here a failed allocation throws an error
+	// instead of writing to NULL.
 	data := (*addonData)(nt.Malloc(addonDataSize))
 	if !nt.Assert(env, data != nil, "data != NULL", "Failed to allocate memory") {
 		return nil

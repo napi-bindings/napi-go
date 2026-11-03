@@ -1,4 +1,4 @@
-// Porting di test/node-api/test_make_callback_recurse/binding.c.
+// Port of test/node-api/test_make_callback_recurse/binding.c.
 package main
 
 import (
@@ -30,9 +30,9 @@ func makeCallback(env sys.Env, info sys.CallbackInfo) sys.Value {
 		return nil
 	}
 	if isExceptionPending && !(status == sys.StatusPendingException) {
-		// Con un'eccezione pendente non ci si aspetta nessun altro errore.
+		// With a pending exception, no other error is expected.
 		var pendingError sys.Value
-		// Lo status non è controllato, come nel C.
+		// Status is not checked, matching C.
 		sys.GetAndClearLastException(env, &pendingError)
 		if !nt.Call(env, sys.ThrowError(env, nil, nt.CStr("error when only pending exception expected"))) {
 			return nil

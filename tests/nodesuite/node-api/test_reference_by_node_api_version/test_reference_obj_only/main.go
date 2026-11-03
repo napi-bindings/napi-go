@@ -1,5 +1,5 @@
-// Porting del target test_reference_obj_only di test/node-api/test_reference_by_node_api_version/binding.gyp
-// (test_reference_by_node_api_version.c con NAPI_VERSION=9).
+// Port of the test_reference_obj_only target from test/node-api/test_reference_by_node_api_version/binding.gyp
+// (test_reference_by_node_api_version.c with NAPI_VERSION=9).
 package main
 
 import (

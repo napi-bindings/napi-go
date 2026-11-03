@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/8_passing_wrapped/8_passing_wrapped.cc.
+// Port of test/js-native-api/8_passing_wrapped/8_passing_wrapped.cc.
 package main
 
 import (
@@ -60,7 +60,7 @@ func finalizeCountFn(env sys.Env, _ sys.CallbackInfo) sys.Value {
 }
 
 func initModule(env sys.Env, exports sys.Value) sys.Value {
-	// Lo status non è controllato, come nel C.
+	// Status is not checked, matching C.
 	initClass(env)
 
 	desc := []sys.PropertyDescriptor{

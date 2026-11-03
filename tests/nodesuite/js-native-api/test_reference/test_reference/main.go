@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/test_reference/test_reference.c (NAPI_VERSION 9, vedi
+// Port of test/js-native-api/test_reference/test_reference.c (NAPI_VERSION 9, see
 // napi-go.json).
 package main
 
@@ -13,19 +13,19 @@ func main() {}
 
 func init() { nt.ModuleInit(initModule) }
 
-// testValue è static int test_value: una variabile globale, che il GC di Go non sposta, quindi
-// il suo indirizzo può fare da data di un external come nel C.
+// testValue is static int test_value: a global variable, which the Go GC does not move, so
+// its address can serve as external data just like in C.
 var (
 	testValue     int32 = 1
 	finalizeCount int32
 	testReference sys.Ref
 )
 
-// descriptionSize è sizeof(description) di CreateSymbolFor.
+// descriptionSize is sizeof(description) in CreateSymbolFor.
 const (
 	descriptionSize      = 256
 	maxDescriptionLength = descriptionSize - 1
-	// incorrectLength è la lunghezza passata con una descrizione NULL.
+	// incorrectLength is the length passed with a NULL description.
 	incorrectLength = 5
 )
 
@@ -262,14 +262,14 @@ func getReferenceValue(env sys.Env, _ sys.CallbackInfo) sys.Value {
 	return result
 }
 
-// deleteBeforeFinalizeFinalizer: le assert() del C restano attive (nt.CAssert).
+// deleteBeforeFinalizeFinalizer: C's assert() calls remain active via nt.CAssert.
 func deleteBeforeFinalizeFinalizer(env sys.Env, finalizeData, _ uintptr) {
 	ref := (*sys.Ref)(nt.Pointer(finalizeData))
 	var value sys.Value
 	nt.CAssert(sys.GetReferenceValue(env, *ref, &value) == sys.StatusOK,
 		"napi_get_reference_value(env, *ref, &value) == napi_ok")
 	nt.CAssert(value == nil, "value == NULL")
-	// Lo status non è controllato, come nel C.
+	// Status is not checked, matching C.
 	sys.DeleteReference(env, *ref)
 	nt.FreeAddr(finalizeData)
 }
@@ -288,10 +288,10 @@ func validateDeleteBeforeFinalize(env sys.Env, info sys.CallbackInfo) sys.Value 
 		return nil
 	}
 
-	// Crea un riferimento che diventa raccoglibile insieme all'oggetto avvolto, passando lo
-	// stesso wrapObject: il finalizer del wrap può quindi girare prima di quello (interno) del
-	// riferimento, e chiama napi_delete_reference, verificando che sia ammesso prima che il
-	// finalizer del riferimento sia eseguito.
+	// Create a reference that becomes eligible for GC at the same time as the wrapped object by
+	// passing the same wrapObject. This means the wrap finalizer may run before the reference's
+	// internal finalizer and call napi_delete_reference, validating that deleting a reference
+	// before its internal finalizer has run is allowed.
 	if !nt.Call(env, sys.CreateReference(env, wrapObject, 0, refT)) {
 		return nil
 	}

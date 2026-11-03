@@ -1,6 +1,6 @@
-// Sostituto minimo di test/common/index.js della suite di Node.js, con le sole funzioni usate dai
-// test di js-native-api e node-api. La semantica (conteggio delle chiamate verificato all'uscita,
-// codici di abort, messaggio di skip) è ripresa da Node.js: vedi LICENSE.node.
+// Minimal replacement for Node.js's test/common/index.js, containing only the functions used by
+// the js-native-api and node-api tests. The semantics (call counts checked at exit, abort exit
+// codes, skip message) match Node.js: see LICENSE.node.
 'use strict';
 
 const assert = require('assert');
@@ -11,12 +11,12 @@ const isWindows = process.platform === 'win32';
 const isMacOS = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
 
-// Gli addon napi-go vengono sempre messi in build/Release dal runner.
+// napi-go addons are always placed in build/Release by the runner.
 const buildType = 'Release';
-// isDebug è sempre falso: gli addon napi-go non hanno una build Debug.
+// isDebug is always false: napi-go addons do not have a Debug build.
 const isDebug = false;
 
-// Exit code e segnali di un processo node terminato con abort (vedi nodeProcessAborted).
+// Exit codes and signals of a node process terminated by abort (see nodeProcessAborted).
 const ABORT_EXIT_CODES = [132, 133, 134];
 const ABORT_SIGNALS = ['SIGILL', 'SIGTRAP', 'SIGABRT'];
 const WINDOWS_BREAKPOINT_EXIT_CODE = 0x80000003;
@@ -69,7 +69,7 @@ function mustCallInner(fn, criteria = 1, field) {
     name: fn.name || '<anonymous>',
   };
 
-  // Un solo listener di uscita, come in Node.js.
+  // Attach a single exit listener, as in Node.js.
   if (mustCallChecks.length === 0) process.on('exit', runCallChecks);
   mustCallChecks.push(context);
 
@@ -99,10 +99,10 @@ function mustSucceed(fn, exact) {
   }, exact);
 }
 
-// callSite restituisce "file:riga" del chiamante di chi la invoca.
+// callSite returns "file:line" of the caller of the function that invoked it.
 function callSite() {
   const frames = (new Error().stack || '').split('\n');
-  // [0] "Error", [1] callSite, [2] mustNotCall, [3] il chiamante.
+  // [0] "Error", [1] callSite, [2] mustNotCall, [3] the caller.
   const frame = frames[3] || '';
   const match = frame.match(/\(?([^()\s]+):(\d+):\d+\)?$/);
   return match ? `${match[1]}:${match[2]}` : '<unknown>';
@@ -130,7 +130,7 @@ function platformTimeout(ms) {
   return ms;
 }
 
-// nodeProcessAborted riconosce l'uscita di un processo node terminato con abort.
+// nodeProcessAborted checks whether a node process exited due to an abort.
 function nodeProcessAborted(exitCode, signal) {
   if (signal !== null) return ABORT_SIGNALS.includes(signal);
   const expected = isWindows ?
@@ -153,6 +153,6 @@ module.exports = {
   platformTimeout,
   printSkipMessage,
   skip,
-  // Radice della suite, utile ai moduli di supporto (fixtures, tmpdir).
+  // Suite root directory, used by helper modules (fixtures, tmpdir).
   suiteRoot: path.resolve(__dirname, '..'),
 };

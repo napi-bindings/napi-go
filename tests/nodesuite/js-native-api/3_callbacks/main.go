@@ -1,4 +1,4 @@
-// Porting di test/js-native-api/3_callbacks/3_callbacks.c.
+// Port of test/js-native-api/3_callbacks/3_callbacks.c.
 package main
 
 import (

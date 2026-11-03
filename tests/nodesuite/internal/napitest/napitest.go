@@ -1,8 +1,8 @@
-// Package napitest è l'equivalente Go di test/js-native-api/common.h e common-inl.h della suite di
-// Node.js: le funzioni hanno lo stesso comportamento delle macro C e producono gli stessi
-// messaggi, così gli script JS originali girano senza modifiche contro gli addon portati in Go.
+// Package napitest is the Go equivalent of test/js-native-api/common.h and common-inl.h from the
+// Node.js test suite: functions match the behavior of the C macros and produce the same messages,
+// allowing the original JS test scripts to run unmodified against the Go-ported addons.
 //
-// Corrispondenze:
+// Mappings:
 //
 //	NODE_API_CALL(env, call)              → if !napitest.Call(env, call) { return nil }
 //	NODE_API_CALL_RETURN_VOID(env, call)  → if !napitest.Call(env, call) { return }
@@ -12,13 +12,13 @@
 //	DECLARE_NODE_API_GETTER(name, fn)     → napitest.DeclareGetter(name, fn)
 //	DECLARE_NODE_API_PROPERTY_VALUE(n, v) → napitest.DeclarePropertyValue(n, v)
 //	add_returned_status / add_last_status → napitest.AddReturnedStatus / napitest.AddLastStatus
-//	NAPI_MODULE / NAPI_MODULE_INIT        → napitest.ModuleInit(init) chiamata in init()
+//	NAPI_MODULE / NAPI_MODULE_INIT        → napitest.ModuleInit(init) called from init()
 //
-// Il testo della condizione di Assert va copiato alla lettera dal sorgente C, perché la macro lo
-// inserisce nel messaggio con lo stringify del preprocessore e gli script JS lo verificano.
+// The condition text passed to Assert must be copied verbatim from the C source, because the macro
+// embeds it into the message via preprocessor stringification and the JS scripts assert on it.
 //
-// Le funzioni JS create da Go passano per sys.CallbackTrampoline: il campo data di napi
-// trasporta l'indice della funzione Go registrata (Register), non il data del test C.
+// JS functions created from Go go through sys.CallbackTrampoline: the napi data field carries the
+// index of the registered Go function (Register), not the C test's data.
 package napitest
 
 /*
@@ -37,10 +37,10 @@ import (
 	"github.com/napi-bindings/napi-go/sys"
 )
 
-// Func è l'equivalente Go di napi_callback.
+// Func is the Go equivalent of napi_callback.
 type Func func(env sys.Env, info sys.CallbackInfo) sys.Value
 
-// Messaggi letterali di common.h / common-inl.h.
+// Literal messages from common.h / common-inl.h.
 const (
 	emptyErrorMessage   = "empty error message"
 	lastStatusOK        = "napi_ok"
@@ -50,18 +50,18 @@ const (
 	unavailableMessage  = "napitest: Node-API function not exported by this Node.js"
 )
 
-// entry è una funzione registrata; argc è il numero di argomenti della chiamata JS e serve solo
-// agli accessor, dove getter e setter condividono lo stesso data.
+// entry is a registered function; argc is the argument count of the JS call and is used only by
+// accessors, where getter and setter share the same data.
 type entry func(env sys.Env, info sys.CallbackInfo, argc int) sys.Value
 
 var (
 	registryMu sync.Mutex
-	// registry è copy-on-write: le letture dal CallbackHandler non prendono lock, anche quando un
-	// worker registra funzioni durante il proprio Init. L'indice 0 è riservato: un data NULL non
-	// corrisponde mai a una funzione.
+	// registry is copy-on-write: reads from CallbackHandler take no lock, even when a worker
+	// registers functions during its own Init. Index 0 is reserved: a NULL data never matches a
+	// function.
 	registry atomic.Pointer[[]entry]
 
-	cstrings sync.Map // string → *byte in memoria C, mai liberata
+	cstrings sync.Map // string → *byte in C memory, never freed
 )
 
 func init() {
@@ -85,8 +85,8 @@ func dispatchCallback(env sys.Env, info sys.CallbackInfo, data uintptr, _ sys.Va
 	return fns[data](env, info, len(args))
 }
 
-// ModuleInit registra la funzione di inizializzazione del modulo (Init di NAPI_MODULE). Va
-// chiamata da init() del pacchetto main dell'addon.
+// ModuleInit registers the module initialization function (Init in NAPI_MODULE). It must be
+// called from init() in the addon's main package.
 func ModuleInit(fn func(env sys.Env, exports sys.Value) sys.Value) {
 	sys.SetModuleInitHandler(fn)
 }
@@ -102,10 +102,10 @@ func register(e entry) uintptr {
 	return uintptr(len(old))
 }
 
-// Register rende fn chiamabile da JS e restituisce il valore da passare come data insieme a
-// sys.CallbackTrampoline (napi_create_function, napi_define_class, descrittori di proprietà).
-// Ogni chiamata aggiunge una voce: le funzioni create più volte (factory) vanno registrate una
-// volta sola, a livello di pacchetto.
+// Register makes fn callable from JS and returns the value to pass as data along with
+// sys.CallbackTrampoline (napi_create_function, napi_define_class, property descriptors). Each
+// call appends an entry: functions created repeatedly (factories) must be registered once at
+// package level.
 func Register(fn Func) uintptr {
 	if fn == nil {
 		panic("napitest: Register(nil)")
@@ -113,8 +113,9 @@ func Register(fn Func) uintptr {
 	return register(func(env sys.Env, info sys.CallbackInfo, _ int) sys.Value { return fn(env, info) })
 }
 
-// RegisterAccessor registra una coppia getter/setter che Node-API chiama con lo stesso data: la
-// chiamata senza argomenti è il getter, quella con un argomento il setter. setter può essere nil.
+// RegisterAccessor registers a getter/setter pair that Node-API calls with the same data: a
+// zero-argument call invokes the getter, and a one-argument call invokes the setter. setter may be
+// nil.
 func RegisterAccessor(getter, setter Func) uintptr {
 	if getter == nil {
 		panic("napitest: RegisterAccessor with nil getter")
@@ -127,9 +128,9 @@ func RegisterAccessor(getter, setter Func) uintptr {
 	})
 }
 
-// CStr restituisce s terminata da NUL in memoria C. Le stringhe sono condivise e non vengono mai
-// liberate: vanno usate solo per nomi e costanti, così da poter stare anche dentro strutture
-// passate a C (es. sys.PropertyDescriptor) senza violare le regole di cgo sui puntatori.
+// CStr returns a NUL-terminated copy of s in C memory. Strings are shared and never freed: use
+// them only for names and constants, so they can also be stored inside structs passed to C (e.g.
+// sys.PropertyDescriptor) without violating cgo pointer rules.
 func CStr(s string) *byte {
 	if p, ok := cstrings.Load(s); ok {
 		return p.(*byte)
@@ -142,7 +143,7 @@ func CStr(s string) *byte {
 	return p
 }
 
-// GoString copia una stringa C terminata da NUL; nil diventa "".
+// GoString copies a NUL-terminated C string; nil becomes "".
 func GoString(p *byte) string {
 	if p == nil {
 		return ""
@@ -150,15 +151,15 @@ func GoString(p *byte) string {
 	return C.GoString((*C.char)(unsafe.Pointer(p)))
 }
 
-// withCString chiama fn con una copia temporanea di s in memoria C.
+// withCString calls fn with a temporary copy of s in C memory.
 func withCString(s string, fn func(p *byte)) {
 	p := C.CString(s)
 	defer C.free(unsafe.Pointer(p))
 	fn((*byte)(unsafe.Pointer(p)))
 }
 
-// ThrowTypeError equivale a napi_throw_type_error(env, NULL, msg) con lo stesso ripiego su
-// stderr di throw.
+// ThrowTypeError corresponds to napi_throw_type_error(env, NULL, msg) with the same stderr
+// fallback as throw.
 func ThrowTypeError(env sys.Env, msg string) {
 	withCString(msg, func(p *byte) {
 		if st := sys.ThrowTypeError(env, nil, p); st != sys.StatusOK {
@@ -171,30 +172,30 @@ func throwMessage(env sys.Env, msg string) {
 	withCString(msg, func(p *byte) { throw(env, p) })
 }
 
-// throw lancia un Error con msg; se napi_throw_error fallisce il messaggio resta almeno su
-// stderr, così il test fallisce con una causa leggibile invece che in silenzio.
+// throw throws a JS Error with msg; if napi_throw_error fails, the message is at least written to
+// stderr so the test fails with a readable cause rather than silently.
 func throw(env sys.Env, msg *byte) {
 	if st := sys.ThrowError(env, nil, msg); st != sys.StatusOK {
 		fmt.Fprintf(os.Stderr, "napitest: napi_throw_error(%q) failed: %s\n", GoString(msg), st)
 	}
 }
 
-// GetAndThrowLastError equivale a GET_AND_THROW_LAST_ERROR: lancia un Error con il messaggio
-// dell'ultimo errore Node-API, se non c'è già un'eccezione pendente.
+// GetAndThrowLastError corresponds to GET_AND_THROW_LAST_ERROR: throws a JS Error with the last
+// Node-API error message unless an exception is already pending.
 func GetAndThrowLastError(env sys.Env) {
 	var info *sys.ExtendedErrorInfo
 	var msg *byte
-	// Se la lettura fallisce info resta nil e si usa "empty error message", come nella macro C.
+	// If retrieving the error info fails, info stays nil and "empty error message" is used,
+	// matching the C macro.
 	if sys.GetLastErrorInfo(env, &info) == sys.StatusOK && info != nil {
 		msg = info.ErrorMessage
 	}
 	var pending bool
-	// Se il controllo fallisce si lancia comunque l'errore: meglio un'eccezione in più che
-	// perderne una.
+	// If checking fails, throw the error anyway: better an extra exception than losing one.
 	if sys.IsExceptionPending(env, &pending) != sys.StatusOK {
 		pending = false
 	}
-	// Se un'eccezione è già pendente non la si sostituisce.
+	// Do not overwrite an already pending exception.
 	if pending {
 		return
 	}
@@ -204,11 +205,11 @@ func GetAndThrowLastError(env sys.Env) {
 	throw(env, msg)
 }
 
-// Call equivale a NODE_API_CALL_BASE: se status non è StatusOK lancia l'ultimo errore e
-// restituisce false, e il chiamante deve uscire come farebbe la macro.
+// Call corresponds to NODE_API_CALL_BASE: if status is not StatusOK, throws the last error and
+// returns false, and the caller must return as the macro would.
 func Call(env sys.Env, status sys.Status) bool {
 	if status == sys.StatusUnavailable {
-		// Non è uno status di Node-API: la funzione manca dal Node in esecuzione.
+		// Not a Node-API status: the function is missing from the running Node binary.
 		throwMessage(env, unavailableMessage)
 		return false
 	}
@@ -219,8 +220,8 @@ func Call(env sys.Env, status sys.Status) bool {
 	return true
 }
 
-// Assert equivale a NODE_API_ASSERT_BASE. expr è il testo C della condizione, come lo produce
-// lo stringify della macro.
+// Assert corresponds to NODE_API_ASSERT_BASE. expr is the C condition text as produced by macro
+// stringification.
 func Assert(env sys.Env, cond bool, expr, message string) bool {
 	if !cond {
 		throwMessage(env, "assertion ("+expr+") failed: "+message)
@@ -229,8 +230,8 @@ func Assert(env sys.Env, cond bool, expr, message string) bool {
 	return true
 }
 
-// AssertStatus equivale a NODE_API_ASSERT_STATUS: se cond è falsa lancia l'errore di Assert e
-// restituisce StatusGenericFailure, altrimenti StatusOK.
+// AssertStatus corresponds to NODE_API_ASSERT_STATUS: if cond is false, throws the Assert error
+// and returns StatusGenericFailure, otherwise StatusOK.
 func AssertStatus(env sys.Env, cond bool, expr, message string) sys.Status {
 	if !Assert(env, cond, expr, message) {
 		return sys.StatusGenericFailure
@@ -238,7 +239,7 @@ func AssertStatus(env sys.Env, cond bool, expr, message string) sys.Status {
 	return sys.StatusOK
 }
 
-// DeclareProperty equivale a DECLARE_NODE_API_PROPERTY.
+// DeclareProperty corresponds to DECLARE_NODE_API_PROPERTY.
 func DeclareProperty(name string, fn Func) sys.PropertyDescriptor {
 	return sys.PropertyDescriptor{
 		Utf8Name:   CStr(name),
@@ -248,7 +249,7 @@ func DeclareProperty(name string, fn Func) sys.PropertyDescriptor {
 	}
 }
 
-// DeclareGetter equivale a DECLARE_NODE_API_GETTER.
+// DeclareGetter corresponds to DECLARE_NODE_API_GETTER.
 func DeclareGetter(name string, fn Func) sys.PropertyDescriptor {
 	return sys.PropertyDescriptor{
 		Utf8Name:   CStr(name),
@@ -258,7 +259,7 @@ func DeclareGetter(name string, fn Func) sys.PropertyDescriptor {
 	}
 }
 
-// DeclarePropertyValue equivale a DECLARE_NODE_API_PROPERTY_VALUE.
+// DeclarePropertyValue corresponds to DECLARE_NODE_API_PROPERTY_VALUE.
 func DeclarePropertyValue(name string, value sys.Value) sys.PropertyDescriptor {
 	return sys.PropertyDescriptor{
 		Utf8Name:   CStr(name),
@@ -267,22 +268,22 @@ func DeclarePropertyValue(name string, value sys.Value) sys.PropertyDescriptor {
 	}
 }
 
-// Method equivale a { name, NULL, fn, NULL, NULL, NULL, attributes, NULL }.
+// Method corresponds to { name, NULL, fn, NULL, NULL, NULL, attributes, NULL }.
 func Method(name string, fn Func, attributes sys.PropertyAttributes) sys.PropertyDescriptor {
 	d := DeclareProperty(name, fn)
 	d.Attributes = attributes
 	return d
 }
 
-// Value equivale a { name, NULL, NULL, NULL, NULL, value, attributes, NULL }.
+// Value corresponds to { name, NULL, NULL, NULL, NULL, value, attributes, NULL }.
 func Value(name string, value sys.Value, attributes sys.PropertyAttributes) sys.PropertyDescriptor {
 	d := DeclarePropertyValue(name, value)
 	d.Attributes = attributes
 	return d
 }
 
-// Accessor equivale a { name, NULL, NULL, getter, setter, NULL, attributes, NULL }; setter può
-// essere nil. Getter e setter condividono il data, come in Node-API (vedi RegisterAccessor).
+// Accessor corresponds to { name, NULL, NULL, getter, setter, NULL, attributes, NULL }; setter
+// may be nil. Getter and setter share data, as in Node-API (see RegisterAccessor).
 func Accessor(name string, getter, setter Func, attributes sys.PropertyAttributes) sys.PropertyDescriptor {
 	d := sys.PropertyDescriptor{
 		Utf8Name:   CStr(name),
@@ -296,8 +297,8 @@ func Accessor(name string, getter, setter Func, attributes sys.PropertyAttribute
 	return d
 }
 
-// DefineProperties chiama napi_define_properties su tutto props (sizeof(props)/sizeof(*props)
-// in C). Con props vuoto passa un puntatore NULL.
+// DefineProperties calls napi_define_properties over all of props (sizeof(props)/sizeof(*props)
+// in C). When props is empty it passes a NULL pointer.
 func DefineProperties(env sys.Env, object sys.Value, props []sys.PropertyDescriptor) sys.Status {
 	if len(props) == 0 {
 		return sys.DefineProperties(env, object, 0, nil)
@@ -305,8 +306,8 @@ func DefineProperties(env sys.Env, object sys.Value, props []sys.PropertyDescrip
 	return sys.DefineProperties(env, object, uint(len(props)), &props[0])
 }
 
-// AddReturnedStatus equivale ad add_returned_status di common-inl.h: imposta object[key] a
-// expectedMessage se actual == expected, altrimenti a "Invalid status [<actual>]".
+// AddReturnedStatus corresponds to add_returned_status in common-inl.h: sets object[key] to
+// expectedMessage if actual == expected, or to "Invalid status [<actual>]" otherwise.
 func AddReturnedStatus(env sys.Env, key string, object sys.Value, expectedMessage string,
 	expected, actual sys.Status) {
 	msg := expectedMessage
@@ -324,15 +325,15 @@ func AddReturnedStatus(env sys.Env, key string, object sys.Value, expectedMessag
 	withCString(key, func(p *byte) { Call(env, sys.SetNamedProperty(env, object, p, prop)) })
 }
 
-// AddLastStatus equivale ad add_last_status di common-inl.h: imposta returnValue[key] al
-// messaggio dell'ultimo errore ("napi_ok" se assente) e, se c'è un'eccezione pendente, la
-// rimuove e la salva in returnValue[key+"Exception"].
+// AddLastStatus corresponds to add_last_status in common-inl.h: sets returnValue[key] to the last
+// error message ("napi_ok" if none) and, if an exception is pending, clears it and stores it in
+// returnValue[key+"Exception"].
 func AddLastStatus(env sys.Env, key string, returnValue sys.Value) {
 	var last *sys.ExtendedErrorInfo
 	if !Call(env, sys.GetLastErrorInfo(env, &last)) {
 		return
 	}
-	// Il contenuto di last cambia alla prossima chiamata Node-API: si copia subito.
+	// The contents of last change on the next Node-API call: copy it immediately.
 	message := lastStatusOK
 	if last != nil && last.ErrorMessage != nil {
 		message = GoString(last.ErrorMessage)

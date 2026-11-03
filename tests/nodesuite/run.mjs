@@ -1,31 +1,31 @@
-// Costruisce ed esegue i test della suite di Node.js (js-native-api, node-api) portati su sys.
+// Builds and runs the Node.js test suites (js-native-api, node-api) ported to sys.
 //
-//   node tests/nodesuite/run.mjs [opzioni] [filtro...]
+//   node tests/nodesuite/run.mjs [options] [filter...]
 //
-// Opzioni:
-//   --no-build   esegue senza ricompilare gli addon
-//   --build-only compila senza eseguire
-//   --jobs=N     build in parallelo (default: metà delle CPU)
+// Options:
+//   --no-build   run without rebuilding the addons
+//   --build-only build without running
+//   --jobs=N     parallel builds (default: half of available CPUs)
 //
-// Un filtro seleziona i test il cui id ("suite/cartella/file") contiene la stringa indicata.
+// A filter selects tests whose id ("suite/dir/file") contains the given substring.
 //
-// Per ogni cartella di test:
-//   - binding.gyp (copiato da Node.js) elenca i target; NAPI_VERSION=N e NAPI_EXPERIMENTAL
-//     diventano i build tag napi_go_vN / napi_go_experimental;
-//   - il sorgente Go di un target sta in <cartella>/<target>/ oppure, se la cartella ha un solo
-//     target, direttamente in <cartella>/;
-//   - l'addon va in <cartella>/build/Release/<target>.node, dove lo cercano gli script JS;
-//   - ogni file .js è un test, come in test/testpy di Node.js, con le righe "// Flags:" e
-//     "// Env:" rispettate;
-//   - napi-go.json (facoltativo) aggiunge defines a un target quando il test C li imposta nel
-//     sorgente invece che nel binding.gyp: {"targets": {"<target>": {"defines": [...], "reason": "..."}}}.
+// For each test directory:
+//   - binding.gyp (copied from Node.js) lists the targets; NAPI_VERSION=N and NAPI_EXPERIMENTAL
+//     become the build tags napi_go_vN / napi_go_experimental;
+//   - the Go source for a target lives in <dir>/<target>/ or, when the directory has a single
+//     target, directly in <dir>/;
+//   - the addon is written to <dir>/build/Release/<target>.node, where the JS scripts look for it;
+//   - each .js file is a test, matching Node.js's test/testpy, with "// Flags:" and "// Env:"
+//     lines honored;
+//   - napi-go.json (optional) adds defines to a target when the C test defines them in source
+//     rather than in binding.gyp: {"targets": {"<target>": {"defines": [...], "reason": "..."}}}.
 //
-// status.json elenca i test saltati con il motivo, sempre ("skip"), sotto una versione di
-// Node.js ("minNodeMajor" o, quando la funzionalità arriva con una minor diversa per ogni linea di
-// release, "minNodeVersion"; servono per i test di nodejs/node main che usano funzionalità
-// recenti) o su alcune piattaforme ("skipPlatforms", per i limiti di piattaforma di napi-go).
-// Variabili d'ambiente rispettate: CC,
-// GOEXPERIMENT (es. cgocheck2). UV_THREADPOOL_SIZE e NODE_OPTIONS non arrivano agli script.
+// status.json lists skipped tests with a reason, unconditionally ("skip"), below a Node.js
+// version ("minNodeMajor" or, when a feature lands in different minors across release lines,
+// "minNodeVersion"; used for nodejs/node main tests that exercise recent features), or on
+// specific platforms ("skipPlatforms", for platform limitations of napi-go).
+// Honored environment variables: CC,
+// GOEXPERIMENT (e.g. cgocheck2). UV_THREADPOOL_SIZE and NODE_OPTIONS are stripped for scripts.
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, rmSync, mkdirSync, statSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
@@ -37,34 +37,34 @@ const root = join(here, '..', '..')
 const SUITES = ['js-native-api', 'node-api']
 const BUILD_SUBDIR = join('build', 'Release')
 const TEST_TIMEOUT_MS = 120_000
-// Durata di sample(1) per processo e suo timeout, nella diagnosi di un test bloccato (macOS).
+// Duration of sample(1) per process and its timeout when diagnosing a hung test (macOS).
 const SAMPLE_SECONDS = 1
 const SAMPLE_TIMEOUT_MS = 30_000
 const isWindows = process.platform === 'win32'
-// Attesa massima di 'close' dopo aver terminato un test scaduto.
+// Maximum wait for 'close' after killing a timed-out test.
 const KILL_GRACE_MS = 5_000
 const EXIT_FAILURE = 1
 const MIN_JOBS = 1
 const SKIP_MARKER = '1..0 # Skipped'
 const FLAGS_PATTERN = /\/\/\s+Flags:(.*)/
 const ENV_PATTERN = /\/\/\s+Env:(.*)/
-// NAPI_VERSION di default degli header (node-gyp non la definisce) e di sys senza build tag.
+// Default NAPI_VERSION in headers (when node-gyp does not define it) and in sys without build tags.
 const DEFAULT_NAPI_VERSION = 8
-// 2147483646 (NAPI_VERSION_EXPERIMENTAL - 1) è la versione mai supportata di
-// node-api/test_module_version_mismatch: sys la dichiara solo con un build tag riservato ai test.
+// 2147483646 (NAPI_VERSION_EXPERIMENTAL - 1) is the never-supported version used by
+// node-api/test_module_version_mismatch: sys declares it only with a test-only build tag.
 const VERSION_TAGS = new Map([[8, null], [9, 'napi_go_v9'], [10, 'napi_go_v10'], [2147483646, 'napi_go_test_version_mismatch']])
 const EXPERIMENTAL_TAG = 'napi_go_experimental'
-// NODE_VERSION è process.versions.node senza il suffisso di prerelease (es. "27.0.0-alpha.0.0.0"
-// → "27.0.0"), che compareVersions non saprebbe confrontare.
+// NODE_VERSION is process.versions.node stripped of any prerelease suffix (e.g. "27.0.0-alpha.0.0.0"
+// → "27.0.0"), which compareVersions cannot compare.
 const NODE_VERSION = process.versions.node.replace(/-.*$/, '')
 const NODE_MAJOR = Number(NODE_VERSION.split('.')[0])
-// Parti di una versione Node.js confrontate da compareVersions: major, minor, patch.
+// Number of Node.js version components compared by compareVersions: major, minor, patch.
 const VERSION_PARTS = 3
-// Variabili d'ambiente tolte ai processi di test, come nella CI di Node.js: cambiano il
-// comportamento di libuv o di node e alcuni script ne verificano il valore di default (es.
-// node-api/test_uv_threadpool_size). Una riga "// Env:" dello script le può reimpostare.
+// Environment variables stripped from test processes, matching Node.js CI: they alter libuv or
+// node behavior and some scripts assert the default value (e.g. node-api/test_uv_threadpool_size).
+// An "// Env:" line in the script can set them again.
 const STRIPPED_ENV = ['UV_THREADPOOL_SIZE', 'NODE_OPTIONS']
-// Piattaforma nel formato di status.skipPlatforms, es. "darwin-x64".
+// Platform in status.skipPlatforms format, e.g. "darwin-x64".
 const PLATFORM = `${process.platform}-${process.arch}`
 
 class UsageError extends Error {}
@@ -84,13 +84,13 @@ function parseArgs (argv) {
   return opts
 }
 
-// readJSON legge un file JSON; restituisce fallback se il file non esiste.
+// readJSON reads a JSON file; returns fallback if the file does not exist.
 function readJSON (file, fallback) {
   if (!existsSync(file)) return fallback
   return parseJSON(readText(file), file)
 }
 
-// readText legge un file di testo indicando il file nell'errore.
+// readText reads a text file and includes the file path in any error.
 function readText (file) {
   try {
     return readFileSync(file, 'utf8')
@@ -107,7 +107,7 @@ function parseJSON (text, file) {
   }
 }
 
-// parseGyp legge un binding.gyp: è JSON con apici singoli, commenti # e virgole finali.
+// parseGyp reads a binding.gyp: JSON with single quotes, # comments, and trailing commas.
 function parseGyp (file) {
   const text = readText(file)
     .split('\n').map((l) => l.replace(/^\s*#.*$/, '')).join('\n')
@@ -116,7 +116,7 @@ function parseGyp (file) {
   return parseJSON(text, file)
 }
 
-// targetTags ricava i build tag di sys dai defines del target.
+// targetTags derives sys build tags from the target's defines.
 function targetTags (target, gypFile) {
   const defines = target.defines ?? []
   if (defines.includes('NAPI_EXPERIMENTAL')) return [EXPERIMENTAL_TAG]
@@ -133,7 +133,7 @@ function hasGoFiles (dir) {
   return existsSync(dir) && readdirSync(dir).some((f) => f.endsWith('.go'))
 }
 
-// discover restituisce le cartelle di test con i loro target e script.
+// discover returns the test directories along with their targets and scripts.
 function discover () {
   const dirs = []
   for (const suite of SUITES) {
@@ -170,11 +170,11 @@ function matches (id, filters) {
   return filters.length === 0 || filters.some((f) => id.includes(f))
 }
 
-// run esegue un comando e ne raccoglie l'esito senza lanciare eccezioni. Su POSIX il processo
-// guida un proprio gruppo: allo scadere del timeout si raccolgono informazioni sui processi
-// ancora vivi (diagnoseHang) e si termina tutto il gruppo, perché i processi figli lanciati dagli
-// script (spawnSync, worker in un figlio) ereditano le pipe e altrimenti 'close' non arriverebbe
-// mai. Su Windows si termina l'albero con taskkill.
+// run executes a command and collects its result without throwing. On POSIX the process leads its
+// own process group: on timeout we gather information about still-running processes (diagnoseHang)
+// and kill the entire group, because child processes spawned by scripts (spawnSync, workers in a
+// child) inherit stdio pipes and would otherwise prevent 'close' from ever firing. On Windows we
+// kill the process tree with taskkill.
 function run (cmd, args, options) {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'], detached: !isWindows })
@@ -190,8 +190,8 @@ function run (cmd, args, options) {
         timedOut = true
         diagnostics = diagnoseHang(child.pid)
         killTree(child)
-        // Se un discendente fuori dal gruppo tiene aperte le pipe, 'close' non arriva: dopo
-        // KILL_GRACE_MS si chiude comunque con l'output raccolto.
+        // If a descendant outside the group keeps the pipes open, 'close' never fires: after
+        // KILL_GRACE_MS resolve anyway with the output collected so far.
         graceTimer = setTimeout(() => finish({ ...exit, stdout, stderr, timedOut, diagnostics }), KILL_GRACE_MS)
       }, options.timeout)
       : null
@@ -203,7 +203,7 @@ function run (cmd, args, options) {
   })
 }
 
-// killTree termina child e tutti i suoi discendenti.
+// killTree terminates child and all of its descendants.
 function killTree (child) {
   if (isWindows) {
     const r = spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { encoding: 'utf8' })
@@ -213,15 +213,15 @@ function killTree (child) {
   try {
     process.kill(-child.pid, 'SIGKILL')
   } catch (err) {
-    // Il gruppo può essere già vuoto (ESRCH): resta il kill del solo processo.
+    // The group may already be empty (ESRCH): fall back to killing the child process directly.
     if (err.code !== 'ESRCH') process.stderr.write(`cannot kill process group ${child.pid}: ${err.message}\n`)
     child.kill('SIGKILL')
   }
 }
 
-// diagnoseHang descrive i processi del gruppo pgid ancora vivi: l'elenco con ps e, su macOS, lo
-// stack nativo di ogni thread con sample(1), per capire dove si è fermato un test. Restituisce un
-// testo vuoto su Windows o se gli strumenti mancano.
+// diagnoseHang describes processes in group pgid that are still alive: the ps listing and, on
+// macOS, the native stack of every thread via sample(1), to show where a test is stuck. Returns
+// an empty string on Windows or if the tools are unavailable.
 function diagnoseHang (pgid) {
   if (isWindows) return ''
   const ps = spawnSync('ps', ['-ax', '-o', 'pid=,pgid=,ppid=,stat=,command='], { encoding: 'utf8' })
@@ -243,13 +243,13 @@ async function buildTarget (t) {
   if (t.tags.length) args.push(`-tags=${t.tags.join(',')}`)
   args.push('-o', t.out, t.pkg)
   const r = await run('go', args, { cwd: root, env: { ...process.env, CGO_ENABLED: '1' } })
-  // c-shared produce anche l'header C delle export: non serve.
+  // c-shared also writes a C header for exports, which is not needed.
   const header = t.out.replace(/\.node$/, '.h')
   if (existsSync(header)) rmSync(header)
   return r
 }
 
-// pool esegue fn su items con al massimo jobs esecuzioni contemporanee.
+// pool runs fn over items with at most jobs concurrent executions.
 async function pool (items, jobs, fn) {
   const results = new Array(items.length)
   let next = 0
@@ -275,8 +275,8 @@ function scriptConfig (file) {
   return { flags, env }
 }
 
-// testEnv è l'ambiente di un processo di test: quello del runner senza STRIPPED_ENV, più le
-// variabili della riga "// Env:".
+// testEnv builds a test process's environment: the runner's environment minus STRIPPED_ENV, plus
+// the variables from the "// Env:" line.
 function testEnv (scriptEnv) {
   const env = { ...process.env }
   for (const name of STRIPPED_ENV) delete env[name]
@@ -293,12 +293,12 @@ function report (label, id, r) {
   if (r.diagnostics) process.stdout.write(`  --- diagnostics\n${r.diagnostics.trimEnd()}\n`)
 }
 
-// skipReason restituisce il motivo per cui il test id va saltato, oppure null:
-//   status.skip[id]          = "motivo"                          sempre
-//   status.minNodeMajor[id]  = {"major": N, "reason": "motivo"}  con Node < N
-//   status.minNodeVersion[id] = {"versions": ["22.23.3", "24.16.0"], "reason": "motivo"}
-//                               (vedi versionSupported)
-//   status.skipPlatforms[id] = {"platforms": ["darwin-x64"], "reason": "motivo"}  su quelle piattaforme
+// skipReason returns the reason why test id should be skipped, or null:
+//   status.skip[id]           = "reason"                         unconditionally
+//   status.minNodeMajor[id]   = {"major": N, "reason": "reason"} when Node < N
+//   status.minNodeVersion[id] = {"versions": ["22.23.3", "24.16.0"], "reason": "reason"}
+//                               (see versionSupported)
+//   status.skipPlatforms[id]  = {"platforms": ["darwin-x64"], "reason": "reason"} on those platforms
 function skipReason (status, id) {
   if (status.skip?.[id]) return status.skip[id]
   const min = status.minNodeMajor?.[id]
@@ -312,7 +312,7 @@ function skipReason (status, id) {
   return null
 }
 
-// compareVersions confronta due versioni "major.minor.patch" (senza prefisso v né suffissi).
+// compareVersions compares two "major.minor.patch" versions (without a leading v or suffixes).
 function compareVersions (a, b) {
   const pa = a.split('.').map(Number)
   const pb = b.split('.').map(Number)
@@ -322,10 +322,10 @@ function compareVersions (a, b) {
   return 0
 }
 
-// versionSupported dice se version soddisfa un elenco di minimi, uno per linea di release:
-// con un minimo per la stessa major serve version >= minimo; una major senza minimo è
-// supportata solo se più recente di tutte quelle elencate (le linee intermedie non hanno la
-// funzionalità).
+// versionSupported reports whether version satisfies a list of minimums, one per release line:
+// if there is a minimum for the same major, version >= minimum is required; a major without a
+// minimum is supported only if it is newer than all listed majors (intermediate lines lack the
+// feature).
 function versionSupported (version, minimums) {
   const major = Number(version.split('.')[0])
   const sameLine = minimums.find((m) => Number(m.split('.')[0]) === major)
