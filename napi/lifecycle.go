@@ -135,6 +135,13 @@ func (x External) Get() (any, error) {
 	return h.value, nil
 }
 
+// SetTypeTag attaches tag to the external; like objects, an external can be tagged at most once
+// (napi_type_tag_object accepts externals).
+func (x External) SetTypeTag(tag TypeTag) error { return Object{x.Value}.SetTypeTag(tag) }
+
+// HasTypeTag reports whether the external carries the given tag.
+func (x External) HasTypeTag(tag TypeTag) (bool, error) { return Object{x.Value}.HasTypeTag(tag) }
+
 // ---- reference ----
 
 // Ref holds a reference to a JS value across handle scopes (napi_ref). With a reference count > 0,

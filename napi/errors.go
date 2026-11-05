@@ -121,6 +121,12 @@ func (t *Thrown) Error() string { return "napi: JavaScript value thrown" }
 // Throw returns an error that throws v in JS (see Thrown).
 func Throw(v Value) error { return &Thrown{Value: v} }
 
+// Check converts a status returned by a sys function into the error napi would return for it (nil
+// for StatusOK, ErrPendingException, or an *Error carrying the message from
+// napi_get_last_error_info). It is meant for addons that call sys directly for APIs not wrapped by
+// napi; call it right after the sys call, before any other Node-API call overwrites the message.
+func (e Env) Check(st Status) error { return check(e.raw, st) }
+
 // check converts a status into an error. The StatusOK fast path does not allocate or cross cgo.
 func check(env sys.Env, st sys.Status) error {
 	if st == sys.StatusOK {

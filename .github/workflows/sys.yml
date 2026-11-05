@@ -4,17 +4,18 @@
 #   generate    up-to-date generated files, gofmt, go vet, and go test across all version build tags,
 #               plus go test -race on package napi
 #   e2e         test addons + node:test on Linux x64/arm64, macOS arm64/x64, Windows (gcc),
-#               followed by the Node.js test suite ported to sys (tests/nodesuite)
-#   cgocheck2   e2e and nodesuite with GOEXPERIMENT=cgocheck2 (cgo pointer checks)
-#   windows-zig e2e and nodesuite on Windows built with zig cc
+#               followed by the Node.js test suite ported to sys (tests/nodesuite) and the
+#               node-addon-api test suite ported to napi (tests/addonapisuite)
+#   cgocheck2   e2e, nodesuite and addonapisuite with GOEXPERIMENT=cgocheck2 (cgo pointer checks)
+#   windows-zig e2e, nodesuite and addonapisuite on Windows built with zig cc
 #   alpine      musl sentinel: known Go limit, checked with a dlopen probe (see the job)
 name: sys
 
 on:
   push:
-    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', 'tests/addonapisuite/**', '.github/workflows/sys.yml']
   pull_request:
-    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', 'tests/addonapisuite/**', '.github/workflows/sys.yml']
   workflow_dispatch:
 
 permissions:
@@ -94,6 +95,10 @@ jobs:
         env:
           CGO_ENABLED: '1'
         run: node tests/nodesuite/run.mjs
+      - name: node-addon-api test suite
+        env:
+          CGO_ENABLED: '1'
+        run: node tests/addonapisuite/run.mjs
 
   cgocheck2:
     name: ubuntu · GOEXPERIMENT=cgocheck2
@@ -115,6 +120,9 @@ jobs:
           GOEXPERIMENT: cgocheck2
       - run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
       - run: node tests/nodesuite/run.mjs
+        env:
+          GOEXPERIMENT: cgocheck2
+      - run: node tests/addonapisuite/run.mjs
         env:
           GOEXPERIMENT: cgocheck2
 
@@ -140,6 +148,9 @@ jobs:
           CC: zig cc
       - run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
       - run: node tests/nodesuite/run.mjs
+        env:
+          CC: zig cc
+      - run: node tests/addonapisuite/run.mjs
         env:
           CC: zig cc
 

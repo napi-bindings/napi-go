@@ -22,6 +22,9 @@ tests/e2e/build/
 tests/nodesuite/**/build/
 tests/nodesuite/.tmp.*/
 
+# Binding of the ported node-addon-api test suite (tests/addonapisuite)
+tests/addonapisuite/test/build/
+
 .cto-toolkit/
 .agents
 .claude

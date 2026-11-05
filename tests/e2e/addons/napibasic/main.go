@@ -408,7 +408,8 @@ func numbers(c napi.CallContext) (napi.Value, error) {
 }
 
 // bigint(v, mode): "i64" and "u64" return [value, lossless]; "big" re-reads via words and
-// recreates the bigint; "words" returns [negative, word count].
+// recreates the bigint; "words" returns [negative, word count]; "rewords" recreates the bigint
+// from the words exactly as Words returns them (nil for 0n).
 func bigint(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	b, err := c.Arg(0).AsBigInt()
@@ -460,6 +461,13 @@ func bigint(c napi.CallContext) (napi.Value, error) {
 			return napi.Value{}, err
 		}
 		r, err := env.NewBigInt(big)
+		return r.Value, err
+	case "rewords":
+		neg, words, err := b.Words()
+		if err != nil {
+			return napi.Value{}, err
+		}
+		r, err := env.NewBigIntWords(neg, words)
 		return r.Value, err
 	case "words":
 		neg, words, err := b.Words()

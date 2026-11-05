@@ -37,7 +37,8 @@ go build -buildmode=c-shared -o add.node .
 node -e "console.log(require('./add.node').add(1, 2))"
 ```
 
-Complete example covering all parts of the API: `tests/e2e/addons/napibasic`.
+Complete example covering all parts of the API: `tests/e2e/addons/napibasic`. The node-addon-api
+test suite ported to napi (`tests/addonapisuite`) checks that napi behaves like node-addon-api.
 
 ## Contents
 
@@ -49,9 +50,9 @@ Complete example covering all parts of the API: `tests/e2e/addons/napibasic`.
 | `object.go` | `Object` and properties (string key, value, index), keys, prototype, freeze/seal, `Array`, `Property` and `DefineProperties` |
 | `function.go` | `Callback`, `CallContext`, `Function` (`NewFunction`, `Call`, `New`), callback table |
 | `class.go` | `DefineClass`, `Promise`/`Deferred` on the JS thread |
-| `lifecycle.go` | finalizers, `Wrap`/`Unwrap`/`UnwrapAs`, type tags, `External`, `Ref`, handle scopes, cleanup hooks |
+| `lifecycle.go` | finalizers, `Wrap`/`Unwrap`/`UnwrapAs`, type tags (objects and externals), `External`, `Ref`, handle scopes, cleanup hooks |
 | `buffer.go` | `Buffer`, `ArrayBuffer` (including external, zero-copy), `TypedArray`, `DataView` |
-| `errors.go` | `Error`, `ErrPendingException`, `TypeError`/`RangeError`/`SyntaxError`, `Throw`, throwing rules |
+| `errors.go` | `Error`, `ErrPendingException`, `TypeError`/`RangeError`/`SyntaxError`, `Throw`, throwing rules, `Env.Check` for statuses from `sys` |
 | `table.go` | ID → Go value table with lock-free reads |
 
 ## Design choices
@@ -120,3 +121,7 @@ Phase 3.
 - `DefineClass` creates base classes: inheriting from a native class works from JS
   (`class Sub extends Counter`), not between classes defined in Go.
 - Async context, `MakeCallback`, async work, and threadsafe functions are currently available only in `sys`.
+- A class defined with `DefineClass` always throws a TypeError when called without `new`; there
+  is no hook to make it act as a factory (node-addon-api's `ObjectWrap::OnCalledAsFunction`).
+- `NewSymbol` always sets a description: `Symbol()` without one has no counterpart.
+- SharedArrayBuffer creation (experimental Node-API) is not wrapped.
