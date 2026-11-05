@@ -174,10 +174,19 @@ func throwError(env Env, code, message string) {
 	if IsExceptionPending(env, &pending) == StatusOK && pending {
 		return
 	}
-	if st := ThrowError(env, cstring(code), cstring(message)); st != StatusOK {
+	if st := ThrowError(env, cstring(code), cstring(message)); st != StatusOK && !envCannotRunJS(st) {
 		// If the error cannot be delivered to JS, at least log it to stderr.
 		fmt.Fprintf(os.Stderr, "%s (napi_throw_error: %s)\n", message, st)
 	}
+}
+
+// envCannotRunJS reports whether st means that the env can no longer run JavaScript: a worker or
+// the process is shutting down (napi_pending_exception for modules that declare Node-API <= 9,
+// napi_cannot_run_js from 10). napi_is_exception_pending is false in that state, yet every call
+// that could run JS fails: there is nobody left to receive the exception, so it is dropped
+// silently instead of being reported on stderr.
+func envCannotRunJS(st Status) bool {
+	return st == StatusPendingException || st == StatusCannotRunJS
 }
 
 func panicMessage(where string, r any) string {

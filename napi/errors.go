@@ -183,7 +183,11 @@ func throwError(env sys.Env, err error) {
 	}
 	v, cerr := newErrorValue(env, err)
 	if cerr != nil {
-		reportThrowFailure(sys.StatusGenericFailure, err)
+		st := sys.StatusGenericFailure
+		if ne, ok := cerr.(*Error); ok {
+			st = ne.Status
+		}
+		reportThrowFailure(st, err)
 		return
 	}
 	reportThrowFailure(sys.Throw(env, v), err)
@@ -236,8 +240,11 @@ func createError(env sys.Env, kind ErrorKind, code, msg string) (sys.Value, erro
 }
 
 // reportThrowFailure logs to stderr if throwing the exception itself fails, matching sys behavior.
+// When the env can no longer run JavaScript (a worker or the process is shutting down) Node-API
+// fails with napi_pending_exception or napi_cannot_run_js while no exception is pending: nobody
+// can receive the error, so it is dropped silently.
 func reportThrowFailure(st sys.Status, err error) {
-	if st != sys.StatusOK {
+	if st != sys.StatusOK && st != sys.StatusPendingException && st != sys.StatusCannotRunJS {
 		logf("napi-go: cannot throw %q (%s)\n", err.Error(), st)
 	}
 }

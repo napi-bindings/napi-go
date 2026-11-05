@@ -98,4 +98,5 @@ An addon that does not register a `ModuleInitHandler` fails to load: `require()`
 - **musl/Alpine** is unsupported: Go releases (≤ 1.27) cannot load `c-shared` libraries on musl.
 - **Windows**: each JS → Go entry costs ~1 µs (missing `x_cgo_bindm` in the Go runtime).
 
-Details and benchmarks: `spike/README.md` (Phase 0).
+Details and benchmarks: `spike/README.md` (Phase 0). The spike was removed after its tests moved to
+`tests/e2e`; its last version is in commit `ad50e4c`.

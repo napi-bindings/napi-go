@@ -7,6 +7,7 @@
 #               followed by the Node.js test suite ported to sys (tests/nodesuite)
 #   cgocheck2   e2e and nodesuite with GOEXPERIMENT=cgocheck2 (cgo pointer checks)
 #   windows-zig e2e and nodesuite on Windows built with zig cc
+#   alpine      musl sentinel: known Go limit, checked with a dlopen probe (see the job)
 name: sys
 
 on:
@@ -141,3 +142,73 @@ jobs:
       - run: node tests/nodesuite/run.mjs
         env:
           CC: zig cc
+
+  alpine:
+    # Known limit (Go <= 1.27): the Go runtime in a c-shared library uses initial-exec TLS and
+    # expects argc/argv in its init functions, so musl refuses the dlopen ("initial-exec TLS
+    # resolves to dynamic definition"). Upstream fix: golang/go#71953, CL 696635.
+    # Sentinel: the dlopen probe tells three outcomes apart. The known error with Alpine's Go →
+    # warning and a green job (tests skipped); a successful load → all e2e tests; any other
+    # error → red job. The go=cl696635 variant builds Go from the latest patchset of the CL (still
+    # open) and checks ahead of time that the fix is enough for napi-go: there the known error is
+    # a failure too. For c-shared builds the CL already picks the general dynamic model
+    # (-tls=auto), so the addon build stays the same.
+    name: alpine (musl) · node ${{ matrix.node }} · go ${{ matrix.go }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.go == 'cl696635' }}   # an unmerged CL can break: it does not block the pipeline
+    timeout-minutes: 25
+    container: node:${{ matrix.node }}-alpine
+    defaults:
+      run:
+        shell: sh   # the Alpine image has no bash: the workflow default would fail before installing it
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24', '26']
+        go: ['alpine']   # Alpine's Go package: reproduces the known limit
+        include:
+          - node: '26'
+            go: 'cl696635'
+    steps:
+      - name: Dependencies
+        run: apk add --no-cache go gcc musl-dev git
+      - uses: actions/checkout@v5
+      - name: Go from CL 696635 (latest patchset, bootstrapped with Alpine's Go)
+        if: matrix.go == 'cl696635'
+        working-directory: /
+        run: |
+          apk add --no-cache bash   # required by make.bash
+          ref=$(git ls-remote https://go.googlesource.com/go 'refs/changes/35/696635/*' | awk '{print $2}' | grep -E '/[0-9]+$' | sort -t/ -k5,5n | tail -1)
+          test -n "$ref"
+          echo "CL 696635: $ref"
+          git init -q /opt/go-cl
+          git -C /opt/go-cl fetch -q --depth=1 https://go.googlesource.com/go "$ref"
+          git -C /opt/go-cl checkout -q FETCH_HEAD
+          git -C /opt/go-cl log -1 --format='%H %s'
+          cd /opt/go-cl/src && GOROOT_BOOTSTRAP=$(go env GOROOT) ./make.bash
+          echo /opt/go-cl/bin >> "$GITHUB_PATH"
+      - name: Toolchain
+        run: go version && node --version && gcc --version | head -1
+      - name: Build e2e addons
+        env:
+          CGO_ENABLED: '1'
+        run: node tests/e2e/build.mjs
+      - name: TLS model of the .node (TPOFF64 = initial-exec, TLSGD/TLSDESC = general dynamic)
+        run: readelf -d tests/e2e/build/sysbasic.node | grep -i flags; readelf -r tests/e2e/build/sysbasic.node | grep -E 'TPOFF|TLSGD|TLSDESC|DTPMOD' || true
+      - name: dlopen probe (known limit → warning, other errors → red job)
+        id: probe
+        run: |
+          if out=$(timeout 60 node -e "require('./tests/e2e/build/sysbasic.node'); require('./tests/e2e/build/sysbasic-copy.node'); require('./tests/e2e/build/napibasic.node')" 2>&1); then
+            echo "loaded=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=musl::dlopen succeeded with $(go version): running all e2e tests"
+          elif [ '${{ matrix.go }}' = alpine ] && printf '%s' "$out" | grep -q 'initial-exec TLS resolves to dynamic definition'; then
+            echo "loaded=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=musl: known limit::$(go version): musl refuses the initial-exec TLS of the Go runtime, tests skipped (golang/go#71953, CL 696635)"
+          else
+            printf '%s\n' "$out"
+            echo "::error title=musl::dlopen failed (or hung) with an outcome other than the known limit"
+            exit 1
+          fi
+      - name: Test e2e
+        if: steps.probe.outputs.loaded == 'true'
+        run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
