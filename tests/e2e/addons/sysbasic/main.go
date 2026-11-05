@@ -80,6 +80,12 @@ func init() {
 		{"tsfnCollect", tsfnCollect},
 		{"asyncSum", asyncSum},
 		{"allocsPerCall", allocsPerCall},
+		// process.go: Go runtime load and signal handler hooks (tests/e2e/process.test.mjs).
+		{"burnCPU", burnCPU},
+		{"burning", burning},
+		{"goGC", goGC},
+		{"dropResetHand", dropResetHand},
+		{"repairSignalHandlers", repairSignalHandlers},
 		{"envCounts", func(env sys.Env, _ sys.Value, _ []sys.Value) sys.Value {
 			obj := newObject(env)
 			setNum(env, obj, "inited", float64(initedEnvs.Load()))
@@ -511,10 +517,19 @@ func onAsyncComplete(env sys.Env, status sys.Status, id uintptr) {
 	jobsMu.Unlock()
 	must(sys.DeleteAsyncWork(env, job.work))
 	if status != sys.StatusOK {
-		must(sys.RejectDeferred(env, job.deferred, newStr(env, "async work: "+status.String())))
+		mustUnlessShuttingDown(sys.RejectDeferred(env, job.deferred, newStr(env, "async work: "+status.String())))
 		return
 	}
-	must(sys.ResolveDeferred(env, job.deferred, newNum(env, job.sum)))
+	mustUnlessShuttingDown(sys.ResolveDeferred(env, job.deferred, newNum(env, job.sum)))
+}
+
+// mustUnlessShuttingDown is must for calls that run JavaScript (settling a Promise): when the
+// worker or the process is shutting down they fail with napi_pending_exception or
+// napi_cannot_run_js, and the Promise can no longer be observed by anyone.
+func mustUnlessShuttingDown(st sys.Status) {
+	if st != sys.StatusPendingException && st != sys.StatusCannotRunJS {
+		must(st)
+	}
 }
 
 // --- allocations ------------------------------------------------------------------------------

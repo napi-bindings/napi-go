@@ -12,8 +12,7 @@ Go bindings for [Node-API](https://nodejs.org/api/n-api.html) (N-API): build nat
 | [`napi/`](napi/README.md) | Layer 1: idiomatic Go API (values, errors, functions, classes, buffers) |
 | `tests/e2e/` | test addons and `node:test` suites |
 | [`tests/nodesuite/`](tests/nodesuite/README.md) | Node.js `js-native-api` and `node-api` test suites ported to `sys` |
-| [`spike/`](spike/README.md) | Phase 0: prototype and feasibility results |
-| `.github/workflows/` | CI: `sys.yml` (Layer 0 and 1) and `spike.yml` (Phase 0) |
+| `.github/workflows/` | CI: `sys.yml` (Layer 0 and 1, including the Alpine/musl sentinel) |
 
 Requirements: Go ≥ 1.24 with cgo, a C compiler (gcc/clang, or `zig cc` on Windows),
 Node.js ≥ 22 for tests.
