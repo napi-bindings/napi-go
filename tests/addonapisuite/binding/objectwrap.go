@@ -28,7 +28,7 @@ var staticMethodText string
 
 func unwrapTest(c napi.CallContext) (*wrapTest, error) { return napi.UnwrapAs[*wrapTest](c.This()) }
 
-// testMethod returns a callback returning ToString(arg0) + suffix, on an instance when instance
+// suffixMethod returns a callback returning ToString(arg0) + suffix, on an instance when instance
 // is true (C++ instance methods unwrap this first).
 func suffixMethod(suffix string, instance bool) napi.Callback {
 	return func(c napi.CallContext) (napi.Value, error) {

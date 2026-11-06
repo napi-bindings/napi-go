@@ -122,7 +122,7 @@ func globalTarget(c napi.CallContext) napi.Object { return c.Env().Global() }
 
 func opGet(_ napi.CallContext, o napi.Object, k objectKey) (napi.Value, error) { return getKey(o, k) }
 
-// opSet sets the property to the argument after the key and returns true, like Object::Set
+// opSetReturningTrue sets the property to the argument after the key and returns true, like Object::Set
 // returning Maybe<bool>.
 func opSetReturningTrue(valueArg int) func(c napi.CallContext, o napi.Object, k objectKey) (napi.Value, error) {
 	return func(c napi.CallContext, o napi.Object, k objectKey) (napi.Value, error) {

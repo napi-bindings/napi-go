@@ -6,6 +6,9 @@ import (
 	"github.com/napi-bindings/napi-go/napi"
 )
 
+// Error messages in this package are copied verbatim from the C++ tests (capitalized, often with a
+// trailing period), since the scripts may compare them; Go's lowercase convention does not apply.
+
 // fn is a named function of a module's exports object.
 type fn struct {
 	name string

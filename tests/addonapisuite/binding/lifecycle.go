@@ -16,6 +16,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/napi-bindings/napi-go/napi"
@@ -573,6 +574,15 @@ func initEnvMiscellaneous(env napi.Env) (napi.Object, error) {
 
 // ---- Env cleanup hooks ----
 
+// emit writes the output that the scripts read from a child process. It runs in cleanup hooks
+// and finalizers, which cannot return errors: a failed write aborts the process, so that the
+// script fails instead of missing a line silently.
+func emit(w io.Writer, format string, args ...any) {
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		napi.FatalError("addonapisuite", "cannot write test output: "+err.Error())
+	}
+}
+
 // The arguments printed by the cleanup hooks (secret1 and secret2 in env_cleanup.cc).
 const (
 	cleanupSecret1 = 42
@@ -582,7 +592,7 @@ const (
 func initEnvCleanup(env napi.Env) (napi.Object, error) {
 	// The hooks print to stdout, which test/env_cleanup.js reads from the child process.
 	printf := func(format string, args ...any) func() {
-		return func() { fmt.Fprintf(os.Stdout, format, args...) }
+		return func() { emit(os.Stdout, format, args...) }
 	}
 	return newExports(env, fn{"addHooks", func(c napi.CallContext) (napi.Value, error) {
 		env := c.Env()
@@ -702,10 +712,10 @@ func addonFactory(c napi.CallContext) (napi.Value, error) {
 	// ~Addon, followed by the hint when one was given (DeleteAddon).
 	err = env.SetInstanceData(addon, func(_ napi.Env, v any) {
 		if v.(*addonData).verbose {
-			fmt.Fprintln(os.Stderr, "addon_data: Addon::~Addon")
+			emit(os.Stderr, "addon_data: Addon::~Addon\n")
 		}
 		if hint != 0 {
-			fmt.Fprintf(os.Stderr, "hint: %d\n", hint)
+			emit(os.Stderr, "hint: %d\n", hint)
 		}
 	})
 	if err != nil {
