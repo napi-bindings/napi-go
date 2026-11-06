@@ -113,7 +113,9 @@ func SyntaxError(code, message string) *Error {
 type Coder interface{ JSCode() string }
 
 // Thrown is an error that, when returned from a callback, throws its Value in JS as-is (even if
-// the value is not an Error). It is valid only within the callback where the value was created.
+// the value is not an Error). It is valid only within the callback where the value was created;
+// returned from WithScope or WithEscapableScope, it is thrown before the scope closes (the
+// functions then return ErrPendingException).
 type Thrown struct{ Value Value }
 
 func (t *Thrown) Error() string { return "napi: JavaScript value thrown" }

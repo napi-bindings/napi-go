@@ -247,6 +247,7 @@ var functions = []export{
 		return napi.Value{}, nil
 	}},
 	{"scopes", scopes},
+	{"throwFromScope", throwFromScope},
 	{"runScript", func(c napi.CallContext) (napi.Value, error) {
 		src, err := c.Arg(0).GoString()
 		if err != nil {
@@ -1308,6 +1309,43 @@ func instanceData(c napi.CallContext) (napi.Value, error) {
 
 // scopes(n): creates n objects in a per-iteration scope and returns an object that escaped an
 // escapable scope.
+// scopeOverwrites is how many values throwFromScope creates after leaving the scope: enough to
+// reuse the handle slots the closed scope freed.
+const scopeOverwrites = 64
+
+// throwFromScope(message, escapable) returns from a handle scope the error napi.Throw(e), where e
+// is an Error created inside the scope, then creates more values before returning it: the thrown
+// value must still be e.
+func throwFromScope(c napi.CallContext) (napi.Value, error) {
+	env := c.Env()
+	msg, err := c.Arg(0).GoString()
+	if err != nil {
+		return napi.Value{}, err
+	}
+	escapable, err := c.Arg(1).Bool()
+	if err != nil {
+		return napi.Value{}, err
+	}
+	throwInside := func() error {
+		e, err := env.NewError(errors.New(msg))
+		if err != nil {
+			return err
+		}
+		return napi.Throw(e.Value)
+	}
+	if escapable {
+		_, err = env.WithEscapableScope(func() (napi.Value, error) { return napi.Value{}, throwInside() })
+	} else {
+		err = env.WithScope(throwInside)
+	}
+	for i := 0; i < scopeOverwrites; i++ {
+		if _, serr := env.NewString("overwritten"); serr != nil {
+			return napi.Value{}, serr
+		}
+	}
+	return napi.Value{}, err
+}
+
 func scopes(c napi.CallContext) (napi.Value, error) {
 	env := c.Env()
 	n, err := c.Arg(0).Int32()

@@ -1,6 +1,7 @@
 package napi
 
 import (
+	"errors"
 	"unsafe"
 
 	"github.com/napi-bindings/napi-go/sys"
@@ -198,12 +199,15 @@ func (r Ref) Delete() error { return check(r.env, sys.DeleteReference(r.env, r.r
 // WithScope executes fn inside a new handle scope (napi_open_handle_scope / napi_close_handle_scope):
 // any Values created within fn are released when fn returns. Use it in loops that create many
 // values. Values created inside fn must not be used after WithScope returns.
+//
+// If fn returns an error carrying a Value (napi.Throw), the value is thrown before the scope
+// closes and WithScope returns ErrPendingException: after closing, the handle would be dangling.
 func (e Env) WithScope(fn func() error) error {
 	var s sys.HandleScope
 	if err := check(e.raw, sys.OpenHandleScope(e.raw, &s)); err != nil {
 		return err
 	}
-	ferr := fn()
+	ferr := e.throwScopedValue(fn())
 	if err := check(e.raw, sys.CloseHandleScope(e.raw, s)); err != nil && ferr == nil {
 		return err
 	}
@@ -211,13 +215,15 @@ func (e Env) WithScope(fn func() error) error {
 }
 
 // WithEscapableScope executes fn inside an escapable handle scope from which the single Value
-// returned by fn is promoted to the outer scope (napi_escape_handle).
+// returned by fn is promoted to the outer scope (napi_escape_handle). Errors carrying a Value are
+// handled as in WithScope.
 func (e Env) WithEscapableScope(fn func() (Value, error)) (Value, error) {
 	var s sys.EscapableHandleScope
 	if err := check(e.raw, sys.OpenEscapableHandleScope(e.raw, &s)); err != nil {
 		return Value{}, err
 	}
 	v, ferr := fn()
+	ferr = e.throwScopedValue(ferr)
 	var escaped sys.Value
 	if ferr == nil && v.raw != nil {
 		ferr = check(e.raw, sys.EscapeHandle(e.raw, s, v.raw, &escaped))
@@ -229,6 +235,18 @@ func (e Env) WithEscapableScope(fn func() (Value, error)) (Value, error) {
 		return Value{}, ferr
 	}
 	return Value{env: e.raw, raw: escaped}, nil
+}
+
+// throwScopedValue throws err now if it carries a Value (a *Thrown), which belongs to the scope
+// about to close, and returns ErrPendingException in its place; other errors hold no handles and
+// are returned unchanged.
+func (e Env) throwScopedValue(err error) error {
+	var thrown *Thrown
+	if err == nil || !errors.As(err, &thrown) {
+		return err
+	}
+	throwError(e.raw, err)
+	return ErrPendingException
 }
 
 // ---- cleanup hook ----

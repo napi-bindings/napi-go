@@ -556,6 +556,11 @@ test('handle scopes and escapable scopes', () => {
   const SCOPE_ITERATIONS = 10_000
   assert.deepEqual({ ...A.scopes(SCOPE_ITERATIONS) }, { n: SCOPE_ITERATIONS })
   assert.deepEqual({ ...A.scopes(0) }, { n: 0 })
+  // An error carrying a value created inside the scope (napi.Throw) is thrown before the scope
+  // closes: afterwards the handle would be dangling.
+  for (const escapable of [false, true]) {
+    assert.throws(() => A.throwFromScope('from scope', escapable), (err) => err instanceof Error && err.message === 'from scope')
+  }
 })
 
 test('RunScript, versions, module file name', () => {
