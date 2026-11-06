@@ -202,14 +202,20 @@ func (e Env) NewBigIntUint64(u uint64) (BigInt, error) {
 }
 
 // NewBigIntWords creates a bigint from 64-bit words in little-endian order (least significant word
-// first) and a sign flag.
+// first) and a sign flag. No words (nil or empty) yields 0n.
 func (e Env) NewBigIntWords(negative bool, words []uint64) (BigInt, error) {
 	sign := int32(0)
 	if negative {
 		sign = 1
 	}
+	// napi_create_bigint_words rejects a NULL words pointer even when the count is 0, which is how
+	// 0n is expressed: point it at a zero word instead.
+	p := unsafe.SliceData(words)
+	if len(words) == 0 {
+		p = &zeroWord
+	}
 	var r sys.Value
-	st := sys.CreateBigIntWords(e.raw, sign, uint(len(words)), unsafe.SliceData(words), &r)
+	st := sys.CreateBigIntWords(e.raw, sign, uint(len(words)), p, &r)
 	v, err := e.value(r, st)
 	return BigInt{v}, err
 }
@@ -266,6 +272,9 @@ func (b BigInt) Big() (*big.Int, error) {
 }
 
 const wordBytes = 8
+
+// zeroWord is the words buffer passed to Node-API for 0n (it is never written).
+var zeroWord uint64
 
 func bigToWords(b *big.Int) []uint64 {
 	be := new(big.Int).Abs(b).Bytes() // big-endian

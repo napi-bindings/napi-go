@@ -182,6 +182,9 @@ test('bigint: int64, uint64, words, *big.Int', () => {
   assert.deepEqual(A.bigint(-1n, 'u64'), [2n ** 64n - 1n, false])
   for (const b of [0n, 1n, -1n, 2n ** 64n, -(2n ** 130n) - 7n, 12345678901234567890123456789n]) {
     assert.equal(A.bigint(b, 'big'), b)
+    // Words returns no words for 0n: NewBigIntWords must accept them (Node-API rejects a NULL
+    // words pointer even with a count of 0).
+    assert.equal(A.bigint(b, 'rewords'), b)
   }
   assert.deepEqual(A.bigint(0n, 'words'), [0, false])
   assert.deepEqual(A.bigint(-(2n ** 64n), 'words'), [2, true])
@@ -553,6 +556,11 @@ test('handle scopes and escapable scopes', () => {
   const SCOPE_ITERATIONS = 10_000
   assert.deepEqual({ ...A.scopes(SCOPE_ITERATIONS) }, { n: SCOPE_ITERATIONS })
   assert.deepEqual({ ...A.scopes(0) }, { n: 0 })
+  // An error carrying a value created inside the scope (napi.Throw) is thrown before the scope
+  // closes: afterwards the handle would be dangling.
+  for (const escapable of [false, true]) {
+    assert.throws(() => A.throwFromScope('from scope', escapable), (err) => err instanceof Error && err.message === 'from scope')
+  }
 })
 
 test('RunScript, versions, module file name', () => {
