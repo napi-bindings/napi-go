@@ -164,6 +164,7 @@ jobs:
     # open) and checks ahead of time that the fix is enough for napi-go: there the known error is
     # a failure too. For c-shared builds the CL already picks the general dynamic model
     # (-tls=auto), so the addon build stays the same.
+    # The tests of that variant run with GODEBUG=asyncpreemptoff=1: see the Test e2e step.
     name: alpine (musl) · node ${{ matrix.node }} · go ${{ matrix.go }}
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.go == 'cl696635' }}   # an unmerged CL can break: it does not block the pipeline
@@ -222,4 +223,12 @@ jobs:
           fi
       - name: Test e2e
         if: steps.probe.outputs.loaded == 'true'
+        env:
+          # CL 696635 (patchset 4) loads g on amd64 with pushq %rax; leaq; call *(%rax); movq; popq
+          # %rax, without updating the SP delta tables or marking the sequence unsafe for async
+          # preemption: a goroutine preempted between push and pop makes the GC unwinder read the
+          # saved BP as return PC ("unexpected return pc", fatal). Reproduced on glibc too. The
+          # variant must test what napi-go needs (dlopen on musl and the e2e tests), so async
+          # preemption is disabled there until the CL is fixed. Remove when a new patchset fixes it.
+          GODEBUG: ${{ matrix.go == 'cl696635' && 'asyncpreemptoff=1' || '' }}
         run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs

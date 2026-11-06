@@ -23,8 +23,13 @@ type export struct {
 	fn   jsFunc
 }
 
-// hintExternal distinguishes finalizers for Externals created by makeExternals.
-const hintExternal = 1
+// Finalize hints: they tell apart the finalizers sharing the FinalizeHandler.
+const (
+	// hintExternal: Externals created by makeExternals.
+	hintExternal = 1
+	// hintTSFN: threadsafe functions created by tsfnCollect (data is the tsfnLife id).
+	hintTSFN = 2
+)
 
 // addonName is overridden with -ldflags=-X to build distinct copies of the same addon (two Go
 // runtimes in the same process).
@@ -104,9 +109,12 @@ func init() {
 	sys.SetCallbackHandler(func(env sys.Env, _ sys.CallbackInfo, data uintptr, this sys.Value, args []sys.Value) sys.Value {
 		return exports[data].fn(env, this, args)
 	})
-	sys.SetFinalizeHandler(func(_ sys.Env, _, hint uintptr) {
-		if hint == hintExternal {
+	sys.SetFinalizeHandler(func(_ sys.Env, data, hint uintptr) {
+		switch hint {
+		case hintExternal:
 			finalized.Add(1)
+		case hintTSFN:
+			finalizeTSFN(data)
 		}
 	})
 	sys.SetCallJSHandler(onCallJS)
@@ -426,24 +434,77 @@ func callMe(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	return result
 }
 
+// tsfnLife guards a threadsafe function against its destruction. When the env is torn down
+// (worker terminated, process exiting) Node finalizes and frees the TSFN even if threads still
+// hold it: calling it afterwards is a use-after-free. The finalizer marks it dead under the
+// write lock; the goroutine holds the read lock across each call and stops once it is dead.
+type tsfnLife struct {
+	mu   sync.RWMutex
+	dead bool
+}
+
+var (
+	tsfnLivesMu sync.Mutex
+	tsfnLives   = map[uintptr]*tsfnLife{}
+	tsfnSeq     uintptr
+)
+
+// finalizeTSFN runs on the JS thread when Node destroys the threadsafe function: it waits for an
+// in-flight call to return and prevents any further one.
+func finalizeTSFN(id uintptr) {
+	tsfnLivesMu.Lock()
+	life := tsfnLives[id]
+	delete(tsfnLives, id)
+	tsfnLivesMu.Unlock()
+	if life == nil {
+		return
+	}
+	life.mu.Lock()
+	life.dead = true
+	life.mu.Unlock()
+}
+
+// whileAlive runs f with the TSFN alive and reports false once the TSFN has been destroyed.
+func (l *tsfnLife) whileAlive(f func() sys.Status) (sys.Status, bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.dead {
+		return sys.StatusClosing, false
+	}
+	return f(), true
+}
+
 // tsfnCollect(n, cb): a goroutine calls cb(0..n-1) through a threadsafe function.
 func tsfnCollect(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	n, ok := argNum(env, args, 0)
 	if !ok || n < 0 || len(args) < 2 {
 		return throwType(env, "tsfnCollect(n, cb)")
 	}
+	life := &tsfnLife{}
+	tsfnLivesMu.Lock()
+	tsfnSeq++
+	id := tsfnSeq
+	tsfnLives[id] = life
+	tsfnLivesMu.Unlock()
 	var tsfn sys.ThreadsafeFunction
-	must(sys.CreateThreadsafeFunction(env, args[1], nil, newStr(env, "tsfnCollect"), 0, 1,
-		0, nil, 0, sys.CallJSTrampoline, &tsfn))
+	if st := sys.CreateThreadsafeFunction(env, args[1], nil, newStr(env, "tsfnCollect"), 0, 1,
+		id, sys.FinalizeTrampoline, hintTSFN, sys.CallJSTrampoline, &tsfn); st != sys.StatusOK {
+		finalizeTSFN(id)
+		must(st)
+	}
 	count := int(n)
 	go func() {
 		for i := 0; i < count; i++ {
-			if st := sys.CallThreadsafeFunction(tsfn, uintptr(i), sys.TSFNBlocking); st != sys.StatusOK {
+			st, alive := life.whileAlive(func() sys.Status { return sys.CallThreadsafeFunction(tsfn, uintptr(i), sys.TSFNBlocking) })
+			if !alive {
+				return // destroyed with the env: it must not be released either
+			}
+			if st != sys.StatusOK {
 				tsfnErrors.Add(1) // e.g. StatusClosing: TSFN closing because the env was torn down
 				break
 			}
 		}
-		if st := sys.ReleaseThreadsafeFunction(tsfn, sys.TSFNRelease); st != sys.StatusOK {
+		if st, alive := life.whileAlive(func() sys.Status { return sys.ReleaseThreadsafeFunction(tsfn, sys.TSFNRelease) }); alive && st != sys.StatusOK {
 			tsfnErrors.Add(1)
 		}
 	}()
