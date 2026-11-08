@@ -37,7 +37,8 @@ go build -buildmode=c-shared -o add.node .
 node -e "console.log(require('./add.node').add(1, 2))"
 ```
 
-Complete example covering all parts of the API: `tests/e2e/addons/napibasic`. The node-addon-api
+Complete example covering all parts of the API: `tests/e2e/addons/napibasic`; the concurrency
+APIs: `tests/e2e/addons/napiasync`. The node-addon-api
 test suite ported to napi (`tests/addonapisuite`) checks that napi behaves like node-addon-api.
 
 ## Contents
@@ -50,6 +51,9 @@ test suite ported to napi (`tests/addonapisuite`) checks that napi behaves like 
 | `object.go` | `Object` and properties (string key, value, index), keys, prototype, freeze/seal, `Array`, `Property` and `DefineProperties` |
 | `function.go` | `Callback`, `CallContext`, `Function` (`NewFunction`, `Call`, `New`), callback table |
 | `class.go` | `DefineClass`, `Promise`/`Deferred` on the JS thread |
+| `dispatcher.go` | per-env dispatcher (one threadsafe function, coalesced Go queue), `Env.Context`, `Ref.DeleteLater` |
+| `async.go` | `Env.Async`, `Resolver`: Promises settled from goroutines |
+| `tsfn.go` | `ThreadsafeFunction[T]`, `CallMode`, `ErrClosing`, `ErrQueueFull` |
 | `lifecycle.go` | finalizers, `Wrap`/`Unwrap`/`UnwrapAs`, type tags (objects and externals), `External`, `Ref`, handle scopes, cleanup hooks |
 | `buffer.go` | `Buffer`, `ArrayBuffer` (including external, zero-copy), `TypedArray`, `DataView` |
 | `errors.go` | `Error`, `ErrPendingException`, `TypeError`/`RangeError`/`SyntaxError`, `Throw`, throwing rules, `Env.Check` for statuses from `sys` |
@@ -109,10 +113,39 @@ allowed (`napi_no_external_buffers_allowed`: V8 sandbox, Electron) they fall bac
 
 ## Threading
 
-Everything must be called on the env's JS thread, inside a callback or `Init`. `Env`, `Value`, and `Ref`
-must not be used from other goroutines. APIs for working from goroutines (Promises resolved from
-goroutines, typed threadsafe functions, releasing Refs from other threads) are planned for
-Phase 3.
+Everything except the APIs listed below must be called on the env's JS thread, inside a callback,
+`Init`, or code those run (a `Resolver`, a `callJS`, a finalizer). `Env`, `Value`, and `Ref` must
+not be used from other goroutines. To work from goroutines:
+
+| API | Use |
+|---|---|
+| `Env.Async(work)` | returns a Promise settled by `work`, which runs in a goroutine without `Env` and returns a `Resolver` that builds the result on the JS thread (napi-rs `AsyncTask` / `async fn`). Errors and panics reject it; the event loop stays alive until it settles |
+| `Env.Context()` | a `context.Context` canceled when the env is destroyed (worker terminated, process exiting): goroutines started for the env should stop |
+| `NewThreadsafeFunction[T](env, fn, callJS, opts)` | goroutines `Call(v T, Blocking/NonBlocking)`; `callJS` converts `v` and calls `fn` on the JS thread (`Napi::TypedThreadSafeFunction`). `Acquire`/`Release`/`Abort` from any goroutine, `Ref`/`Unref` on the JS thread |
+| `Ref.DeleteLater()` | deletes a reference from any goroutine (queued on the JS thread) |
+
+How it works and what it guarantees:
+
+- **One dispatcher per env.** Each env (main thread, worker) has one `napi_threadsafe_function`,
+  unref'd, and a Go queue of closures: a burst of results from goroutines costs one Node-API call
+  (the call is made only when the queue goes from empty to non-empty). `Async` keeps the event
+  loop alive while work is pending. A closure that throws ends its batch, and the remaining
+  closures run on the next call.
+- **Destroyed envs.** When the env is destroyed, `Env.Context()` is canceled and pending Promises
+  are dropped (nobody can observe them). The methods of a `ThreadsafeFunction` then return
+  `ErrClosing`: calls hold a read lock that the finalizer takes for writing, so a goroutine can
+  never call a function Node has already freed.
+- **Closed functions.** After the last `Release`, or after `Abort`, every method returns
+  `ErrClosing`. Node-API itself keeps accepting calls until the JS thread notices, and reports
+  `napi_invalid_arg` after an abort.
+- **Blocking calls.** Node wakes a thread blocked on a full queue with a single
+  `cond->Signal`, and only when it pops from a full queue or closes the function
+  (`src/node_api.cc`): with several threads blocked at once, wake-ups are lost. `Call` first tries
+  without blocking. If the queue is full, goroutines wait for room one at a time.
+- **Errors in `callJS`.** An error or panic in `callJS` is thrown on the JS thread. Node reports
+  it as an uncaught exception for modules declaring Node-API 10 (`napi_go_v10`) or with
+  `--force-node-api-uncaught-exceptions-policy=true`. Otherwise it emits the DEP0168 warning and
+  drops it.
 
 ## Current limitations
 
@@ -120,7 +153,10 @@ Phase 3.
   must not call functions that execute JS (`node_api_post_finalizer` is not exposed yet).
 - `DefineClass` creates base classes: inheriting from a native class works from JS
   (`class Sub extends Counter`), not between classes defined in Go.
-- Async context, `MakeCallback`, async work, and threadsafe functions are currently available only in `sys`.
+- Async context, `MakeCallback` and `napi_async_work` (the libuv thread pool) are available only in
+  `sys`; `Env.Async` runs work in goroutines.
+- A `ThreadsafeFunction` call cannot return the result of the JS function to the goroutine yet
+  (planned with the Layer 2 conversions); pass a channel in the queued value.
 - A class defined with `DefineClass` always throws a TypeError when called without `new`; there
   is no hook to make it act as a factory (node-addon-api's `ObjectWrap::OnCalledAsFunction`).
 - `NewSymbol` always sets a description: `Symbol()` without one has no counterpart.

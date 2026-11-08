@@ -561,6 +561,13 @@ test('handle scopes and escapable scopes', () => {
   for (const escapable of [false, true]) {
     assert.throws(() => A.throwFromScope('from scope', escapable), (err) => err instanceof Error && err.message === 'from scope')
   }
+  // A panic inside a scope: the scope is closed before the panic becomes a GO_PANIC error, or
+  // Node aborts (open handle scope check). Run in a child, which would die otherwise.
+  const r = nodeEval(`const a = require(${JSON.stringify(addonPath('napibasic'))});
+    const codes = [false, true].map((escapable) => { try { a.panicInScope(escapable) } catch (e) { return e.code } })
+    process.stdout.write(JSON.stringify({ codes, after: a.add(1, 2) }))`)
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(lastJSONLine(r), { codes: ['GO_PANIC', 'GO_PANIC'], after: 3 })
 })
 
 test('RunScript, versions, module file name', () => {

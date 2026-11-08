@@ -49,8 +49,10 @@
 // # Threading
 //
 // All napi functions must be called on the env's JS thread, inside a callback or during
-// module initialization; Env and Value must not be passed to goroutines. Asynchronous APIs
-// (goroutines resolving Promises, typed threadsafe functions) are planned for Phase 3.
+// module initialization; Env and Value must not be passed to goroutines. Goroutines reach the
+// JS thread through Env.Async (a Promise settled by work running in a goroutine), typed
+// threadsafe functions (NewThreadsafeFunction) and Ref.DeleteLater; Env.Context is canceled
+// when the env is destroyed.
 //
 // # Go values passed to JS
 //
