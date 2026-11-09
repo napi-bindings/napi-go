@@ -16,9 +16,12 @@ export const hostNapiVersion = Number(process.versions.napi)
 const CHILD_TIMEOUT_MS = 60_000
 
 // nodeEval runs code in a separate Node process and returns its result. When the timeout expires,
-// the child receives SIGKILL because a wedged process may ignore SIGTERM.
-export function nodeEval (code, { nodeArgs = [], timeout = CHILD_TIMEOUT_MS } = {}) {
-  const r = spawnSync(process.execPath, [...nodeArgs, '-e', code], { encoding: 'utf8', timeout, killSignal: 'SIGKILL' })
+// the child receives SIGKILL because a wedged process may ignore SIGTERM. env adds variables to
+// the child's environment.
+export function nodeEval (code, { nodeArgs = [], timeout = CHILD_TIMEOUT_MS, env } = {}) {
+  const r = spawnSync(process.execPath, [...nodeArgs, '-e', code], {
+    encoding: 'utf8', timeout, killSignal: 'SIGKILL', env: env ? { ...process.env, ...env } : undefined,
+  })
   if (r.error) throw r.error
   return r
 }

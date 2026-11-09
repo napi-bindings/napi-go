@@ -59,8 +59,7 @@ func requireNew(name string, fn Callback) Callback {
 type Promise struct{ Object }
 
 // Deferred resolves or rejects the Promise created by NewPromise (napi_deferred). It may be used
-// only once and only on the env's JS thread; settling a Promise from a goroutine requires the
-// asynchronous APIs (Phase 3).
+// only once and only on the env's JS thread; to settle a Promise from a goroutine, use Env.Async.
 type Deferred struct {
 	env sys.Env
 	raw sys.Deferred

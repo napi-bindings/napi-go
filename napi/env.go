@@ -1,6 +1,7 @@
 package napi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -50,8 +51,17 @@ const noEntryPointMessage = "Module has no declared entry point."
 
 // envState holds the per-env state for napi, reachable from Node-API via napi_instance_data.
 type envState struct {
+	env               sys.Env
 	instanceData      any
 	instanceFinalizer FinalizeFunc
+
+	// Concurrency (dispatcher.go): the dispatcher and its threadsafe function, the env context
+	// and the number of holds keeping the event loop alive (JS thread only).
+	dispatcher *dispatcher
+	tsfn       sys.ThreadsafeFunction
+	ctx        context.Context
+	cancel     context.CancelFunc
+	holds      int
 }
 
 var envStates table[envState]
@@ -86,17 +96,26 @@ func registerModule(env sys.Env, exports sys.Value) sys.Value {
 // attachEnvState creates the env state and attaches it via napi_set_instance_data: Node invokes
 // the finalizer when the env is destroyed (on process exit or worker termination).
 func attachEnvState(env sys.Env) error {
-	st := &envState{}
+	st := &envState{env: env}
+	if err := startDispatcher(env, st); err != nil {
+		return err
+	}
 	id := envStates.add(st)
 	fid := handles.add(&handle{onFinalize: func(e Env, _ any) {
 		s := envStates.remove(id)
-		if s != nil && s.instanceFinalizer != nil {
+		if s == nil {
+			return
+		}
+		s.closeEnv(env)
+		if s.instanceFinalizer != nil {
 			s.instanceFinalizer(e, s.instanceData)
 		}
 	}})
 	if err := check(env, sys.SetInstanceData(env, id, sys.FinalizeTrampoline, fid)); err != nil {
 		handles.remove(fid)
 		envStates.remove(id)
+		// Node finalizes the dispatcher's threadsafe function with the env.
+		st.closeEnv(env)
 		return err
 	}
 	return nil
@@ -158,8 +177,13 @@ func init() {
 	sys.SetCleanupHookHandler(dispatchCleanupHook)
 }
 
-// dispatchFinalize receives the hint (an ID in handles) for all napi finalizers.
-func dispatchFinalize(env sys.Env, _, hint uintptr) {
+// dispatchFinalize receives the hint (an ID in handles) for all napi finalizers, except those of
+// threadsafe functions, whose hint is their context (see tsfnEntry).
+func dispatchFinalize(env sys.Env, data, hint uintptr) {
+	if data == tsfnFinalizeData {
+		finalizeTSFN(env, hint)
+		return
+	}
 	h := handles.remove(hint)
 	if h != nil && h.onFinalize != nil {
 		h.onFinalize(Env{raw: env}, h.value)

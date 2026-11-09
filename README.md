@@ -3,8 +3,9 @@
 Go bindings for [Node-API](https://nodejs.org/api/n-api.html) (N-API): build native Node.js addons
 (`.node`) in Go, modeled after [napi-rs](https://napi.rs).
 
-> **Status:** under development. Phase 0 (feasibility spike), Phase 1 (Layer 0) and Phase 2
-> (Layer 1) are complete; Phase 3 (concurrency) is next.
+> **Status:** under development. Phase 0 (feasibility spike), Phase 1 (Layer 0), Phase 2
+> (Layer 1) and Phase 3 (concurrency: Promises from goroutines, typed threadsafe functions) are
+> complete; Phase 4 (Layer 2 framework) is next.
 
 | Path | Contents |
 |---|---|

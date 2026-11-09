@@ -202,12 +202,23 @@ func (r Ref) Delete() error { return check(r.env, sys.DeleteReference(r.env, r.r
 //
 // If fn returns an error carrying a Value (napi.Throw), the value is thrown before the scope
 // closes and WithScope returns ErrPendingException: after closing, the handle would be dangling.
+// If fn panics, the scope is closed and the panic goes on.
 func (e Env) WithScope(fn func() error) error {
 	var s sys.HandleScope
 	if err := check(e.raw, sys.OpenHandleScope(e.raw, &s)); err != nil {
 		return err
 	}
+	closed := false
+	defer func() {
+		if !closed {
+			// fn panicked: close the scope before the panic leaves it, or Node aborts when the
+			// callback returns with a scope still open. The status is dropped: the panic carries
+			// on, and closing fails only for an invalid env or scope.
+			sys.CloseHandleScope(e.raw, s)
+		}
+	}()
 	ferr := e.throwScopedValue(fn())
+	closed = true
 	if err := check(e.raw, sys.CloseHandleScope(e.raw, s)); err != nil && ferr == nil {
 		return err
 	}
@@ -222,12 +233,19 @@ func (e Env) WithEscapableScope(fn func() (Value, error)) (Value, error) {
 	if err := check(e.raw, sys.OpenEscapableHandleScope(e.raw, &s)); err != nil {
 		return Value{}, err
 	}
+	closed := false
+	defer func() {
+		if !closed {
+			sys.CloseEscapableHandleScope(e.raw, s) // fn panicked: see WithScope (status dropped)
+		}
+	}()
 	v, ferr := fn()
 	ferr = e.throwScopedValue(ferr)
 	var escaped sys.Value
 	if ferr == nil && v.raw != nil {
 		ferr = check(e.raw, sys.EscapeHandle(e.raw, s, v.raw, &escaped))
 	}
+	closed = true
 	if err := check(e.raw, sys.CloseEscapableHandleScope(e.raw, s)); err != nil && ferr == nil {
 		return Value{}, err
 	}

@@ -248,6 +248,7 @@ var functions = []export{
 	}},
 	{"scopes", scopes},
 	{"throwFromScope", throwFromScope},
+	{"panicInScope", panicInScope},
 	{"runScript", func(c napi.CallContext) (napi.Value, error) {
 		src, err := c.Arg(0).GoString()
 		if err != nil {
@@ -1344,6 +1345,20 @@ func throwFromScope(c napi.CallContext) (napi.Value, error) {
 		}
 	}
 	return napi.Value{}, err
+}
+
+// panicInScope(escapable) panics inside a handle scope: the scope must be closed before the
+// panic reaches the callback trampoline, which turns it into a GO_PANIC error.
+func panicInScope(c napi.CallContext) (napi.Value, error) {
+	env := c.Env()
+	escapable, err := c.Arg(0).Bool()
+	if err != nil {
+		return napi.Value{}, err
+	}
+	if escapable {
+		return env.WithEscapableScope(func() (napi.Value, error) { panic("panic in escapable scope") })
+	}
+	return napi.Value{}, env.WithScope(func() error { panic("panic in scope") })
 }
 
 func scopes(c napi.CallContext) (napi.Value, error) {
