@@ -33,10 +33,11 @@ Complete example: `tests/e2e/addons/sysbasic`.
 | `handlers.go` | C → Go entry trampolines and handlers, `//export` |
 | `version_*.go` | declared Node-API version, per build tag |
 | `loader.c` | runtime symbol resolution from the host process (`dlsym` / `GetProcAddress`) |
-| `module.c` | `NAPI_MODULE_INIT`: symbol loading, runtime guard, module registration, signal handler repair |
+| `module.c` | `NAPI_MODULE_INIT`: symbol loading, runtime guard, module registration, signal handler repair and `SA_ONSTACK` hook |
 | `trampoline.c` | C trampolines (callbacks, finalizers, TSFN, async work, cleanup hooks) |
 | `guard.c` | guard against a second Go runtime on the same thread (macOS x64 only) |
 | `sigfix.c` | restores `SA_RESETHAND` on `node::SignalExit` (macOS) |
+| `onstack.c` | adds `SA_ONSTACK` to the signal handlers Node/libuv install after the module loads (Linux, GOT hook of `sigaction`) |
 
 To regenerate: `go generate ./sys`. CI verifies that generated files are up to date with
 `go run ./internal/gen -check`. Decisions that cannot be inferred from the headers (parameter

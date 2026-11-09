@@ -48,6 +48,9 @@ static inline void gn_leave(void) {}
 /* sigfix.c: restores SA_RESETHAND on Node's signal handlers (macOS). */
 void gn_repair_node_signal_handlers(void);
 
+/* onstack.c: adds SA_ONSTACK to the signal handlers installed after the module loads (Linux). */
+void gn_install_onstack_hook(void);
+
 /* pin.c: keeps the module mapped in memory until process exit (worker dlclose on macOS). */
 void gn_pin_module(void);
 
