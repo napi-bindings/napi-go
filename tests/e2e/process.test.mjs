@@ -4,7 +4,8 @@
 // Phase 0 spike.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
+import { readdirSync, readFileSync } from 'node:fs'
 import { constants } from 'node:os'
 import { load, addonPath, isWin, nodeEval, lastJSONLine, signalChild } from './helpers.mjs'
 
@@ -73,36 +74,86 @@ test('child processes work with the addon loaded and the Go runtime busy (SIGCHL
 
 const isLinux = process.platform === 'linux'
 const FLOOD_BURN_MS = 2000
-const FLOOD_BATCHES = 300
+const FLOOD_MS = 1500
 const SIGNALS_PER_BATCH = 20
+// The child stops itself with a report after WATCHDOG_MS (Go timer); if even that cannot run,
+// the parent records the child's threads from /proc after PARENT_TIMEOUT_MS and kills it.
+const WATCHDOG_MS = 30_000
+const PARENT_TIMEOUT_MS = 45_000
+
+// procThreads describes the threads of process pid from /proc: what each one is blocked on.
+function procThreads (pid) {
+  const dir = `/proc/${pid}/task`
+  const read = (path) => {
+    try {
+      return readFileSync(path, 'utf8').trim()
+    } catch (e) {
+      return `error: ${e.code}`
+    }
+  }
+  try {
+    return readdirSync(dir).map((tid) => {
+      const status = read(`${dir}/${tid}/status`)
+      const field = (key) => (status.match(new RegExp(`^${key}:\\s*(.*)$`, 'm')) || [])[1]
+      return `thread ${tid} name=${field('Name')} state=${field('State')} wchan=${read(`${dir}/${tid}/wchan`)} syscall=${read(`${dir}/${tid}/syscall`)}`
+    }).join('\n')
+  } catch (e) {
+    return `threads: ${e.code}`
+  }
+}
+
+// runWatched runs code in a child Node process. If it is still running after timeoutMs, its
+// threads are recorded (threads) before it is killed.
+function runWatched (code, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['-e', code], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    let threads = ''
+    child.stdout.on('data', (d) => { stdout += d })
+    child.stderr.on('data', (d) => { stderr += d })
+    child.on('error', reject)
+    const timer = setTimeout(() => {
+      threads = procThreads(child.pid)
+      child.kill('SIGKILL')
+    }, timeoutMs)
+    child.on('close', (status, signal) => {
+      clearTimeout(timer)
+      resolve({ status, signal, stdout, stderr, threads })
+    })
+  })
+}
 
 // libuv installs its handlers (SIGCHLD on the first child process, any signal with a JS listener)
 // without SA_ONSTACK: delivered to a Go thread, the signal frame would be written on a goroutine
 // stack and overrun it (sys/onstack.c). tgkill sends the signal to every thread, Go threads
 // included, which a process-directed signal reaches only by chance; the child process crashes
 // within a few batches without the fix. SIGWINCH is ignored by default, so a signal still pending
-// when Node resets its handlers at exit does no harm.
-test('signal handlers installed after load use the alternate stack; signals on Go threads are safe', { skip: !isLinux && 'tgkill and the GOT hook are Linux only' }, () => {
+// when Node resets its handlers at exit does no harm. The child process used to check SIGCHLD is
+// reaped before the flood, so that its SIGCHLD does not compete with it.
+test('signal handlers installed after load use the alternate stack; signals on Go threads are safe', { skip: !isLinux && 'tgkill and the GOT hook are Linux only' }, async () => {
   const { SIGWINCH, SIGCHLD } = constants.signals
-  const r = nodeEval(`const a = require(${ADDON});
+  const r = await runWatched(`const a = require(${ADDON});
+    a.watchdog(${WATCHDOG_MS});
     const { spawn } = require('node:child_process');
     let handled = 0;
     process.on('SIGWINCH', () => { handled++ });
     // libuv keeps its SIGCHLD handler while a child process is alive.
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, ${SETTLE_MS})']);
     const flags = { winch: a.onStack(${SIGWINCH}), chld: a.onStack(${SIGCHLD}) };
-    child.kill();
-    a.burnCPU(${FLOOD_BURN_MS});
-    (async () => {
+    child.once('exit', async () => {
+      a.burnCPU(${FLOOD_BURN_MS});
       let sent = 0;
-      for (let b = 0; b < ${FLOOD_BATCHES}; b++) {
+      const until = Date.now() + ${FLOOD_MS};
+      while (Date.now() < until) {
         for (let i = 0; i < ${SIGNALS_PER_BATCH}; i++) sent += a.signalThreads(${SIGWINCH});
         await new Promise((resolve) => setImmediate(resolve));
       }
       while (a.burning() > 0) await new Promise((resolve) => setTimeout(resolve, ${SETTLE_MS}));
       process.stdout.write(JSON.stringify({ ...flags, sent, handled }));
-    })()`)
-  assert.equal(r.status, 0, `signal=${r.signal} stderr=${r.stderr}`)
+    });
+    child.kill();`, PARENT_TIMEOUT_MS)
+  assert.equal(r.status, 0, `signal=${r.signal}\nstderr=${r.stderr}\n${r.threads}`)
   const out = lastJSONLine(r)
   assert.equal(out.winch, true, 'the SIGWINCH handler of process.on lacks SA_ONSTACK')
   assert.equal(out.chld, true, 'the SIGCHLD handler of child_process lacks SA_ONSTACK')

@@ -105,3 +105,14 @@ func onStack(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	}
 	return newBool(env, flags&saOnStack != 0)
 }
+
+// watchdog(ms) stops the process after ms milliseconds with a report of its threads and
+// goroutines on stderr and exit code 70 (Linux only; a no-op elsewhere).
+func watchdog(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
+	ms, ok := argNum(env, args, 0)
+	if !ok || ms <= 0 {
+		return throwType(env, "watchdog(ms)")
+	}
+	startWatchdog(time.Duration(ms * float64(time.Millisecond)))
+	return undefined(env)
+}

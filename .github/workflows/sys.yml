@@ -1,12 +1,13 @@
-# Layer 0 (package sys) and Layer 1 (package napi): code generator, Go unit tests, and
-# end-to-end tests with Node.js.
+# Layer 0 (package sys), Layers 1 and 2 (package napi) and the code generator (cmd/napi-go-gen):
+# generated files, Go unit tests, and end-to-end tests with Node.js.
 #
 #   generate    up-to-date generated files, gofmt, go vet, and go test across all version build tags,
-#               plus go test -race on package napi
+#               plus go test -race on package napi and the tests of napi-go-gen
 #   e2e         test addons + node:test on Linux x64/arm64, macOS arm64/x64, Windows (gcc),
 #               followed by the Node.js test suite ported to sys (tests/nodesuite) and the
 #               node-addon-api test suite ported to napi (tests/addonapisuite)
-#   cgocheck2   e2e, nodesuite and addonapisuite with GOEXPERIMENT=cgocheck2 (cgo pointer checks)
+#   cgocheck2   e2e, nodesuite and addonapisuite with GOEXPERIMENT=cgocheck2 (cgo pointer checks);
+#               it also type-checks the generated TypeScript declarations with tsc
 #   windows-zig e2e, nodesuite and addonapisuite on Windows built with zig cc
 #   alpine      musl sentinel: known Go limit, checked with a dlopen probe (see the job)
 name: sys
@@ -46,13 +47,15 @@ jobs:
       - name: Layer 2 wrappers up to date
         working-directory: napi
         run: go run ./internal/genwrappers -check
+      - name: Annotated test addon up to date (napi-go-gen)
+        run: go run ./cmd/napi-go-gen -check -name codegen tests/e2e/addons/codegen
       - name: gofmt
-        run: test -z "$(gofmt -l sys napi tests)" || (gofmt -l sys napi tests && exit 1)
+        run: test -z "$(gofmt -l sys napi cmd tests)" || (gofmt -l sys napi cmd tests && exit 1)
       - name: go vet (all version build tags)
         run: |
           for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             echo "== tags: ${tags:-default}"
-            go vet -tags "$tags" ./sys/... ./napi/... ./tests/...
+            go vet -tags "$tags" ./sys/... ./napi/... ./cmd/... ./tests/...
           done
       - name: go test (all version build tags)
         run: |
@@ -61,6 +64,8 @@ jobs:
           done
       - name: go test -race (napi)
         run: go test -count=1 -race ./napi/...
+      - name: go test (napi-go-gen)
+        run: go test -count=1 ./cmd/...
 
   e2e:
     name: ${{ matrix.os }} · node ${{ matrix.node }} · go ${{ matrix.go }}
@@ -121,7 +126,12 @@ jobs:
       - run: node tests/e2e/build.mjs
         env:
           GOEXPERIMENT: cgocheck2
+      # The codegen test type-checks the generated declarations: here tsc is required, elsewhere
+      # the test is skipped when tsc is not installed.
+      - run: npm install --global typescript@6.0.3
       - run: node --test --test-timeout=180000 --test-reporter=spec tests/e2e/*.test.mjs
+        env:
+          NAPI_GO_REQUIRE_TSC: '1'
       - run: node tests/nodesuite/run.mjs
         env:
           GOEXPERIMENT: cgocheck2
