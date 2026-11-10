@@ -45,6 +45,49 @@ static inline int gn_enter(void) { return 1; }
 static inline void gn_leave(void) {}
 #endif
 
+/* typed.c: typed callback trampoline (Layer 2). Argument and result kinds: */
+enum {
+  GN_TK_VALUE = 0, /* a napi_value converted in Go */
+  GN_TK_F64 = 1,   /* number (double) */
+  GN_TK_BOOL = 2,  /* boolean */
+  GN_TK_STR = 3,   /* UTF-8 string in a C buffer */
+  GN_TK_I32 = 4,   /* result only: napi_create_int32 */
+  GN_TK_U32 = 5    /* result only: napi_create_uint32 */
+};
+/* Size of the stack buffers holding the input strings (shared) and the result string. */
+#define GN_TYPED_STRBUF 512
+/* gn_typed_sig flags */
+#define GN_TF_UNWRAP_THIS 1 /* methods: C reads the native object wrapped by this (napi_unwrap) */
+typedef struct {
+  uintptr_t id; /* entry in the Go table of typed functions */
+  int32_t nargs;
+  int32_t flags;
+  int32_t kinds[GN_INLINE_ARGS];
+} gn_typed_sig;
+/* One argument; the double comes first so that Go and C agree on the layout on every ABI. */
+typedef struct {
+  double f64;
+  const char* sp;
+  size_t sn;
+  napi_value v;
+  int32_t kind;
+  int32_t b;
+} gn_typed_arg;
+/* The result: Go sets kind and the matching field, or copies a string into buf (cap bytes). */
+typedef struct {
+  double f64;
+  char* buf;
+  size_t cap;
+  size_t sn;
+  int32_t kind;
+  int32_t b;
+  int32_t i32;
+  uint32_t u32;
+} gn_typed_out;
+napi_value gn_typed_callback(napi_env env, napi_callback_info info);
+uintptr_t gn_typed_sig_new(uintptr_t id, int32_t flags, int32_t nargs, const int32_t* kinds);
+void gn_typed_sig_free(uintptr_t s);
+
 /* sigfix.c: restores SA_RESETHAND on Node's signal handlers (macOS). */
 void gn_repair_node_signal_handlers(void);
 

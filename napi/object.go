@@ -244,6 +244,11 @@ type Property struct {
 	Setter     Callback
 	Value      Value
 	Attributes PropertyAttributes
+
+	// Layer 2 (classdef.go): a typed method or accessor, and the definition whose parameter
+	// kinds C converts.
+	typed      *typedEntry
+	typedKinds *funcDef
 }
 
 // DefineProperties defines properties on o (napi_define_properties). Any callbacks remain
@@ -253,25 +258,25 @@ func (o Object) DefineProperties(props ...Property) error {
 		return nil
 	}
 	env := Env{raw: o.env}
-	descs, ids, err := env.descriptors(props)
+	descs, res, err := env.descriptors(props)
 	if err != nil {
 		return err
 	}
 	if err := check(o.env, sys.DefineProperties(o.env, o.raw, uint(len(descs)), &descs[0])); err != nil {
-		releaseCallbacks(ids)
+		res.release()
 		return err
 	}
-	return env.releaseCallbacksWith(o, ids)
+	return env.releaseWith(o, res)
 }
 
 // descriptors converts props into Node-API property descriptors and registers their callbacks. If
 // an error occurs, any already-registered callbacks are released.
-func (e Env) descriptors(props []Property) ([]sys.PropertyDescriptor, []uintptr, error) {
+func (e Env) descriptors(props []Property) ([]sys.PropertyDescriptor, resources, error) {
 	descs := make([]sys.PropertyDescriptor, len(props))
-	var ids []uintptr
-	fail := func(err error) ([]sys.PropertyDescriptor, []uintptr, error) {
-		releaseCallbacks(ids)
-		return nil, nil, err
+	var res resources
+	fail := func(err error) ([]sys.PropertyDescriptor, resources, error) {
+		res.release()
+		return nil, resources{}, err
 	}
 	for i := range props {
 		p := &props[i]
@@ -287,12 +292,29 @@ func (e Env) descriptors(props []Property) ([]sys.PropertyDescriptor, []uintptr,
 		}
 		d.Attributes = p.Attributes
 		switch {
+		case p.typed != nil:
+			// Layer 2: a method or accessor on the typed trampoline.
+			tr, err := newTyped(p.typed, p.typedKinds)
+			if err != nil {
+				return fail(err)
+			}
+			res.typed = append(res.typed, tr)
+			d.Data = uintptr(tr.sig)
+			switch {
+			case p.typed.fn != nil:
+				d.Method = sys.TypedCallbackTrampoline
+			default:
+				d.Getter = sys.TypedCallbackTrampoline
+				if p.typed.set != nil {
+					d.Setter = sys.TypedCallbackTrampoline
+				}
+			}
 		case p.Method != nil:
 			if p.Getter != nil || p.Setter != nil || p.Value.raw != nil {
 				return fail(TypeError("", "property "+p.Name+": Method excludes Getter, Setter and Value"))
 			}
 			id := registerCallback(p.Method)
-			ids = append(ids, id)
+			res.cbs = append(res.cbs, id)
 			d.Method, d.Data = sys.CallbackTrampoline, id
 		case p.Getter != nil || p.Setter != nil:
 			if p.Value.raw != nil {
@@ -311,7 +333,7 @@ func (e Env) descriptors(props []Property) ([]sys.PropertyDescriptor, []uintptr,
 					d.Getter = sys.CallbackTrampoline
 				}
 			}
-			ids = append(ids, id)
+			res.cbs = append(res.cbs, id)
 			d.Data = id
 		default:
 			if p.Value.raw == nil {
@@ -320,5 +342,5 @@ func (e Env) descriptors(props []Property) ([]sys.PropertyDescriptor, []uintptr,
 			d.Value = p.Value.raw
 		}
 	}
-	return descs, ids, nil
+	return descs, res, nil
 }

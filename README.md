@@ -4,17 +4,18 @@ Go bindings for [Node-API](https://nodejs.org/api/n-api.html) (N-API): build nat
 (`.node`) in Go, modeled after [napi-rs](https://napi.rs).
 
 > **Status:** under development. Phase 0 (feasibility spike), Phase 1 (Layer 0), Phase 2
-> (Layer 1) and Phase 3 (concurrency: Promises from goroutines, typed threadsafe functions) are
-> complete; Phase 4 (Layer 2 framework) is next.
+> (Layer 1), Phase 3 (concurrency: Promises from goroutines, typed threadsafe functions) and
+> Phase 4 (Layer 2 framework: `napi.Export`, generic wrappers, automatic conversions, classes)
+> are complete; Phase 5 (codegen and TypeScript definitions) is next.
 
 | Path | Contents |
 |---|---|
 | [`sys/`](sys/README.md) | Layer 0: generated 1:1 bindings for Node-API 1–10 |
-| [`napi/`](napi/README.md) | Layer 1: idiomatic Go API (values, errors, functions, classes, buffers) |
+| [`napi/`](napi/README.md) | Layer 2: framework (`Export`, `Func2`, `Async1`, classes, conversions); Layer 1: idiomatic Go API (values, errors, functions, classes, buffers) |
 | `tests/e2e/` | test addons and `node:test` suites |
 | [`tests/nodesuite/`](tests/nodesuite/README.md) | Node.js `js-native-api` and `node-api` test suites ported to `sys` |
 | [`tests/addonapisuite/`](tests/addonapisuite/README.md) | node-addon-api test suite ported to `napi` |
-| `.github/workflows/` | CI: `sys.yml` (Layer 0 and 1, including the Alpine/musl sentinel) |
+| `.github/workflows/` | CI: `sys.yml` (Layers 0–2, including the Alpine/musl sentinel) |
 
 Requirements: Go ≥ 1.24 with cgo, a C compiler (gcc/clang, or `zig cc` on Windows),
 Node.js ≥ 22 for tests.

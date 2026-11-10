@@ -17,12 +17,12 @@ func (e Env) DefineClass(name string, constructor Callback, props ...Property) (
 	if constructor == nil {
 		return Function{}, TypeError("", "DefineClass: nil constructor")
 	}
-	descs, ids, err := e.descriptors(props)
+	descs, res, err := e.descriptors(props)
 	if err != nil {
 		return Function{}, err
 	}
 	ctorID := registerCallback(requireNew(name, constructor))
-	ids = append(ids, ctorID)
+	res.cbs = append(res.cbs, ctorID)
 	var descp *sys.PropertyDescriptor
 	if len(descs) > 0 {
 		descp = &descs[0]
@@ -32,11 +32,11 @@ func (e Env) DefineClass(name string, constructor Callback, props ...Property) (
 		uint(len(descs)), descp, &r)
 	v, err := e.value(r, st)
 	if err != nil {
-		releaseCallbacks(ids)
+		res.release()
 		return Function{}, err
 	}
 	f := Function{Object{v}}
-	if err := e.releaseCallbacksWith(f.Object, ids); err != nil {
+	if err := e.releaseWith(f.Object, res); err != nil {
 		return Function{}, err
 	}
 	return f, nil

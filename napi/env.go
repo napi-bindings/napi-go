@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"unsafe"
 
@@ -62,6 +63,11 @@ type envState struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	holds      int
+
+	// Layer 2 classes (classdef.go): the constructor of each class and the JS object wrapping
+	// each Go value, so that a *T converts to the same instance (JS thread only).
+	classes   map[reflect.Type]Ref
+	instances map[unsafe.Pointer]*instEntry
 }
 
 var envStates table[envState]
