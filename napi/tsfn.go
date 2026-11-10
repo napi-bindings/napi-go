@@ -57,6 +57,8 @@ type ThreadsafeFunction[T any] struct {
 	env    sys.Env
 	callJS func(env Env, fn Function, v T) error
 	values table[T] // queued values, by the data ID passed to Node-API
+	// discard, if set, receives the values Node drops without calling JS (Abort, env destroyed).
+	discard func(v T)
 
 	// life guards raw: calls hold the read lock, the finalizer takes the write lock and sets dead,
 	// so no call can be in flight or start once Node frees the function.
@@ -86,6 +88,10 @@ type ThreadsafeFunction[T any] struct {
 // --force-node-api-uncaught-exceptions-policy=true; otherwise it emits the DEP0168 warning and
 // drops it.
 func NewThreadsafeFunction[T any](env Env, fn Function, callJS func(env Env, fn Function, v T) error, opts ThreadsafeFunctionOptions) (*ThreadsafeFunction[T], error) {
+	return newThreadsafeFunction(env, fn, callJS, opts, nil)
+}
+
+func newThreadsafeFunction[T any](env Env, fn Function, callJS func(env Env, fn Function, v T) error, opts ThreadsafeFunctionOptions, discard func(T)) (*ThreadsafeFunction[T], error) {
 	if callJS == nil {
 		return nil, TypeError("", "NewThreadsafeFunction: nil callJS")
 	}
@@ -100,7 +106,7 @@ func NewThreadsafeFunction[T any](env Env, fn Function, callJS func(env Env, fn 
 	if name == "" {
 		name = defaultTSFNName
 	}
-	t := &ThreadsafeFunction[T]{env: env.raw, callJS: callJS, threads: threads}
+	t := &ThreadsafeFunction[T]{env: env.raw, callJS: callJS, threads: threads, discard: discard}
 	entry := &tsfnEntry{callJS: t.dispatch}
 	cid := tsfnEntries.add(entry)
 	entry.onFinalize = func(e Env) {
@@ -140,7 +146,13 @@ func retireEntry(env sys.Env, cid uintptr) {
 // dispatch receives one queued value on the JS thread (env nil: Node is discarding the queue).
 func (t *ThreadsafeFunction[T]) dispatch(raw sys.Env, cb sys.Value, data uintptr) {
 	p := t.values.remove(data)
-	if raw == nil || p == nil {
+	if p == nil {
+		return
+	}
+	if raw == nil {
+		if t.discard != nil {
+			t.discard(*p)
+		}
 		return
 	}
 	env := Env{raw: raw}

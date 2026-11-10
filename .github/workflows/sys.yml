@@ -43,6 +43,9 @@ jobs:
       - name: Generated files up to date
         working-directory: sys
         run: go run ./internal/gen -check
+      - name: Layer 2 wrappers up to date
+        working-directory: napi
+        run: go run ./internal/genwrappers -check
       - name: gofmt
         run: test -z "$(gofmt -l sys napi tests)" || (gofmt -l sys napi tests && exit 1)
       - name: go vet (all version build tags)

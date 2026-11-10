@@ -37,6 +37,7 @@ Complete example: `tests/e2e/addons/sysbasic`.
 | `trampoline.c` | C trampolines (callbacks, finalizers, TSFN, async work, cleanup hooks) |
 | `guard.c` | guard against a second Go runtime on the same thread (macOS x64 only) |
 | `sigfix.c` | restores `SA_RESETHAND` on `node::SignalExit` (macOS) |
+| `typed.c`, `typed.go` | typed callback trampoline for Layer 2: primitive arguments and results converted in C, `this` unwrapped in C, one cgo transition per call |
 | `onstack.c` | adds `SA_ONSTACK` to the signal handlers Node/libuv install after the module loads (Linux, GOT hook of `sigaction`) |
 
 To regenerate: `go generate ./sys`. CI verifies that generated files are up to date with

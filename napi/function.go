@@ -66,22 +66,34 @@ var callbacks table[Callback]
 
 func registerCallback(fn Callback) uintptr { return callbacks.add(&fn) }
 
-func releaseCallbacks(ids []uintptr) {
-	for _, id := range ids {
+// resources are the Go-side entries (callback IDs, typed signatures) that a JS object makes
+// reachable from Node-API; they are released together with the object.
+type resources struct {
+	cbs   []uintptr
+	typed []typedResources
+}
+
+func (r resources) release() {
+	for _, id := range r.cbs {
 		callbacks.remove(id)
+	}
+	for _, t := range r.typed {
+		t.release()
 	}
 }
 
-// releaseCallbacksWith releases ids when o is garbage-collected (or when the env is destroyed).
-// If attaching the finalizer fails, the IDs are released immediately: o is left without valid
+func (r resources) empty() bool { return len(r.cbs) == 0 && len(r.typed) == 0 }
+
+// releaseWith releases res when o is garbage-collected (or when the env is destroyed). If
+// attaching the finalizer fails, they are released immediately: o is left without valid
 // callbacks, avoiding a memory leak.
-func (e Env) releaseCallbacksWith(o Object, ids []uintptr) error {
-	if len(ids) == 0 {
+func (e Env) releaseWith(o Object, res resources) error {
+	if res.empty() {
 		return nil
 	}
-	err := o.AddFinalizer(func(Env) { releaseCallbacks(ids) })
+	err := o.AddFinalizer(func(Env) { res.release() })
 	if err != nil {
-		releaseCallbacks(ids)
+		res.release()
 	}
 	return err
 }
@@ -133,7 +145,7 @@ func (e Env) NewFunction(name string, fn Callback) (Function, error) {
 		return Function{}, err
 	}
 	f := Function{Object{v}}
-	if err := e.releaseCallbacksWith(f.Object, []uintptr{id}); err != nil {
+	if err := e.releaseWith(f.Object, resources{cbs: []uintptr{id}}); err != nil {
 		return Function{}, err
 	}
 	return f, nil

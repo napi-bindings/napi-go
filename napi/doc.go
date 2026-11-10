@@ -1,5 +1,30 @@
-// Package napi is Layer 1 of napi-go: an idiomatic Go API on top of Node-API (package sys) for
-// writing native Node.js addons (.node).
+// Package napi provides Layers 1 and 2 of napi-go, for writing native Node.js addons (.node) in
+// Go on top of Node-API (package sys).
+//
+// # Layer 2: the framework
+//
+// Export declares Go functions, classes and constants; the generic wrappers convert arguments
+// and results automatically:
+//
+//	func init() {
+//		napi.Export("add", napi.Func2(func(a, b float64) float64 { return a + b }))
+//		napi.Export("load", napi.Async1(func(ctx context.Context, id string) (User, error) { ... }))
+//		napi.Export("Counter", napi.NewClass(napi.Ctor1(newCounter)).
+//			Method("add", napi.Method1((*Counter).Add)))
+//	}
+//
+// The wrappers are FuncN, FuncNE, ProcN, ProcNE (synchronous), AsyncN, AsyncProcN (Promises
+// settled from goroutines), MethodN and its variants, and CtorN, for 0 to 8 JS parameters. A
+// napi.Env or napi.CallContext parameter is injected. Conversions follow the Go type: numbers
+// (integers are range-checked), strings, []byte (Buffer), slices, arrays, maps, structs (napi or
+// json tags, else lowerCamelCase names), pointers (nullable), any, *big.Int, time.Time,
+// Either[A, B], the napi value types, and types implementing FromJS and ToJS. ToValue and
+// FromValue convert directly. JSFunc calls JS from goroutines and returns the converted result.
+// See README.md for the type mapping and the costs.
+//
+// # Layer 1: the core
+//
+// Layer 1 gives full control over JS values:
 //
 //	package main
 //
@@ -71,3 +96,5 @@
 // SetCleanupHookHandler) and uses napi_set_instance_data: an addon that uses napi must not call
 // the corresponding functions in sys.
 package napi
+
+//go:generate go run ./internal/genwrappers
