@@ -19,6 +19,8 @@
 NAPI_MODULE_INIT() {
   /* First of all: the Go runtime has already started and must never be unloaded (pin.c). */
   gn_pin_module();
+  /* Before any JS runs: handlers that libuv installs from now on get SA_ONSTACK (onstack.c). */
+  gn_install_onstack_hook();
   const char* first_missing = NULL;
   int missing = gn_api_load_once(&first_missing);
   if (missing != 0) {

@@ -77,3 +77,31 @@ func repairSignalHandlers(env sys.Env, _ sys.Value, _ []sys.Value) sys.Value {
 	sys.RepairNodeSignalHandlers()
 	return undefined(env)
 }
+
+// signalThreads(signo) sends signo to every other thread of the process with tgkill, Go threads
+// included, and returns how many were signaled (Linux only, it throws elsewhere).
+func signalThreads(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
+	signo, ok := argNum(env, args, 0)
+	if !ok {
+		return throwType(env, "signalThreads(signo)")
+	}
+	n, err := signalAllThreads(int(signo))
+	if err != nil {
+		return throwType(env, "signalThreads: "+err.Error())
+	}
+	return newNum(env, float64(n))
+}
+
+// onStack(signo) reports whether the handler of signo has SA_ONSTACK (Linux only, it throws
+// elsewhere).
+func onStack(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
+	signo, ok := argNum(env, args, 0)
+	if !ok {
+		return throwType(env, "onStack(signo)")
+	}
+	flags, err := handlerFlags(int(signo))
+	if err != nil {
+		return throwType(env, "onStack: "+err.Error())
+	}
+	return newBool(env, flags&saOnStack != 0)
+}

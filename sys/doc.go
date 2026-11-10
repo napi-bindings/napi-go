@@ -56,6 +56,11 @@
 //     of corrupting memory.
 //   - macOS: after Go runtime initialization, sys restores SA_RESETHAND on Node's SIGINT/SIGTERM
 //     handlers, which the Go runtime strips (otherwise the process hangs on signal exit).
+//   - Linux: libuv installs its signal handlers (SIGCHLD for child processes, signals with a JS
+//     listener) without SA_ONSTACK; delivered on a goroutine stack, the signal frame overruns it.
+//     When the module loads, sys redirects the sigaction calls of the objects already loaded
+//     (the node executable, libuv/libnode if shared) to a wrapper that adds SA_ONSTACK. On macOS
+//     the hook is not implemented yet.
 //   - musl (Alpine): not supported by current Go releases for c-shared builds.
 package sys
 

@@ -71,6 +71,45 @@ test('child processes work with the addon loaded and the Go runtime busy (SIGCHL
   await waitFor(() => A.burning() === 0, 'burnCPU goroutines to finish')
 })
 
+const isLinux = process.platform === 'linux'
+const FLOOD_BURN_MS = 2000
+const FLOOD_BATCHES = 300
+const SIGNALS_PER_BATCH = 20
+
+// libuv installs its handlers (SIGCHLD on the first child process, any signal with a JS listener)
+// without SA_ONSTACK: delivered to a Go thread, the signal frame would be written on a goroutine
+// stack and overrun it (sys/onstack.c). tgkill sends the signal to every thread, Go threads
+// included, which a process-directed signal reaches only by chance; the child process crashes
+// within a few batches without the fix. SIGWINCH is ignored by default, so a signal still pending
+// when Node resets its handlers at exit does no harm.
+test('signal handlers installed after load use the alternate stack; signals on Go threads are safe', { skip: !isLinux && 'tgkill and the GOT hook are Linux only' }, () => {
+  const { SIGWINCH, SIGCHLD } = constants.signals
+  const r = nodeEval(`const a = require(${ADDON});
+    const { spawn } = require('node:child_process');
+    let handled = 0;
+    process.on('SIGWINCH', () => { handled++ });
+    // libuv keeps its SIGCHLD handler while a child process is alive.
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, ${SETTLE_MS})']);
+    const flags = { winch: a.onStack(${SIGWINCH}), chld: a.onStack(${SIGCHLD}) };
+    child.kill();
+    a.burnCPU(${FLOOD_BURN_MS});
+    (async () => {
+      let sent = 0;
+      for (let b = 0; b < ${FLOOD_BATCHES}; b++) {
+        for (let i = 0; i < ${SIGNALS_PER_BATCH}; i++) sent += a.signalThreads(${SIGWINCH});
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      while (a.burning() > 0) await new Promise((resolve) => setTimeout(resolve, ${SETTLE_MS}));
+      process.stdout.write(JSON.stringify({ ...flags, sent, handled }));
+    })()`)
+  assert.equal(r.status, 0, `signal=${r.signal} stderr=${r.stderr}`)
+  const out = lastJSONLine(r)
+  assert.equal(out.winch, true, 'the SIGWINCH handler of process.on lacks SA_ONSTACK')
+  assert.equal(out.chld, true, 'the SIGCHLD handler of child_process lacks SA_ONSTACK')
+  assert.ok(out.sent > 0, 'no thread was signaled')
+  assert.ok(out.handled > 0, 'no SIGWINCH reached the JS listener')
+})
+
 const EXIT_CODE = 7
 const EXIT_AFTER_MS = 20
 const LONG_BURN_MS = 5000
