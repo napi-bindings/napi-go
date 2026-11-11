@@ -274,11 +274,11 @@ func TestFindProject(t *testing.T) {
 }
 
 // stubLookPath makes zig available or not for the duration of a test.
-func stubLookPath(t *testing.T, haveZig bool) {
+func stubFindExecutable(t *testing.T, haveZig bool) {
 	t.Helper()
-	orig := lookPath
-	t.Cleanup(func() { lookPath = orig })
-	lookPath = func(file string) (string, error) {
+	orig := findExecutable
+	t.Cleanup(func() { findExecutable = orig })
+	findExecutable = func(file string) (string, error) {
 		if file == "zig" && !haveZig {
 			return "", errors.New("not found")
 		}
@@ -307,7 +307,7 @@ func TestToolchain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stubLookPath(t, true)
+	stubFindExecutable(t, true)
 	tc, err := toolchainFor(cross, buildOptions{zig: zigAuto})
 	if err != nil {
 		t.Fatal(err)
@@ -339,7 +339,7 @@ func TestToolchain(t *testing.T) {
 		}
 	}
 
-	stubLookPath(t, false)
+	stubFindExecutable(t, false)
 	if _, err := toolchainFor(cross, buildOptions{zig: zigAuto}); err == nil || !strings.Contains(err.Error(), "needs zig") {
 		t.Errorf("cross build without zig: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestDarwinStubs(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		t.Skip("the stubs are for builds on other systems")
 	}
-	stubLookPath(t, true)
+	stubFindExecutable(t, true)
 	tg, err := lookupTarget("darwin-arm64")
 	if err != nil {
 		t.Fatal(err)
@@ -560,10 +560,10 @@ func mustTarget(t *testing.T, name string) target {
 // stubNpm records the npm commands of a test; view answers published for the specs in published.
 func stubNpm(t *testing.T, published ...string) *[]string {
 	t.Helper()
-	orig := npmCommand
-	t.Cleanup(func() { npmCommand = orig })
+	orig := runNpm
+	t.Cleanup(func() { runNpm = orig })
 	var calls []string
-	npmCommand = func(dir string, args ...string) ([]byte, error) {
+	runNpm = func(dir string, args ...string) ([]byte, error) {
 		calls = append(calls, filepath.Base(dir)+": "+strings.Join(args, " "))
 		if args[0] == "view" {
 			if slices.Contains(published, args[1]) {

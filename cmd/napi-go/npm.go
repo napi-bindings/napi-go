@@ -270,8 +270,9 @@ func syncOptionalDependencies(p *project, targets []target) error {
 	return p.writePackageJSON()
 }
 
-// npmCommand runs npm; tests replace it.
-var npmCommand = func(dir string, args ...string) ([]byte, error) {
+// runNpm runs npm in dir and returns its standard output. It is a variable so that tests check
+// the npm commands without a registry.
+var runNpm = func(dir string, args ...string) ([]byte, error) {
 	cmd := exec.Command("npm", args...)
 	cmd.Dir = dir
 	var stderr bytes.Buffer
@@ -287,7 +288,7 @@ var npmCommand = func(dir string, args ...string) ([]byte, error) {
 // the registry (a rerun of a failed release publishes the rest).
 func publishPlatformPackage(p *project, t target, dir, tag string, dryRun bool, stdout io.Writer) error {
 	spec := t.packageName(p.name) + "@" + p.version
-	if out, err := npmCommand(dir, "view", spec, "version"); err == nil && strings.TrimSpace(string(out)) == p.version {
+	if out, err := runNpm(dir, "view", spec, "version"); err == nil && strings.TrimSpace(string(out)) == p.version {
 		_, err := fmt.Fprintf(stdout, "%s already published\n", spec)
 		return err
 	}
@@ -302,7 +303,7 @@ func publishPlatformPackage(p *project, t target, dir, tag string, dryRun bool, 
 	if strings.HasPrefix(p.name, "@") && !p.pkg.has("publishConfig") {
 		args = append(args, "--access", "public")
 	}
-	if _, err := npmCommand(dir, args...); err != nil {
+	if _, err := runNpm(dir, args...); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintf(stdout, "published %s\n", spec)

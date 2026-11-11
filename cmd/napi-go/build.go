@@ -192,8 +192,9 @@ type toolchain struct {
 	cleanup     func() error // removes the temporary files of the toolchain
 }
 
-// lookPath finds executables; tests replace it.
-var lookPath = exec.LookPath
+// findExecutable looks up a program in PATH (exec.LookPath). It is a variable so that tests can
+// simulate a machine with or without zig.
+var findExecutable = exec.LookPath
 
 // toolchainFor chooses the C compiler for t and returns the environment of go build.
 func toolchainFor(t target, o buildOptions) (*toolchain, error) {
@@ -207,7 +208,7 @@ func toolchainFor(t target, o buildOptions) (*toolchain, error) {
 		case o.release && t.goos == "linux":
 			// A native build links against the glibc of this machine and needs it at least as
 			// new on the machines of the users: zig links against glibc 2.17.
-			if _, err := lookPath("zig"); err == nil {
+			if _, err := findExecutable("zig"); err == nil {
 				useZig = true
 			} else {
 				tc.warnings = append(tc.warnings, "zig not found: the binary needs a glibc at least as new as the one of this machine (install zig, or pass -zig never)")
@@ -219,7 +220,7 @@ func toolchainFor(t target, o buildOptions) (*toolchain, error) {
 		tc.env = append(tc.env, "CC="+o.cc)
 		tc.description = o.cc
 	case useZig:
-		if _, err := lookPath("zig"); err != nil {
+		if _, err := findExecutable("zig"); err != nil {
 			return nil, fmt.Errorf("cross-compiling for %s needs zig (https://ziglang.org/download/) or -cc: %w", t.name, err)
 		}
 		cc := "zig cc -target " + t.zig

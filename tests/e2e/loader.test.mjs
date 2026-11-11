@@ -40,7 +40,10 @@ function requireIn (dir, { env, nodeArgs } = {}) {
 }
 
 // The target of this machine, as the loader computes it: from the error of an empty directory.
-const target = withDir((dir) => /for (\S+):/.exec(requireIn(dir).message)[1])
+// On musl the target is followed by the note that musl is not supported.
+const target = withDir((dir) => /for (\S+?)(?::| \()/.exec(requireIn(dir).message)[1])
+const muslNote = ' (musl libc, as on Alpine Linux, is not supported: Go cannot build shared libraries that load with musl)'
+const expectedHead = `cannot load the native addon codegen for ${target}${target.endsWith('-musl') ? muslNote : ''}:`
 
 test('the loader names the target after process.platform and process.arch', () => {
   assert.ok(target.startsWith(`${process.platform}-${process.arch}`), target)
@@ -53,7 +56,7 @@ test('without a binary the error lists every candidate, without a cause', () => 
     // The directory as the loader sees it may differ from dir (realpath of the temporary
     // directory on macOS and Windows): the candidates are compared by file name.
     const [head, ...lines] = r.message.split('\n')
-    assert.equal(head, `cannot load the native addon codegen for ${target}:`)
+    assert.equal(head, expectedHead)
     assert.deepEqual(lines.map((l) => l.replace(/^ {2}.*[\\/]/, '')), [`codegen.${target}.node: not found`, 'codegen.node: not found'])
     assert.equal(r.cause, null)
   })
