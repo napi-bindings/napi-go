@@ -1,0 +1,30 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import { sum, distance, Counter, delay } from '../index.js'
+
+test('sum adds two numbers', () => {
+  assert.equal(sum(2, 3), 5)
+})
+
+test('arguments of the wrong type throw a TypeError', () => {
+  assert.throws(() => sum('2', 3), TypeError)
+})
+
+test('distance converts plain objects to Point', () => {
+  assert.equal(distance({ x: 0, y: 0 }, { x: 3, y: 4 }), 5)
+})
+
+test('Counter keeps its Go value between calls', () => {
+  const counter = new Counter(10)
+  assert.equal(counter.add(5), 15)
+  assert.equal(counter.value, 15)
+})
+
+test('delay resolves from a goroutine', async () => {
+  assert.equal(await delay(1, 'done'), 'done')
+})
+
+test('delay rejects a negative duration', async () => {
+  await assert.rejects(delay(-1, 'never'), /must not be negative/)
+})

@@ -1,4 +1,4 @@
-// End-to-end tests of the code generator (cmd/napi-go-gen) on the addon tests/e2e/addons/codegen,
+// End-to-end tests of the code generator (napi-go gen, internal/codegen) on the addon tests/e2e/addons/codegen,
 // whose exports are declared with //napi: annotations only: behavior of the generated
 // registrations, the JS entry point and the TypeScript declarations (checked with tsc).
 import { test } from 'node:test'

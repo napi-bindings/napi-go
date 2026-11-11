@@ -1,0 +1,76 @@
+// Command [[.Binary]] is a Node.js addon written in Go with napi-go. Declarations annotated with
+// //napi: are exported to JavaScript: go tool napi-go gen, which go tool napi-go build runs
+// first, writes their registrations (zz_napi.go), the entry point index.js and the TypeScript
+// declarations index.d.ts.
+package main
+
+//go:generate go tool napi-go gen
+
+import (
+	"context"
+	"errors"
+	"math"
+	"time"
+)
+
+// Sum returns a + b.
+//
+//napi:export
+func Sum(a, b float64) float64 { return a + b }
+
+// Point is a point of the plane. JS passes it as a plain object { x, y }.
+type Point struct {
+	X float64
+	Y float64
+}
+
+// Distance returns the distance between p and q.
+//
+//napi:export
+func Distance(p, q Point) float64 {
+	return math.Hypot(q.X-p.X, q.Y-p.Y)
+}
+
+// Counter is a JS class wrapping a Go value.
+//
+//napi:class
+type Counter struct {
+	n int
+}
+
+// NewCounter creates a counter starting at start.
+//
+//napi:constructor
+func NewCounter(start int) (*Counter, error) {
+	return &Counter{n: start}, nil
+}
+
+// Add adds delta and returns the new value.
+func (c *Counter) Add(delta int) int {
+	c.n += delta
+	return c.n
+}
+
+// Value is the current value.
+//
+//napi:getter
+func (c *Counter) Value() int { return c.n }
+
+// Delay waits ms milliseconds in a goroutine, without blocking JavaScript, then resolves with
+// message. A context.Context first parameter makes a function asynchronous: it returns a Promise.
+//
+//napi:export
+func Delay(ctx context.Context, ms int, message string) (string, error) {
+	if ms < 0 {
+		return "", errors.New("ms must not be negative")
+	}
+	select {
+	case <-time.After(time.Duration(ms) * time.Millisecond):
+		return message, nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+// main is required by -buildmode=c-shared; it does not run.
+func main() {}

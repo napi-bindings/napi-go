@@ -1,0 +1,82 @@
+# Builds and tests the addon on a machine of every target and, for a tag v<version>, publishes
+# the npm platform packages and the main package. Created by napi-go new.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+[[- range .Targets]]
+          - target: [[.Name]]
+            runner: [[.Runner]]
+[[- end]]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # zig links Linux binaries against glibc [[.Glibc]] (they load on older distributions than
+      # the runner's) and builds for Windows; macOS uses the system clang.
+      - uses: mlugg/setup-zig@v2
+        if: runner.os != 'macOS'
+      - name: Build
+        shell: bash
+        run: go tool napi-go build -release -target ${{ matrix.target }} $([ "$RUNNER_OS" = macOS ] || echo -zig always)
+      - name: Test
+        run: npm test
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binary-${{ matrix.target }}
+          path: '*.${{ matrix.target }}.node'
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: The tag matches the version of package.json
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: binary-*
+          path: artifacts
+      - name: Copy the binaries into the platform packages
+        run: go tool napi-go artifacts -d artifacts
+      - name: Publish the platform packages
+        run: go tool napi-go prepublish -publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+      - name: Publish the main package
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'

@@ -77,7 +77,7 @@ Complete examples: `tests/e2e/addons/framework` (Layer 2), `tests/e2e/addons/nap
 ## Layer 2: the framework
 
 Instead of writing the registrations by hand, annotate the declarations (`//napi:export`,
-`//napi:class`) and let [`napi-go-gen`](../cmd/napi-go-gen/README.md) generate them together with
+`//napi:class`) and let [`napi-go gen`](../internal/codegen/README.md) generate them together with
 the TypeScript declarations.
 
 ### Exports
