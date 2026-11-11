@@ -22,6 +22,7 @@ const variants = [
   { name: 'napibasic-v10', pkg: './tests/e2e/addons/napibasic', tags: ['napi_go_v10'] },
   { name: 'napiasync', pkg: './tests/e2e/addons/napiasync', tags: [] },
   { name: 'framework', pkg: './tests/e2e/addons/framework', tags: [] },
+  { name: 'codegen', pkg: './tests/e2e/addons/codegen', tags: [] },
 ]
 
 mkdirSync(out, { recursive: true })

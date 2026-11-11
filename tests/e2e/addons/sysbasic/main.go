@@ -93,6 +93,7 @@ func init() {
 		{"repairSignalHandlers", repairSignalHandlers},
 		{"signalThreads", signalThreads},
 		{"onStack", onStack},
+		{"watchdog", watchdog},
 		{"envCounts", func(env sys.Env, _ sys.Value, _ []sys.Value) sys.Value {
 			obj := newObject(env)
 			setNum(env, obj, "inited", float64(initedEnvs.Load()))
