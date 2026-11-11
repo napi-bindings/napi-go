@@ -17,4 +17,4 @@ func handlerFlags(int) (int64, error) { return 0, errLinuxOnly }
 const saOnStack = int64(0)
 
 // startWatchdog is a no-op outside Linux (the tests using it are Linux only).
-func startWatchdog(time.Duration) {}
+func startWatchdog(time.Duration) error { return nil }

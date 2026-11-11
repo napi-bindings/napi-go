@@ -113,6 +113,8 @@ func watchdog(env sys.Env, _ sys.Value, args []sys.Value) sys.Value {
 	if !ok || ms <= 0 {
 		return throwType(env, "watchdog(ms)")
 	}
-	startWatchdog(time.Duration(ms * float64(time.Millisecond)))
+	if err := startWatchdog(time.Duration(ms * float64(time.Millisecond))); err != nil {
+		return throwType(env, "watchdog: "+err.Error())
+	}
 	return undefined(env)
 }

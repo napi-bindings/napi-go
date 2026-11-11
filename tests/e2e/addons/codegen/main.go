@@ -148,7 +148,9 @@ func Count(c napi.CallContext) int { return c.Len() }
 //
 //napi:export
 //napi:returns unknown
-func Callback(fn napi.Function, value napi.Value) (napi.Value, error) { return fn.Call(napi.Value{}, value) }
+func Callback(fn napi.Function, value napi.Value) (napi.Value, error) {
+	return fn.Call(napi.Value{}, value)
+}
 
 // Point is a 2D point, converted as [x, y].
 //

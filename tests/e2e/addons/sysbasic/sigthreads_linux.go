@@ -13,6 +13,9 @@ static long handler_flags(int signo) {
   if (sigaction(signo, NULL, &sa) != 0) return -1;
   return (long)sa.sa_flags;
 }
+
+// watchdog_linux.c
+int gn_start_watchdog(unsigned ms);
 */
 import "C"
 
@@ -98,25 +101,36 @@ const (
 // stackDumpBytes bounds the goroutine dump of the watchdog.
 const stackDumpBytes = 1 << 20
 
-// startWatchdog stops the process after d with a report on stderr: the state of every thread
-// (name, state, kernel wait channel, current syscall) and the stacks of all goroutines. It
-// diagnoses hangs that happen only on CI machines. If the Go runtime itself is stuck (a
-// stop-the-world that never completes) the timer cannot run: the test reads /proc from the
-// parent process then.
-func startWatchdog(d time.Duration) {
-	time.AfterFunc(d, func() {
-		var b strings.Builder
-		fmt.Fprintf(&b, "napi-go watchdog: process still running after %v\n", d)
-		b.WriteString(threadReport(os.Getpid()))
-		buf := make([]byte, stackDumpBytes)
-		b.Write(buf[:runtime.Stack(buf, true)])
-		if _, err := os.Stderr.WriteString(b.String()); err != nil {
-			// The report is lost: a distinct exit code tells the test to rely on the threads it
-			// reads from /proc itself.
-			os.Exit(watchdogReportLostExit)
+// goWatchdogDelay is how long after the C watchdog the Go one runs: the samples of the C
+// watchdog are written first.
+const goWatchdogDelay = 5 * time.Second
+
+// startWatchdog reports on stderr a process still running after d, to diagnose hangs that happen
+// only on CI machines:
+//   - a C thread (watchdog_linux.c) prints where every thread is executing; it does not need
+//     the Go runtime;
+//   - goWatchdogDelay later a Go timer prints the state of every thread from /proc, then the
+//     stacks of all goroutines, and exits with watchdogExit. Collecting the stacks stops the
+//     world: if the runtime is stuck that never completes (the report up to there is already
+//     written) and the test kills the process.
+func startWatchdog(d time.Duration) error {
+	if errno := C.gn_start_watchdog(C.uint(d.Milliseconds())); errno != 0 {
+		return fmt.Errorf("watchdog thread: %w", syscall.Errno(errno))
+	}
+	time.AfterFunc(d+goWatchdogDelay, func() {
+		write := func(s string) {
+			if _, err := os.Stderr.WriteString(s); err != nil {
+				// The report is lost: a distinct exit code tells the test to rely on the
+				// threads it reads from /proc itself.
+				os.Exit(watchdogReportLostExit)
+			}
 		}
+		write(fmt.Sprintf("napi-go watchdog (Go): %d goroutines, %d burning\n%s", runtime.NumGoroutine(), burners.Load(), threadReport(os.Getpid())))
+		buf := make([]byte, stackDumpBytes)
+		write(string(buf[:runtime.Stack(buf, true)]))
 		os.Exit(watchdogExit)
 	})
+	return nil
 }
 
 // threadReport describes the threads of process pid from /proc: one line per thread.
@@ -129,9 +143,10 @@ func threadReport(pid int) string {
 	var b strings.Builder
 	for _, e := range entries {
 		base := dir + "/" + e.Name() + "/"
-		fmt.Fprintf(&b, "thread %s name=%q state=%q wchan=%q syscall=%q\n", e.Name(),
-			procField(base+"status", "Name:"), procField(base+"status", "State:"),
-			procText(base+"wchan"), procText(base+"syscall"))
+		status := procText(base + "status")
+		fmt.Fprintf(&b, "thread %s name=%q state=%q blocked=%s pending=%s cpu=%s wchan=%q syscall=%q\n", e.Name(),
+			statusField(status, "Name:"), statusField(status, "State:"), statusField(status, "SigBlk:"),
+			statusField(status, "SigPnd:"), cpuTicks(procText(base+"stat")), procText(base+"wchan"), procText(base+"syscall"))
 	}
 	return b.String()
 }
@@ -145,12 +160,31 @@ func procText(path string) string {
 	return strings.TrimSpace(string(b))
 }
 
-// procField returns the value of a "Key:\tvalue" line of a /proc status file.
-func procField(path, key string) string {
-	for _, line := range strings.Split(procText(path), "\n") {
+// statusField returns the value of a "Key:\tvalue" line of a /proc status file.
+func statusField(status, key string) string {
+	for _, line := range strings.Split(status, "\n") {
 		if v, ok := strings.CutPrefix(line, key); ok {
 			return strings.TrimSpace(v)
 		}
 	}
 	return ""
+}
+
+// Positions of utime and stime among the fields of /proc/<pid>/stat that follow the command
+// name (fields 14 and 15 of the file, proc(5)).
+const (
+	statUtime = 11
+	statStime = 12
+)
+
+// cpuTicks returns the user and system CPU time of a thread, in clock ticks, from its stat file:
+// a thread whose times grow between two reports is running, not blocked.
+func cpuTicks(stat string) string {
+	// The command name, in parentheses, may contain spaces: the fields start after it.
+	if i := strings.LastIndexByte(stat, ')'); i >= 0 {
+		if f := strings.Fields(stat[i+1:]); len(f) > statStime {
+			return f[statUtime] + "u/" + f[statStime] + "s"
+		}
+	}
+	return "?"
 }
