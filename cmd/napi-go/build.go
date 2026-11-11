@@ -103,7 +103,12 @@ func buildTarget(p *project, t target, o buildOptions, stdout, stderr io.Writer)
 	if err != nil {
 		return err
 	}
-	defer tc.cleanup()
+	defer func() {
+		// A leftover temporary directory does not fail the build, but is reported.
+		if err := tc.cleanup(); err != nil {
+			_, _ = fmt.Fprintf(stderr, "warning: %s: %v\n", t.name, err)
+		}
+	}()
 	for _, w := range tc.warnings {
 		if _, err := fmt.Fprintf(stdout, "warning: %s: %s\n", t.name, w); err != nil {
 			return err
@@ -184,7 +189,7 @@ type toolchain struct {
 	zig         bool
 	description string // for the build report, e.g. "zig cc -target x86_64-linux-gnu.2.17"
 	warnings    []string
-	cleanup     func()
+	cleanup     func() error // removes the temporary files of the toolchain
 }
 
 // lookPath finds executables; tests replace it.
@@ -192,7 +197,7 @@ var lookPath = exec.LookPath
 
 // toolchainFor chooses the C compiler for t and returns the environment of go build.
 func toolchainFor(t target, o buildOptions) (*toolchain, error) {
-	tc := &toolchain{cleanup: func() {}}
+	tc := &toolchain{cleanup: func() error { return nil }}
 	tc.env = []string{"CGO_ENABLED=1", "GOOS=" + t.goos, "GOARCH=" + t.goarch}
 	useZig := o.zig == zigAlways
 	if o.zig == zigAuto && o.cc == "" {
@@ -226,8 +231,7 @@ func toolchainFor(t target, o buildOptions) (*toolchain, error) {
 			if err != nil {
 				return nil, err
 			}
-			// Best effort: a leftover temporary directory is harmless.
-			tc.cleanup = func() { _ = os.RemoveAll(dir) }
+			tc.cleanup = func() error { return os.RemoveAll(dir) }
 			// Appended to the flags of the environment, if any.
 			ldflags := strings.TrimSpace(os.Getenv("CGO_LDFLAGS") + " -L" + dir + " -F" + dir)
 			tc.env = append(tc.env, "CGO_LDFLAGS="+ldflags)

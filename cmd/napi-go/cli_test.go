@@ -312,7 +312,9 @@ func TestToolchain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tc.cleanup()
+	if err := tc.cleanup(); err != nil {
+		t.Fatal(err)
+	}
 	if cc := envValue(tc.env, "CC"); cc != "zig cc -target "+cross.zig || !tc.zig {
 		t.Errorf("cross build: CC %q", cc)
 	}
@@ -375,7 +377,9 @@ func TestDarwinStubs(t *testing.T) {
 	if !strings.Contains(readFile(t, filepath.Join(dir, "CoreFoundation.framework", "CoreFoundation.tbd")), "CoreFoundation.framework/Versions/A/CoreFoundation") {
 		t.Error("CoreFoundation stub without its install name")
 	}
-	tc.cleanup()
+	if err := tc.cleanup(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("stub directory left after cleanup: %v", err)
 	}
