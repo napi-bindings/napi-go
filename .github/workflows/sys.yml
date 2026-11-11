@@ -1,8 +1,9 @@
-# Layer 0 (package sys), Layers 1 and 2 (package napi) and the code generator (cmd/napi-go-gen):
-# generated files, Go unit tests, and end-to-end tests with Node.js.
+# Layer 0 (package sys), Layers 1 and 2 (package napi), the code generator (internal/codegen) and
+# the napi-go CLI (cmd/napi-go): generated files, Go unit tests, and end-to-end tests with Node.js.
+# Cross-compilation and the generated projects are tested by cli.yml.
 #
 #   generate    up-to-date generated files, gofmt, go vet, and go test across all version build tags,
-#               plus go test -race on package napi and the tests of napi-go-gen
+#               plus go test -race on package napi and the tests of the generator and of the CLI
 #   e2e         test addons + node:test on Linux x64/arm64, macOS arm64/x64, Windows (gcc),
 #               followed by the Node.js test suite ported to sys (tests/nodesuite) and the
 #               node-addon-api test suite ported to napi (tests/addonapisuite)
@@ -14,9 +15,9 @@ name: sys
 
 on:
   push:
-    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', 'tests/addonapisuite/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'napi/**', 'cmd/**', 'internal/**', 'tests/e2e/**', 'tests/nodesuite/**', 'tests/addonapisuite/**', '.github/workflows/sys.yml']
   pull_request:
-    paths: ['go.mod', 'sys/**', 'napi/**', 'tests/e2e/**', 'tests/nodesuite/**', 'tests/addonapisuite/**', '.github/workflows/sys.yml']
+    paths: ['go.mod', 'sys/**', 'napi/**', 'cmd/**', 'internal/**', 'tests/e2e/**', 'tests/nodesuite/**', 'tests/addonapisuite/**', '.github/workflows/sys.yml']
   workflow_dispatch:
 
 permissions:
@@ -47,15 +48,15 @@ jobs:
       - name: Layer 2 wrappers up to date
         working-directory: napi
         run: go run ./internal/genwrappers -check
-      - name: Annotated test addon up to date (napi-go-gen)
-        run: go run ./cmd/napi-go-gen -check -name codegen tests/e2e/addons/codegen
+      - name: Annotated test addon up to date (napi-go gen)
+        run: go run ./cmd/napi-go gen -check -C tests/e2e/addons/codegen -name codegen
       - name: gofmt
-        run: test -z "$(gofmt -l sys napi cmd tests)" || (gofmt -l sys napi cmd tests && exit 1)
+        run: test -z "$(gofmt -l sys napi cmd internal tests)" || (gofmt -l sys napi cmd internal tests && exit 1)
       - name: go vet (all version build tags)
         run: |
           for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             echo "== tags: ${tags:-default}"
-            go vet -tags "$tags" ./sys/... ./napi/... ./cmd/... ./tests/...
+            go vet -tags "$tags" ./sys/... ./napi/... ./cmd/... ./internal/... ./tests/...
           done
       - name: go test (all version build tags)
         run: |
@@ -64,8 +65,8 @@ jobs:
           done
       - name: go test -race (napi)
         run: go test -count=1 -race ./napi/...
-      - name: go test (napi-go-gen)
-        run: go test -count=1 ./cmd/...
+      - name: go test (generator and CLI)
+        run: go test -count=1 ./internal/... ./cmd/...
 
   e2e:
     name: ${{ matrix.os }} · node ${{ matrix.node }} · go ${{ matrix.go }}

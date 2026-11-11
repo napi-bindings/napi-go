@@ -1,0 +1,144 @@
+# The napi-go CLI (cmd/napi-go) and the projects it creates.
+#
+#   cross   on Linux x64: a project created by napi-go new, built for every target with zig
+#           (napi-go build -release -target all), tested, packaged (artifacts, prepublish, npm pack)
+#   load    on a machine of each other target: the binaries cross-compiled by the cross job are
+#           tested there, from the project directory and installed from the npm packages
+#   native  on every OS: the Go tests of the CLI (including its end-to-end test), then a new project
+#           built with the system C compiler through go tool napi-go, and its tests
+name: cli
+
+on:
+  push:
+    paths: ['go.mod', 'sys/**', 'napi/**', 'cmd/**', 'internal/**', '.github/workflows/cli.yml']
+  pull_request:
+    paths: ['go.mod', 'sys/**', 'napi/**', 'cmd/**', 'internal/**', '.github/workflows/cli.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Every target of the CLI; the project of the cross job builds and packages all of them.
+  TARGETS: linux-x64-gnu,linux-arm64-gnu,darwin-x64,darwin-arm64,win32-x64-gnu,win32-arm64-gnu
+
+jobs:
+  cross:
+    name: cross-compile with zig (linux x64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: mlugg/setup-zig@v2
+      - run: zig version && go version && node --version
+      - name: Create a project
+        run: go run ./cmd/napi-go new -replace "$GITHUB_WORKSPACE" -targets "$TARGETS" "$RUNNER_TEMP/demo"
+      - name: Build every target
+        working-directory: ${{ runner.temp }}/demo
+        run: go tool napi-go build -release -target all
+      - name: glibc floor of the Linux binaries (zig links against glibc 2.17)
+        working-directory: ${{ runner.temp }}/demo
+        run: |
+          for f in demo.linux-*.node; do
+            newest=$(objdump -T "$f" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+            echo "$f: $newest"
+            [ "$(printf '%s\nGLIBC_2.17\n' "$newest" | sort -V | tail -1)" = GLIBC_2.17 ] || { echo "::error::$f needs $newest"; exit 1; }
+          done
+      - name: Tests (linux x64)
+        working-directory: ${{ runner.temp }}/demo
+        run: npm test
+      - name: Package
+        working-directory: ${{ runner.temp }}/demo
+        run: |
+          go tool napi-go artifacts -d .
+          go tool napi-go prepublish
+          go tool napi-go gen -check
+          mkdir packs
+          npm pack --pack-destination packs
+          for d in npm/*/; do (cd "$d" && npm pack --pack-destination ../../packs); done
+          ls -l packs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo
+          path: |
+            ${{ runner.temp }}/demo/index.js
+            ${{ runner.temp }}/demo/package.json
+            ${{ runner.temp }}/demo/test/
+            ${{ runner.temp }}/demo/*.node
+            ${{ runner.temp }}/demo/packs/
+          if-no-files-found: error
+
+  load:
+    name: load · ${{ matrix.target }} · node ${{ matrix.node }}
+    needs: cross
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04-arm, target: linux-arm64-gnu, node: '24' }
+          - { os: macos-latest, target: darwin-arm64, node: '24' }
+          - { os: macos-latest, target: darwin-arm64, node: '22' }
+          - { os: macos-15-intel, target: darwin-x64, node: '24' }
+          - { os: windows-latest, target: win32-x64-gnu, node: '24' }
+          - { os: windows-latest, target: win32-x64-gnu, node: '22' }
+          - { os: windows-11-arm, target: win32-arm64-gnu, node: '24' }
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v7
+        with:
+          name: demo
+          path: demo
+      - name: The target of this machine
+        run: node -p "process.platform + '-' + process.arch" && ls demo
+      - name: Tests with the cross-compiled binary
+        working-directory: demo
+        run: node --test
+      - name: Install the main and the platform package, and load
+        run: |
+          mkdir consumer && cd consumer && npm init -y > /dev/null
+          npm install --offline --no-audit --no-fund ../demo/packs/demo-${{ matrix.target }}-0.1.0.tgz ../demo/packs/demo-0.1.0.tgz
+          node -e "const a = require('demo'); if (a.sum(20, 22) !== 42) throw new Error('wrong sum')"
+          node --input-type=module -e "import { Counter } from 'demo'; if (new Counter(1).add(1) !== 2) throw new Error('wrong count')"
+
+  native:
+    name: native · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: go test (CLI and generator)
+        run: go test -count=1 ./cmd/... ./internal/...
+      - name: New project, built with the system C compiler
+        run: |
+          go run ./cmd/napi-go new -replace "$GITHUB_WORKSPACE" "$RUNNER_TEMP/native"
+          cd "$RUNNER_TEMP/native"
+          npm run build -- -zig never
+          npm test

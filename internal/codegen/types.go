@@ -1,4 +1,4 @@
-package main
+package codegen
 
 // types.go — the Go types the napi conversions accept (mirroring napi/conv.go) and their
 // TypeScript counterparts.

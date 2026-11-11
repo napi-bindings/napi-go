@@ -1,12 +1,12 @@
-# napi-go-gen
+# napi-go gen
 
-Generates the Layer 2 registrations and the TypeScript declarations of a napi-go addon from
+The code generator of the [`napi-go`](../../cmd/napi-go/README.md) CLI. Generates the Layer 2 registrations and the TypeScript declarations of a napi-go addon from
 annotations in its Go source: the equivalent of `#[napi]` and of the type generation of napi-rs.
 
 ```go
 package main
 
-//go:generate go run github.com/napi-bindings/napi-go/cmd/napi-go-gen
+//go:generate go tool napi-go gen
 
 import "context"
 
@@ -29,13 +29,13 @@ func FindUser(ctx context.Context, name string) (*User, error) { return &User{Na
 func main() {}
 ```
 
-`go generate` writes three files next to the source:
+`napi-go gen` (run by `napi-go build`, or by `go generate`) writes three files:
 
 | File | Contents |
 |---|---|
 | `zz_napi.go` | an `init` function calling `napi.Export` for every annotated declaration, with the wrapper that fits each signature (`Func1`, `Async1`, `MethodE2`, …) |
 | `index.d.ts` | TypeScript declarations; the Go doc comments become JSDoc |
-| `index.js` | CommonJS entry point loading `<name>.node` from its directory |
+| `index.js` | CommonJS entry point loading the binary of the platform (see the [CLI](../../cmd/napi-go/README.md#the-entry-point)) |
 
 ```ts
 /** User is a registered user. */
@@ -107,15 +107,19 @@ The declarations use `Buffer`, declared by `@types/node`.
 ## Usage
 
 ```
-napi-go-gen [flags] [package directory]
+napi-go gen [flags]
 
-  -out file    generated Go file (default zz_napi.go)
-  -dts file    TypeScript declarations (default index.d.ts; empty: none)
-  -js file     JS entry point (default index.js; empty: none)
-  -name name   base name of the .node file loaded by the entry point (default: the directory name)
-  -tags tags   build tags, as for go build
-  -check       do not write: fail if the generated files are out of date (for CI)
+  -C dir             project (package.json) or Go package directory (default .)
+  -name name         base name of the .node files (default: binaryName of package.json, or the directory name)
+  -package-name pkg  npm package of the platform packages (default: name of package.json)
+  -js file           JS entry point (default index.js; empty: none)
+  -dts file          TypeScript declarations (default index.d.ts; empty: none)
+  -tags tags         build tags, as for go build
+  -check             do not write: fail if the generated files are out of date (for CI)
 ```
+
+In a project, the files go next to `package.json` and `zz_napi.go` into the Go package
+(`napiGo.goPackage`); `go generate` in the Go package finds the `package.json` above it.
 
 The generator uses only the Go standard library. It type-checks the package with the export data
 of the Go build cache (`go list -export`), so it needs the same toolchain as the build, C compiler
@@ -128,6 +132,3 @@ conversions are the cached codecs of Layer 2. Generating Go conversion code for 
 measured and dropped: on a struct of five fields it was 15% faster from JS to Go and no faster from
 Go to JS (about 2 µs either way), because the time goes into the Node-API calls for each property,
 not into Go. Reading the properties of a struct in one C call is the optimization that would help.
-
-The entry point loads one `.node` file. Loading the right binary for each platform belongs to the
-`napi-go` CLI (Phase 6 of the plan).

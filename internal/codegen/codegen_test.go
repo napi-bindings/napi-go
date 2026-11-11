@@ -1,7 +1,8 @@
-package main
+package codegen
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 const e2eAddon = "../../tests/e2e/addons/codegen"
 
 func TestGeneratedFilesOfE2EAddonAreUpToDate(t *testing.T) {
-	outs, err := generate(config{dir: e2eAddon, goFile: defaultGoFile, dtsFile: defaultDTSFile, jsFile: defaultJSFile, name: "codegen"})
+	outs, err := Generate(Config{Dir: e2eAddon, GoFile: DefaultGoFile, DTSFile: DefaultDTSFile, JSFile: DefaultJSFile, BinaryName: "codegen"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,12 +23,12 @@ func TestGeneratedFilesOfE2EAddonAreUpToDate(t *testing.T) {
 		t.Fatalf("got %d files, want 3", len(outs))
 	}
 	for _, o := range outs {
-		cur, err := os.ReadFile(o.path)
+		cur, err := os.ReadFile(o.Path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(cur, o.content) {
-			t.Errorf("%s is out of date: run go generate ./tests/e2e/addons/codegen", o.path)
+		if !bytes.Equal(cur, o.Content) {
+			t.Errorf("%s is out of date: run go generate ./tests/e2e/addons/codegen", o.Path)
 		}
 	}
 }
@@ -75,11 +76,11 @@ func genSource(t *testing.T, body string) (goSrc, dts string, err error) {
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	outs, err := generate(config{dir: dir, goFile: defaultGoFile, dtsFile: defaultDTSFile})
+	outs, err := Generate(Config{Dir: dir, GoFile: DefaultGoFile, DTSFile: DefaultDTSFile})
 	if err != nil {
 		return "", "", err
 	}
-	return string(outs[0].content), string(outs[1].content), nil
+	return string(outs[0].Content), string(outs[1].Content), nil
 }
 
 func TestMain(m *testing.M) {
@@ -242,8 +243,8 @@ func TestCheckMode(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config{dir: dir, goFile: defaultGoFile, dtsFile: defaultDTSFile, jsFile: defaultJSFile}
-	if err := run(cfg, true); err == nil || !strings.Contains(err.Error(), "run napi-go-gen") {
+	cfg := Config{Dir: dir, GoFile: DefaultGoFile, DTSFile: DefaultDTSFile, JSFile: DefaultJSFile}
+	if err := run(cfg, true); err == nil || !strings.Contains(err.Error(), "run napi-go gen") {
 		t.Fatalf("check before generating: %v", err)
 	}
 	if err := run(cfg, false); err != nil {
@@ -256,21 +257,34 @@ func TestCheckMode(t *testing.T) {
 	if err := run(cfg, false); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
-	js, err := os.ReadFile(filepath.Join(dir, defaultJSFile))
+	js, err := os.ReadFile(filepath.Join(dir, DefaultJSFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "require('./" + filepath.Base(dir) + ".node')"; !strings.Contains(string(js), want) {
+	if want := "const binaryName = '" + filepath.Base(dir) + "'"; !strings.Contains(string(js), want) {
 		t.Errorf("entry point %q does not contain %s", js, want)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(strings.Replace(src, "func F()", "func G()", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(cfg, true); err == nil || !strings.Contains(err.Error(), "out of date") {
+	if err := run(cfg, true); !errors.Is(err, ErrOutOfDate) {
 		t.Fatalf("check after a change: %v", err)
 	}
 	// The stale generated file refers to F, which no longer exists: generation still works.
 	if err := run(cfg, false); err != nil {
 		t.Fatalf("regeneration with a stale file: %v", err)
 	}
+}
+
+// run generates the files of cfg and writes them, or with check compares them with the files on
+// disk (as napi-go gen and napi-go gen -check).
+func run(cfg Config, check bool) error {
+	files, err := Generate(cfg)
+	if err != nil {
+		return err
+	}
+	if check {
+		return Check(files)
+	}
+	return Write(files)
 }

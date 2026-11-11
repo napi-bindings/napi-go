@@ -1,0 +1,24 @@
+# [[.Name]]
+
+A Node.js addon written in Go with [napi-go](https://github.com/napi-bindings/napi-go).
+
+## Develop
+
+Requirements: Go [[.GoVersion]] or later, a C compiler (`gcc`, `clang`, or [zig](https://ziglang.org/download/)), Node.js 22 or later.
+
+```sh
+npm run build:debug   # go tool napi-go build: <binary>.<target>.node for this machine
+npm test
+```
+
+`go tool napi-go build` first runs `go tool napi-go gen`, which reads the `//napi:` annotations of `main.go` and writes `zz_napi.go`, `index.js` and `index.d.ts`. Commit them: they are part of the package.
+
+## Release
+
+`.github/workflows/CI.yml` builds and tests the addon for every target listed in `napiGo.targets` of `package.json`. Pushing a tag `v<version>` matching the version of `package.json` also publishes one npm package per target (`[[.Name]]-<target>`, with the `.node` file) and the main package, which lists them in `optionalDependencies`: npm installs only the one of the user's machine. Publishing needs the secret `NPM_TOKEN`.
+
+To build for another platform locally, install zig and run for example:
+
+```sh
+go tool napi-go build -release -target linux-arm64-gnu
+```

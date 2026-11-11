@@ -1,4 +1,4 @@
-package main
+package codegen
 
 // model.go — reads the annotations of a package and builds the model of its exports.
 
@@ -123,7 +123,7 @@ func analyze(p *loaded) (*module, error) {
 			iface, _ = obj.Type().Underlying().(*types.Interface)
 		}
 		if iface == nil {
-			return nil, fmt.Errorf("%s.%s is not an interface: napi-go-gen does not match this version of napi", napiPath, name)
+			return nil, fmt.Errorf("%s.%s is not an interface: napi-go gen does not match this version of napi", napiPath, name)
 		}
 		if name == "FromJS" {
 			g.fromJS = iface
