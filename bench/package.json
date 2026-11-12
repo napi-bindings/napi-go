@@ -1,0 +1,8 @@
+{
+  "name": "napi-go-bench",
+  "private": true,
+  "description": "Benchmarks of napi-go against napi-rs and node-addon-api",
+  "devDependencies": {
+    "node-addon-api": "8.5.0"
+  }
+}

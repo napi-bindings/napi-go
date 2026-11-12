@@ -51,12 +51,12 @@ jobs:
       - name: Annotated test addon up to date (napi-go gen)
         run: go run ./cmd/napi-go gen -check -C tests/e2e/addons/codegen -name codegen
       - name: gofmt
-        run: test -z "$(gofmt -l sys napi cmd internal tests)" || (gofmt -l sys napi cmd internal tests && exit 1)
+        run: test -z "$(gofmt -l sys napi cmd internal tests bench)" || (gofmt -l sys napi cmd internal tests bench && exit 1)
       - name: go vet (all version build tags)
         run: |
           for tags in "" napi_go_v9 napi_go_v10 napi_go_experimental napi_go_test_version_mismatch; do
             echo "== tags: ${tags:-default}"
-            go vet -tags "$tags" ./sys/... ./napi/... ./cmd/... ./internal/... ./tests/...
+            go vet -tags "$tags" ./sys/... ./napi/... ./cmd/... ./internal/... ./tests/... ./bench/...
           done
       - name: go test (all version build tags)
         run: |
