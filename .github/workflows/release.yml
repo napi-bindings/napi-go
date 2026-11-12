@@ -103,7 +103,10 @@ jobs:
           go run "$MODULE/cmd/napi-go@$TAG" new demo
           cd demo
           grep -F "$MODULE $TAG" go.mod
-          go tool napi-go version | tee /dev/stderr | grep -Fx "napi-go $TAG"
+          # The CLI run by go tool is the version required by go.mod.
+          version=$(go tool napi-go version)
+          echo "$version"
+          [ "$version" = "napi-go $TAG" ] || { echo "::error::go tool napi-go version is '$version', want 'napi-go $TAG'"; exit 1; }
           npm run build
           npm test
 
