@@ -4,7 +4,7 @@ All notable changes to napi-go. The format follows [Keep a Changelog](https://ke
 and versions follow [Semantic Versioning](https://semver.org/): before 1.0.0, a minor version may
 change the API (the changes are listed here).
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-11-12
 
 The first release: native Node.js addons written in Go, with the tooling of napi-rs.
 
