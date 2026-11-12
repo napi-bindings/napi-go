@@ -96,11 +96,11 @@ Generated for 0 to 8 JS parameters (`napi/zz_wrappers.go`, `go generate ./napi`)
 | Wrapper | Go function | JS |
 |---|---|---|
 | `FuncN` | `func(A1…AN) R` | returns the converted `R` |
-| `FuncNE` | `func(A1…AN) (R, error)` | returns `R`, or throws the error |
-| `ProcN` / `ProcNE` | `func(A1…AN)` / `… error` | returns `undefined` (or throws) |
+| `FuncEN` | `func(A1…AN) (R, error)` | returns `R`, or throws the error |
+| `ProcN` / `ProcEN` | `func(A1…AN)` / `… error` | returns `undefined` (or throws) |
 | `AsyncN` | `func(context.Context, A1…AN) (R, error)` | returns a Promise; the function runs in a goroutine |
 | `AsyncProcN` | `func(context.Context, A1…AN) error` | Promise resolved with `undefined` |
-| `MethodN`, `MethodNE`, `MethodProcN`, `MethodProcNE` | the same with a `*T` receiver first | methods of the class of `T` |
+| `MethodN`, `MethodEN`, `MethodProcN`, `MethodProcEN` | the same with a `*T` receiver first | methods of the class of `T` |
 | `CtorN` | `func(A1…AN) (*T, error)` | constructor of the class of `T` |
 
 A parameter of type `napi.Env` or `napi.CallContext` is filled from the call and does not consume

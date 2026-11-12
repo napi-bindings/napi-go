@@ -13,7 +13,7 @@
 //			Method("add", napi.Method1((*Counter).Add)))
 //	}
 //
-// The wrappers are FuncN, FuncNE, ProcN, ProcNE (synchronous), AsyncN, AsyncProcN (Promises
+// The wrappers are FuncN, FuncEN, ProcN, ProcEN (synchronous), AsyncN, AsyncProcN (Promises
 // settled from goroutines), MethodN and its variants, and CtorN, for 0 to 8 JS parameters. A
 // napi.Env or napi.CallContext parameter is injected. Conversions follow the Go type: numbers
 // (integers are range-checked), strings, []byte (Buffer), slices, arrays, maps, structs (napi or

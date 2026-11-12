@@ -6,7 +6,7 @@ addons rewritten in Go on top of Layer 0 (`sys`). The JS scripts are the origina
 **unmodified**: if a test passes, the Go addon behaves identically to the C addon, including error
 messages.
 
-Source: nodejs/node @ `75191c45afeb`. License of copied files: [LICENSE.node](LICENSE.node) (MIT).
+Source: nodejs/node @ `75191c45afeb`. License of copied files: [LICENSE.nodejs](LICENSE.nodejs) (MIT).
 
 ```bash
 node tests/nodesuite/run.mjs                    # build and run everything

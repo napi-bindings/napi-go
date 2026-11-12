@@ -1,0 +1,60 @@
+# Benchmarks of napi-go against napi-rs and node-addon-api (bench/README.md). The table goes to
+# the summary of the run and the raw results to an artifact; nothing is compared against a
+# threshold (shared runners are too noisy for that). On pull requests the quick mode only checks
+# that the three implementations build and return the same results.
+name: bench
+
+on:
+  push:
+    branches: [main]
+    paths: ['go.mod', 'sys/**', 'napi/**', 'internal/codegen/**', 'bench/**', '.github/workflows/bench.yml']
+  pull_request:
+    paths: ['go.mod', 'sys/**', 'napi/**', 'internal/codegen/**', 'bench/**', '.github/workflows/bench.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  bench:
+    name: bench · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: go version && node --version && cargo --version && c++ --version | sed -n 1p
+      - name: napi-go registrations up to date
+        run: go run ./cmd/napi-go gen -check -C bench/napigo -name napigo -js "" -dts ""
+      - name: Build the three implementations
+        env:
+          BENCH_REQUIRE_ALL: '1'
+        run: |
+          (cd bench && npm ci --no-audit --no-fund)
+          node bench/build.mjs
+      - name: Run
+        run: |
+          mode=--quick
+          [ "${{ github.event_name }}" = pull_request ] || mode=
+          node bench/run.mjs $mode --json "bench-${{ matrix.os }}.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bench-${{ matrix.os }}
+          path: bench-${{ matrix.os }}.json
